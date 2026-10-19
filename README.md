@@ -6,9 +6,9 @@ and save rooms, tune the generation from a built-in editor, and export the resul
 
 Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 
-![Screenshot](docs/screenshot.png)
-
-![Screenshot](docs/screenshot_2.png)
+[![Screenshot 1](docs/screenshot-miniature.png)](docs/screenshot.png)
+[![Screenshot 2](docs/screenshot-2-miniature.png)](docs/screenshot-2.png)
+[![Screenshot 3](docs/screenshot-3-miniature.png)](docs/screenshot-3.png)
 
 ## Features
 
