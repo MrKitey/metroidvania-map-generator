@@ -4,6 +4,12 @@ use crate::world::{Marker, RoomKind};
 use macroquad::prelude::*;
 use resvg::{tiny_skia, usvg};
 
+/// Embedded SVG sources. The SVG export reuses them as they are.
+pub const BOSS_SVG: &str = include_str!("../assets/icons/boss.svg");
+pub const SAVE_SVG: &str = include_str!("../assets/icons/save.svg");
+pub const SECRET_SVG: &str = include_str!("../assets/icons/secret.svg");
+pub const PORTAL_SVG: &str = include_str!("../assets/icons/portal.svg");
+
 /// Raster size limits, in pixels per side.
 const MIN_PX: u32 = 8;
 const MAX_PX: u32 = 512;
@@ -67,10 +73,10 @@ pub struct Icons {
 impl Icons {
     pub fn new() -> Icons {
         Icons {
-            boss: Icon::new(include_bytes!("../assets/icons/boss.svg")),
-            save: Icon::new(include_bytes!("../assets/icons/save.svg")),
-            secret: Icon::new(include_bytes!("../assets/icons/secret.svg")),
-            portal: Icon::new(include_bytes!("../assets/icons/portal.svg")),
+            boss: Icon::new(BOSS_SVG.as_bytes()),
+            save: Icon::new(SAVE_SVG.as_bytes()),
+            secret: Icon::new(SECRET_SVG.as_bytes()),
+            portal: Icon::new(PORTAL_SVG.as_bytes()),
         }
     }
 

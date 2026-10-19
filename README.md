@@ -28,7 +28,7 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Clickable seed in the bottom right corner, copied to the clipboard.
 - Editor panel for generation settings, room sizes and biomes.
 - Biomes and settings saved as JSON. Biomes can be imported from any JSON file.
-- Export of the map as a zip holding a PNG image and a JSON description.
+- Export of the map as a zip holding a PNG image, an SVG image and a JSON description.
 
 ## Download
 
@@ -136,6 +136,7 @@ The export button opens a save dialog and writes a zip, named `map-<seed>.zip` b
 
 - `map.png`: the whole map on a transparent background, with rooms, doors and icons.
   One cell is 32 pixels tall. Large maps are scaled down to fit 8192 pixels per side.
+- `map.svg`: the same drawing as a vector image, also on a transparent background.
 - `map.json`: the seed, the map size in cells, the settings, the biomes, and every room
   and door.
 
@@ -188,7 +189,7 @@ fall back to the defaults.
 
 ## Releases
 
-Pushing a tag such as `v0.3.0` runs `.github/workflows/release.yml`. It builds the Windows
+Pushing a tag such as `v0.4.0` runs `.github/workflows/release.yml`. It builds the Windows
 `.exe` and the Linux AppImage, then publishes both in a GitHub release.
 
 - The tag must match the `version` in `Cargo.toml`, otherwise the workflow fails.
@@ -196,8 +197,8 @@ Pushing a tag such as `v0.3.0` runs `.github/workflows/release.yml`. It builds t
   `Cargo.lock` is updated, and commit both files together.
 
 ```sh
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 ## Project structure
@@ -217,7 +218,7 @@ src/biome.rs               Biomes and biomes.json
 src/settings.rs            Generation settings and settings.json
 src/storage.rs             App folder and JSON reading and writing
 src/icons.rs               SVG icon rasterization
-src/export.rs              Zip export with map.png and map.json
+src/export.rs              Zip export with map.png, map.svg and map.json
 ```
 
 ## License

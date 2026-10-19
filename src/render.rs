@@ -3,7 +3,7 @@
 use crate::biome::Biome;
 use crate::icons::Icons;
 use crate::view::View;
-use crate::world::{Marker, Room, RoomKind, World};
+use crate::world::{Door, Marker, Room, RoomKind, World};
 use macroquad::prelude::*;
 
 /// Height of the header bar, in screen pixels.
@@ -127,7 +127,7 @@ fn darker(c: Color) -> Color {
 }
 
 /// Biome color for a room. Corridors use a darker shade.
-fn room_fill(world: &World, biomes: &[Biome], idx: usize) -> Color {
+pub fn room_fill(world: &World, biomes: &[Biome], idx: usize) -> Color {
     let r = &world.rooms[idx];
     match r.marker {
         Some(Marker::Boss) => return BOSS_FILL,
@@ -140,6 +140,30 @@ fn room_fill(world: &World, biomes: &[Biome], idx: usize) -> Color {
         RoomKind::Secret => SECRET_FILL,
         RoomKind::Portal => PORTAL_FILL,
         RoomKind::Corridor => darker(fill),
+    }
+}
+
+/// Border color of a room, and whether the border is thicker than usual.
+/// Rooms with a marker or a special kind stand out.
+pub fn room_border(world: &World, biomes: &[Biome], idx: usize) -> (Color, bool) {
+    let r = &world.rooms[idx];
+    match (r.marker, r.kind) {
+        (Some(Marker::Boss), _) => (BOSS_BORDER, true),
+        (Some(Marker::Save), _) => (SAVE_BORDER, true),
+        (_, RoomKind::Secret) => (SECRET_BORDER, true),
+        (_, RoomKind::Portal) => (PORTAL_BORDER, true),
+        (_, RoomKind::Normal) => (biomes[r.biome].border(), false),
+        (_, RoomKind::Corridor) => (CORRIDOR_BORDER, false),
+    }
+}
+
+/// Color of a door. A door inside a biome takes the room color so it blends in,
+/// a door between biomes stands out.
+pub fn door_color(world: &World, biomes: &[Biome], d: &Door) -> Color {
+    if world.rooms[d.a].biome == world.rooms[d.b].biome {
+        room_fill(world, biomes, d.b)
+    } else {
+        TRANSITION_DOOR
     }
 }
 
@@ -272,15 +296,9 @@ pub fn draw_map(
     for (i, r) in world.rooms.iter().enumerate() {
         let (x, y) = (r.x as f32 * cw, r.y as f32 * ch);
         let (w, h) = (r.w as f32 * cw, r.h as f32 * ch);
-        let (border, thickness) = match (r.marker, r.kind) {
-            // One screen pixel thicker than the other rooms, at any zoom.
-            (Some(Marker::Boss), _) => (BOSS_BORDER, t + 1.0 / scale),
-            (Some(Marker::Save), _) => (SAVE_BORDER, t + 1.0 / scale),
-            (_, RoomKind::Secret) => (SECRET_BORDER, t + 1.0 / scale),
-            (_, RoomKind::Portal) => (PORTAL_BORDER, t + 1.0 / scale),
-            (_, RoomKind::Normal) => (biomes[r.biome].border(), t),
-            (_, RoomKind::Corridor) => (CORRIDOR_BORDER, t),
-        };
+        let (border, thick) = room_border(world, biomes, i);
+        // A thick border is one screen pixel thicker than the others, at any zoom.
+        let thickness = if thick { t + 1.0 / scale } else { t };
         draw_rectangle(x, y, w, h, room_fill(world, biomes, i));
         draw_rectangle_lines(x, y, w, h, thickness, border);
         if hovered == Some(i) {
@@ -291,11 +309,7 @@ pub fn draw_map(
     // Doors are drawn over the borders to open a gap in them. A door inside a biome
     // takes the room color so it blends in, a door between biomes stands out.
     for d in &world.doors {
-        let color = if world.rooms[d.a].biome == world.rooms[d.b].biome {
-            room_fill(world, biomes, d.b)
-        } else {
-            TRANSITION_DOOR
-        };
+        let color = door_color(world, biomes, d);
         let (x, y) = (d.x as f32 * cw, d.y as f32 * ch);
         if d.vertical {
             draw_rectangle(x - t, y + ch * 0.3, 2.0 * t, ch * 0.4, color);

@@ -1,7 +1,7 @@
-//! Export of the current map as a zip holding map.png and map.json.
+//! Export of the current map as a zip holding map.png, map.svg and map.json.
 
 use crate::biome::{self, Biome};
-use crate::icons::Icons;
+use crate::icons::{BOSS_SVG, Icons, PORTAL_SVG, SAVE_SVG, SECRET_SVG};
 use crate::render::{self, Layout};
 use crate::settings::Settings;
 use crate::world::{Marker, RoomKind, World};
@@ -80,6 +80,7 @@ struct DoorEntry {
 /// rendered on the GPU.
 pub fn write_zip(path: &Path, map: &MapData, icons: &mut Icons) -> Result<(), Box<dyn Error>> {
     let png = render_png(map, icons)?;
+    let svg = render_svg(map);
     let json = serde_json::to_string_pretty(&map_file(map))?;
 
     let mut zip = zip::ZipWriter::new(File::create(path)?);
@@ -87,6 +88,8 @@ pub fn write_zip(path: &Path, map: &MapData, icons: &mut Icons) -> Result<(), Bo
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     zip.start_file("map.png", stored)?;
     zip.write_all(&png)?;
+    zip.start_file("map.svg", SimpleFileOptions::default())?;
+    zip.write_all(svg.as_bytes())?;
     zip.start_file("map.json", SimpleFileOptions::default())?;
     zip.write_all(json.as_bytes())?;
     zip.finish()?;
@@ -130,6 +133,108 @@ fn render_png(map: &MapData, icons: &mut Icons) -> Result<Vec<u8>, Box<dyn Error
     writer.write_image_data(&image.bytes)?;
     writer.finish()?;
     Ok(png)
+}
+
+/// Vector version of the map, in world units, on a transparent background.
+/// Mirrors `render::draw_map`: rooms, then doors, then icons.
+fn render_svg(map: &MapData) -> String {
+    let (world, biomes) = (map.world, map.biomes);
+    let (x0, y0, x1, y1) = world.bounds();
+    let Layout { cw, ch, .. } = *map.layout;
+    let min = vec2(x0 as f32 * cw, y0 as f32 * ch) - PADDING;
+    let size = vec2(x1 as f32 * cw, y1 as f32 * ch) + PADDING - min;
+    // Border and door thickness. A thick border is one image pixel thicker.
+    let t = cw.min(ch) * 0.12;
+    let thick = t + 1.0 / PX_PER_UNIT;
+
+    let mut svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
+         viewBox=\"{} {} {} {}\" width=\"{}\" height=\"{}\">\n",
+        min.x,
+        min.y,
+        size.x,
+        size.y,
+        size.x * PX_PER_UNIT,
+        size.y * PX_PER_UNIT,
+    );
+
+    // Each icon is defined once, then placed with <use>.
+    svg.push_str("<defs>\n");
+    for (id, source) in [
+        ("boss", BOSS_SVG),
+        ("save", SAVE_SVG),
+        ("secret", SECRET_SVG),
+        ("portal", PORTAL_SVG),
+    ] {
+        let tag = format!("<svg id=\"{id}\"");
+        svg.push_str(&source.trim().replacen("<svg", &tag, 1));
+        svg.push('\n');
+    }
+    svg.push_str("</defs>\n");
+
+    for (i, r) in world.rooms.iter().enumerate() {
+        let fill = biome::to_hex(render::room_fill(world, biomes, i));
+        let (border, is_thick) = render::room_border(world, biomes, i);
+        let thickness = if is_thick { thick } else { t };
+        // SVG strokes are centered on the edge, so the rectangle is inset by half of it
+        // to keep the border inside the room, as in the app.
+        let half = thickness / 2.0;
+        svg.push_str(&format!(
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" stroke=\"{}\" stroke-width=\"{}\"/>\n",
+            r.x as f32 * cw + half,
+            r.y as f32 * ch + half,
+            r.w as f32 * cw - thickness,
+            r.h as f32 * ch - thickness,
+            fill,
+            biome::to_hex(border),
+            thickness,
+        ));
+    }
+
+    // Doors open a gap in the borders.
+    for d in &world.doors {
+        let color = biome::to_hex(render::door_color(world, biomes, d));
+        let (x, y) = (d.x as f32 * cw, d.y as f32 * ch);
+        let (x, y, w, h) = if d.vertical {
+            (x - t, y + ch * 0.3, 2.0 * t, ch * 0.4)
+        } else {
+            (x + cw * 0.3, y - t, cw * 0.4, 2.0 * t)
+        };
+        svg.push_str(&format!(
+            "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"{color}\"/>\n"
+        ));
+    }
+
+    let side = (cw.min(ch) * 0.7).max(12.0 / PX_PER_UNIT);
+    for r in &world.rooms {
+        let kind = match r.kind {
+            RoomKind::Secret => Some("secret"),
+            RoomKind::Portal => Some("portal"),
+            RoomKind::Normal | RoomKind::Corridor => None,
+        };
+        let marker = r.marker.map(|m| match m {
+            Marker::Boss => "boss",
+            Marker::Save => "save",
+        });
+        // A room with a kind icon and a marker shows both, side by side, smaller.
+        let both = kind.is_some() && marker.is_some();
+        let s = if both { side * 0.6 } else { side };
+        let (cx, cy) = (
+            (r.x as f32 + r.w as f32 / 2.0) * cw,
+            (r.y as f32 + r.h as f32 / 2.0) * ch,
+        );
+        let mut x = if both { cx - s } else { cx - s / 2.0 };
+        for id in kind.into_iter().chain(marker) {
+            svg.push_str(&format!(
+                "<use xlink:href=\"#{id}\" x=\"{x}\" y=\"{}\" width=\"{s}\" height=\"{s}\"/>\n",
+                cy - s / 2.0,
+            ));
+            x += s;
+        }
+    }
+
+    svg.push_str("</svg>\n");
+    svg
 }
 
 fn map_file<'a>(map: &MapData<'a>) -> MapFile<'a> {
