@@ -94,6 +94,8 @@ pub struct Frame<'a> {
     pub reserved: f32,
     pub hovered: Option<usize>,
     pub help_open: bool,
+    /// Short message shown in the header, such as the export result.
+    pub notice: Option<&'a str>,
 }
 
 /// Square shortcuts button, in the top right corner of the header, left of `reserved`.
@@ -137,11 +139,47 @@ pub fn seed_rect(seed: u64, copied: bool, reserved: f32) -> Rect {
     seed_label(seed, copied, reserved).1
 }
 
-/// Draws one frame. Rooms and doors use the map camera, the rest uses screen pixels.
+/// Draws one frame. The map uses the map camera, the rest uses screen pixels.
 pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons) {
     clear_background(BACKGROUND);
     set_camera(f.camera);
-    let Layout { cw, ch, .. } = *f.layout;
+    draw_map(world, biomes, f.layout, f.view.scale, f.hovered, icons);
+    set_default_camera();
+
+    // Opaque header so the map does not show through the text when panned under it.
+    draw_rectangle(0.0, 0.0, screen_width(), TOP, BACKGROUND);
+    let mut info = format!("Rooms {}", world.rooms.len());
+    if let Some(notice) = f.notice {
+        info = format!("{info}    {notice}");
+    }
+    draw_text(info, MARGIN, TOP / 2.0 + 7.0, 20.0, WHITE);
+    draw_legend(world, biomes);
+
+    // Backdrop keeps the label readable over the map. Brighter on hover to show it is clickable.
+    let (text, rect, baseline) = seed_label(f.seed, f.copied, f.reserved);
+    let hover = rect.contains(Vec2::from(mouse_position()));
+    draw_rectangle(rect.x - 6.0, rect.y - 6.0, rect.w + 12.0, rect.h + 12.0, BACKGROUND);
+    let color = if hover { WHITE } else { LIGHTGRAY };
+    draw_text(&text, rect.x, baseline, SEED_SIZE as f32, color);
+
+    if let Some(i) = f.hovered {
+        draw_tooltip(&world.rooms[i], biomes, f.layout);
+    }
+    draw_export_button(f.reserved);
+    draw_help(f.reserved, f.help_open);
+}
+
+/// Draws rooms, doors and icons in world units, with the camera already set.
+/// `scale` is pixels per world unit, used to rasterize icons at their drawn size.
+pub fn draw_map(
+    world: &World,
+    biomes: &[Biome],
+    layout: &Layout,
+    scale: f32,
+    hovered: Option<usize>,
+    icons: &mut Icons,
+) {
+    let Layout { cw, ch, .. } = *layout;
     // Border and door thickness, in world units.
     let t = cw.min(ch) * 0.12;
 
@@ -154,7 +192,7 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
         };
         draw_rectangle(x, y, w, h, room_fill(world, biomes, i));
         draw_rectangle_lines(x, y, w, h, t, border);
-        if f.hovered == Some(i) {
+        if hovered == Some(i) {
             draw_rectangle(x, y, w, h, Color::new(1.0, 1.0, 1.0, 0.15));
         }
     }
@@ -175,19 +213,17 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
         }
     }
 
-    // Icons are drawn in screen space, from textures rasterized at their screen size,
-    // so they stay sharp at any zoom. One raster size for all icons, otherwise the
-    // cache would rasterize again every frame.
-    set_default_camera();
-    let side = (cw.min(ch) * 0.7 * f.view.scale).max(12.0);
-    let px = side.ceil() as u32;
+    // Icons are rasterized at their size in pixels, so they stay sharp at any zoom.
+    // One raster size for all icons, otherwise the cache would rasterize every frame.
+    let side_px = (cw.min(ch) * 0.7 * scale).max(12.0);
+    let px = side_px.ceil() as u32;
+    let side = side_px / scale;
     for r in &world.rooms {
         let secret = r.kind == RoomKind::Secret;
         if !secret && r.marker.is_none() {
             continue;
         }
-        let center = vec2((r.x as f32 + r.w as f32 / 2.0) * cw, (r.y as f32 + r.h as f32 / 2.0) * ch);
-        let c = f.camera.world_to_screen(center);
+        let c = vec2((r.x as f32 + r.w as f32 / 2.0) * cw, (r.y as f32 + r.h as f32 / 2.0) * ch);
         // A secret room with a marker shows both icons side by side, smaller.
         let both = secret && r.marker.is_some();
         let s = if both { side * 0.6 } else { side };
@@ -207,23 +243,25 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
             draw(icons.get(marker, px), x);
         }
     }
+}
 
-    // Opaque header so the map does not show through the text when panned under it.
-    draw_rectangle(0.0, 0.0, screen_width(), TOP, BACKGROUND);
-    draw_text(format!("Rooms {}", world.rooms.len()), MARGIN, TOP / 2.0 + 7.0, 20.0, WHITE);
-    draw_legend(world, biomes);
+/// Export button, just left of the shortcuts button.
+pub fn export_button_rect(reserved: f32) -> Rect {
+    let help = help_button_rect(reserved);
+    Rect::new(help.x - PAD - HELP_H, help.y, HELP_H, HELP_H)
+}
 
-    // Backdrop keeps the label readable over the map. Brighter on hover to show it is clickable.
-    let (text, rect, baseline) = seed_label(f.seed, f.copied, f.reserved);
-    let hover = rect.contains(Vec2::from(mouse_position()));
-    draw_rectangle(rect.x - 6.0, rect.y - 6.0, rect.w + 12.0, rect.h + 12.0, BACKGROUND);
-    let color = if hover { WHITE } else { LIGHTGRAY };
-    draw_text(&text, rect.x, baseline, SEED_SIZE as f32, color);
-
-    if let Some(i) = f.hovered {
-        draw_tooltip(&world.rooms[i], biomes, f.layout);
-    }
-    draw_help(f.reserved, f.help_open);
+/// Square button with a download arrow icon.
+fn draw_export_button(reserved: f32) {
+    let b = export_button_rect(reserved);
+    let hover = b.contains(Vec2::from(mouse_position()));
+    draw_rectangle(b.x, b.y, b.w, b.h, if hover { BUTTON_HOVER } else { BUTTON_BG });
+    let c = b.center();
+    let (top, tip, half) = (c.y - 8.0, c.y + 4.0, 5.0);
+    draw_line(c.x, top, c.x, tip, 2.0, WHITE);
+    draw_line(c.x - half, tip - half, c.x, tip, 2.0, WHITE);
+    draw_line(c.x + half, tip - half, c.x, tip, 2.0, WHITE);
+    draw_line(c.x - 8.0, c.y + 8.0, c.x + 8.0, c.y + 8.0, 2.0, WHITE);
 }
 
 /// Biomes used in this map, one per row, in a column on the left, vertically centered

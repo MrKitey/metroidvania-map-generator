@@ -8,6 +8,7 @@
 
 mod biome;
 mod editor;
+mod export;
 mod icons;
 mod render;
 mod settings;
@@ -27,6 +28,8 @@ const MIN_CELLS: u32 = 96;
 const MAX_CELLS: u32 = 5120;
 /// Cells added or removed per arrow key press.
 const STEP: u32 = 64;
+/// Seconds the export result stays in the header.
+const NOTICE_TIME: f64 = 4.0;
 
 fn window_conf() -> Conf {
     Conf {
@@ -71,6 +74,8 @@ async fn main() {
     // Time of the last seed copy, used to show the "copied" feedback.
     let mut copied_at = f64::NEG_INFINITY;
     let mut help_open = false;
+    // Last export result and when it happened, shown in the header for a while.
+    let mut notice: Option<(String, f64)> = None;
 
     // One iteration per frame: input, optional regeneration, camera, hover, drawing.
     loop {
@@ -148,6 +153,38 @@ async fn main() {
             consumed = true;
         }
 
+        if render::export_button_rect(reserved).contains(mouse) && is_mouse_button_pressed(MouseButton::Left) {
+            // Blocks the app until the dialog is closed.
+            let picked = rfd::FileDialog::new()
+                .add_filter("Zip", &["zip"])
+                .set_file_name(format!("map-{seed}.zip"))
+                .save_file();
+            if let Some(mut path) = picked {
+                if path.extension().is_none() {
+                    path.set_extension("zip");
+                }
+                let settings = editor.settings();
+                let map = export::MapData {
+                    seed,
+                    cells,
+                    settings: &settings,
+                    world: &world,
+                    biomes: &biomes,
+                    layout: &layout,
+                };
+                let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                let text = match export::write_zip(&path, &map, &mut icons) {
+                    Ok(()) => format!("Exported {name}"),
+                    Err(e) => format!("Export failed: {e}"),
+                };
+                notice = Some((text, get_time()));
+            }
+        }
+        let notice_text = notice
+            .as_ref()
+            .filter(|(_, at)| get_time() - at < NOTICE_TIME)
+            .map(|(text, _)| text.as_str());
+
         let hovered = if over_ui || over_seed || over_help || consumed || mouse.y < render::TOP {
             None
         } else {
@@ -173,6 +210,7 @@ async fn main() {
             reserved,
             hovered,
             help_open,
+            notice: notice_text,
         };
         render::draw_world(&world, &biomes, &frame, &mut icons);
         next_frame().await;

@@ -177,7 +177,7 @@ impl Editor {
     }
 
     /// Current field values, validated, in the format saved to disk.
-    fn settings(&self) -> Settings {
+    pub fn settings(&self) -> Settings {
         Settings {
             viewport: self.viewport(),
             min_rooms: self.min_rooms(),
