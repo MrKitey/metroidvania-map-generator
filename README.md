@@ -17,7 +17,7 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Secret rooms: 0 to 5 per biome, added as 1x1 dead ends.
 - Save rooms: 0 to 5 per biome, added as 1x1 dead ends.
 - Boss rooms: 0 to 5 per biome, with one entrance and one exit.
-- Corridors: 1 to 5 per biome. Extra corridors join two biomes that face each other and
+- Corridors: 0 to 5 per biome. Extra corridors join two biomes that face each other and
   create loops. Two corridors never come closer than 3 cells, diagonals included.
 - Same seed and settings always give the same map.
 - Boss and save markers can also be toggled on any room.
