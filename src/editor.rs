@@ -408,7 +408,8 @@ impl Editor {
                     count_slider(ui, id + 2, "Secret rooms", 0, &mut b.secrets);
                     count_slider(ui, id + 3, "Boss rooms", 0, &mut b.bosses);
                     count_slider(ui, id + 4, "Save rooms", 0, &mut b.saves);
-                    count_slider(ui, id + 5, "Corridors", MIN_CORRIDORS, &mut b.corridors);
+                    count_slider(ui, id + 5, "Portal rooms", 0, &mut b.portals);
+                    count_slider(ui, id + 6, "Corridors", MIN_CORRIDORS, &mut b.corridors);
                     if ui.button(None, "Delete") {
                         remove = Some(i);
                     }

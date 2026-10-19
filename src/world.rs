@@ -47,6 +47,8 @@ pub struct Extras {
     pub bosses: u32,
     /// 1x1 dead ends with a save marker.
     pub saves: u32,
+    /// 1x1 dead ends.
+    pub portals: u32,
 }
 
 /// Top-left cell and size of an extra corridor of `len` cells whose first cell is (x, y),
@@ -72,6 +74,8 @@ pub enum RoomKind {
     Corridor,
     /// 1x1 dead end added after a biome is grown. Nothing is attached to it.
     Secret,
+    /// 1x1 dead end, same as a secret room but with its own look.
+    Portal,
 }
 
 /// Icon on a room. Placed by the generator, and toggled by the user.
@@ -257,6 +261,9 @@ impl World {
         }
         for _ in 0..extras.secrets {
             self.add_dead_end(biome, RoomKind::Secret, None);
+        }
+        for _ in 0..extras.portals {
+            self.add_dead_end(biome, RoomKind::Portal, None);
         }
     }
 

@@ -47,6 +47,7 @@ struct BiomeEntry {
     name: String,
     color: String,
     corridors: u32,
+    portals: u32,
     secrets: u32,
     bosses: u32,
     saves: u32,
@@ -144,6 +145,7 @@ fn map_file<'a>(map: &MapData<'a>) -> MapFile<'a> {
                 name: b.name.clone(),
                 color: biome::to_hex(b.fill),
                 corridors: b.corridors,
+                portals: b.portals,
                 secrets: b.secrets,
                 bosses: b.bosses,
                 saves: b.saves,
@@ -163,6 +165,7 @@ fn map_file<'a>(map: &MapData<'a>) -> MapFile<'a> {
                     RoomKind::Normal => "normal",
                     RoomKind::Corridor => "corridor",
                     RoomKind::Secret => "secret",
+                    RoomKind::Portal => "portal",
                 },
                 marker: r.marker.map(|m| match m {
                     Marker::Boss => "boss",

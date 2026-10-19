@@ -1,6 +1,6 @@
 //! Marker icons, rasterized from embedded SVG files at the size they are drawn.
 
-use crate::world::Marker;
+use crate::world::{Marker, RoomKind};
 use macroquad::prelude::*;
 use resvg::{tiny_skia, usvg};
 
@@ -61,6 +61,7 @@ pub struct Icons {
     boss: Icon,
     save: Icon,
     secret: Icon,
+    portal: Icon,
 }
 
 impl Icons {
@@ -69,11 +70,17 @@ impl Icons {
             boss: Icon::new(include_bytes!("../assets/icons/boss.svg")),
             save: Icon::new(include_bytes!("../assets/icons/save.svg")),
             secret: Icon::new(include_bytes!("../assets/icons/secret.svg")),
+            portal: Icon::new(include_bytes!("../assets/icons/portal.svg")),
         }
     }
 
-    pub fn secret(&mut self, px: u32) -> &Texture2D {
-        self.secret.texture(px)
+    /// Icon of a room kind, for the kinds that have one.
+    pub fn kind(&mut self, kind: RoomKind, px: u32) -> Option<&Texture2D> {
+        match kind {
+            RoomKind::Secret => Some(self.secret.texture(px)),
+            RoomKind::Portal => Some(self.portal.texture(px)),
+            RoomKind::Normal | RoomKind::Corridor => None,
+        }
     }
 
     pub fn get(&mut self, marker: Marker, px: u32) -> &Texture2D {

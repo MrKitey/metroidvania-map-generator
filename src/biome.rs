@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 /// Read at startup and written by the editor, in the app folder.
 const BIOMES_FILE: &str = "biomes.json";
-/// Default and maximum number of secret, boss and save rooms per biome.
+/// Default and maximum number of secret, boss, save and portal rooms per biome.
 pub const DEFAULT_COUNT: u32 = 1;
 pub const MAX_COUNT: u32 = 5;
 /// Every biome has at least the corridor that links it to the map.
@@ -22,6 +22,8 @@ pub struct Biome {
     pub corridors: u32,
     /// Number of secret rooms added to the biome, up to `MAX_COUNT`.
     pub secrets: u32,
+    /// Number of portal rooms, up to `MAX_COUNT`.
+    pub portals: u32,
     /// Number of boss rooms, up to `MAX_COUNT`.
     pub bosses: u32,
     /// Number of save rooms, up to `MAX_COUNT`.
@@ -35,6 +37,7 @@ impl Biome {
             fill: Color::from_rgba(r, g, b, 255),
             corridors: DEFAULT_COUNT,
             secrets: DEFAULT_COUNT,
+            portals: DEFAULT_COUNT,
             bosses: DEFAULT_COUNT,
             saves: DEFAULT_COUNT,
         }
@@ -46,6 +49,7 @@ impl Biome {
             secrets: self.secrets,
             bosses: self.bosses,
             saves: self.saves,
+            portals: self.portals,
         }
     }
 
@@ -75,7 +79,7 @@ pub fn default_biomes() -> Vec<Biome> {
 
 /// One biome as stored in JSON:
 /// `{"name": "Castle", "color": "#464E78", "corridors": 1, "secrets": 1, "bosses": 1,
-/// "saves": 1}`. The counts may be missing in older files.
+/// "saves": 1, "portals": 1}`. The counts may be missing in older files.
 #[derive(Serialize, Deserialize)]
 struct Entry {
     name: String,
@@ -88,6 +92,8 @@ struct Entry {
     bosses: u32,
     #[serde(default = "default_count")]
     saves: u32,
+    #[serde(default = "default_count")]
+    portals: u32,
 }
 
 fn default_count() -> u32 {
@@ -108,6 +114,7 @@ pub fn read(path: &Path) -> Result<Vec<Biome>, Box<dyn Error>> {
                 secrets: e.secrets.min(MAX_COUNT),
                 bosses: e.bosses.min(MAX_COUNT),
                 saves: e.saves.min(MAX_COUNT),
+                portals: e.portals.min(MAX_COUNT),
             })
         })
         .collect();
@@ -133,6 +140,7 @@ pub fn save(biomes: &[Biome]) -> Result<PathBuf, Box<dyn Error>> {
             secrets: b.secrets,
             bosses: b.bosses,
             saves: b.saves,
+            portals: b.portals,
         })
         .collect();
     storage::write_json(BIOMES_FILE, &entries)

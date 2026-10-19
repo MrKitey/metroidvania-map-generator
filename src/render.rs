@@ -19,9 +19,11 @@ const BOSS_FILL: Color = Color::from_rgba(0x80, 0x00, 0x00, 255);
 const BOSS_BORDER: Color = Color::from_rgba(0xFF, 0x00, 0x00, 255);
 const SAVE_FILL: Color = Color::from_rgba(0x00, 0x80, 0x00, 255);
 const SAVE_BORDER: Color = Color::from_rgba(0x00, 0xFF, 0x00, 255);
-/// Secret rooms use these too.
+/// Secret and portal rooms use these too.
 const SECRET_FILL: Color = Color::from_rgba(0x80, 0x80, 0x00, 255);
 const SECRET_BORDER: Color = Color::from_rgba(0xFF, 0xFF, 0x00, 255);
+const PORTAL_FILL: Color = Color::from_rgba(0x00, 0x80, 0x80, 255);
+const PORTAL_BORDER: Color = Color::from_rgba(0x00, 0xFF, 0xFF, 255);
 const SEED_SIZE: u16 = 20;
 /// Seconds the "copied" feedback stays on the seed label.
 pub const COPIED_TIME: f64 = 1.5;
@@ -95,6 +97,7 @@ fn room_fill(world: &World, biomes: &[Biome], idx: usize) -> Color {
     match r.kind {
         RoomKind::Normal => fill,
         RoomKind::Secret => SECRET_FILL,
+        RoomKind::Portal => PORTAL_FILL,
         RoomKind::Corridor => darker(fill),
     }
 }
@@ -224,6 +227,7 @@ pub fn draw_map(
             (Some(Marker::Boss), _) => (BOSS_BORDER, t + 1.0 / scale),
             (Some(Marker::Save), _) => (SAVE_BORDER, t + 1.0 / scale),
             (_, RoomKind::Secret) => (SECRET_BORDER, t + 1.0 / scale),
+            (_, RoomKind::Portal) => (PORTAL_BORDER, t + 1.0 / scale),
             (_, RoomKind::Normal) => (biomes[r.biome].border(), t),
             (_, RoomKind::Corridor) => (CORRIDOR_BORDER, t),
         };
@@ -256,16 +260,16 @@ pub fn draw_map(
     let px = side_px.ceil() as u32;
     let side = side_px / scale;
     for r in &world.rooms {
-        let secret = r.kind == RoomKind::Secret;
-        if !secret && r.marker.is_none() {
+        let has_kind_icon = matches!(r.kind, RoomKind::Secret | RoomKind::Portal);
+        if !has_kind_icon && r.marker.is_none() {
             continue;
         }
         let c = vec2(
             (r.x as f32 + r.w as f32 / 2.0) * cw,
             (r.y as f32 + r.h as f32 / 2.0) * ch,
         );
-        // A secret room with a marker shows both icons side by side, smaller.
-        let both = secret && r.marker.is_some();
+        // A secret or portal room with a marker shows both icons side by side, smaller.
+        let both = has_kind_icon && r.marker.is_some();
         let s = if both { side * 0.6 } else { side };
         let draw = |texture: &Texture2D, x: f32| {
             let params = DrawTextureParams {
@@ -275,8 +279,8 @@ pub fn draw_map(
             draw_texture_ex(texture, x, c.y - s / 2.0, WHITE, params);
         };
         let mut x = if both { c.x - s } else { c.x - s / 2.0 };
-        if secret {
-            draw(icons.secret(px), x);
+        if let Some(texture) = icons.kind(r.kind, px) {
+            draw(texture, x);
             x += s;
         }
         if let Some(marker) = r.marker {
@@ -395,6 +399,7 @@ fn draw_tooltip(r: &Room, biomes: &[Biome], layout: &Layout) {
         RoomKind::Normal => biome.clone(),
         RoomKind::Corridor => "Corridor".to_owned(),
         RoomKind::Secret => format!("{biome} (secret)"),
+        RoomKind::Portal => format!("{biome} (portal)"),
     };
     match r.marker {
         Some(Marker::Boss) => name.push_str(" (boss)"),

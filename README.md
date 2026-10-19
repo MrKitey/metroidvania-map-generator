@@ -15,6 +15,7 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Random maps made of rectangular rooms on a grid, connected through doors.
 - Biomes grown one after another, each linked to the map by a corridor.
 - Secret rooms: 0 to 5 per biome, added as 1x1 dead ends.
+- Portal rooms: 0 to 5 per biome, added as 1x1 dead ends.
 - Save rooms: 0 to 5 per biome, added as 1x1 dead ends.
 - Boss rooms: 0 to 5 per biome, with one entrance and one exit.
 - Corridors: 0 to 5 per biome. Extra corridors join two biomes that face each other and
@@ -101,8 +102,8 @@ Press Tab to open the panel on the right.
 
 - Seed: shows the current seed. Type one and press "Use seed" to rebuild that map.
 - Screen size: size of one in-game screen in pixels. One cell stands for one screen.
-- Min and max rooms per biome. Max 0 means no limit. Secret, boss and save rooms are
-  not counted, nor the room behind each boss.
+- Min and max rooms per biome. Max 0 means no limit. Secret, portal, boss and save
+  rooms are not counted, nor the room behind each boss.
 - Room sizes: allowed room sizes in cells, from 1 to 10 per side. Add, edit, delete or
   reset them to the defaults.
 - Boss room sizes: allowed sizes for boss rooms, edited the same way.
@@ -116,8 +117,8 @@ Changes apply on the next generation.
 **Biomes tab**
 
 - One foldable entry per biome, with its name, a hex color field and a color picker.
-- "Secret rooms", "Boss rooms" and "Save rooms" sliders: number of each in the biome,
-  from 0 to 5, 1 by default. A boss room is followed by a normal room.
+- "Secret rooms", "Portal rooms", "Boss rooms" and "Save rooms" sliders: number of each
+  in the biome, from 0 to 5, 1 by default. A boss room is followed by a normal room.
 - "Corridors" slider: from 1 to 5, 1 by default. The first corridor links the biome to
   the map. Each other one is built from the biome to a room of another biome, if a free
   straight line exists. The first biome has no parent, so it only gets the others.
@@ -150,7 +151,7 @@ Rooms and doors in `map.json` use cell coordinates. `biome` is an index into `bi
 }
 ```
 
-`kind` is `normal`, `corridor` or `secret`. `marker` is `boss`, `save` or `null`. A door is
+`kind` is `normal`, `corridor`, `secret` or `portal`. `marker` is `boss`, `save` or `null`. A door is
 on the left edge of cell (x, y) when `vertical` is true, otherwise on its top edge.
 
 ## Data files
@@ -159,12 +160,12 @@ Files are stored in `Documents/Metroidvania Map Generator/`, in the user's Docum
 If that folder cannot be found, the working directory is used. Missing or invalid files
 fall back to the defaults.
 
-`biomes.json`, also the format used by "Import". `secrets`, `bosses` and `saves` default to 1 when missing:
+`biomes.json`, also the format used by "Import". `corridors`, `secrets`, `portals`, `bosses` and `saves` default to 1 when missing:
 
 ```json
 [
-  { "name": "Castle", "color": "#465078", "corridors": 1, "secrets": 1, "bosses": 1, "saves": 1 },
-  { "name": "Caves", "color": "#64462D", "corridors": 3, "secrets": 2, "bosses": 0, "saves": 2 }
+  { "name": "Castle", "color": "#465078", "corridors": 1, "secrets": 1, "portals": 1, "bosses": 1, "saves": 1 },
+  { "name": "Caves", "color": "#64462D", "corridors": 3, "secrets": 2, "portals": 0, "bosses": 0, "saves": 2 }
 ]
 ```
 
@@ -199,7 +200,7 @@ git push origin v0.3.0
 
 ```
 assets/icon.png, icon.ico  App icon for the AppImage and the Windows executable
-assets/icons/              Boss, save and secret icons, embedded at build time
+assets/icons/              Boss, save, secret and portal icons, embedded at build time
 packaging/linux/           Desktop entry for the AppImage
 .github/workflows/         Release workflow
 build.rs                   Embeds the icon into the Windows executable
