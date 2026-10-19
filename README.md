@@ -75,6 +75,8 @@ cd metroidvania-map-generator
 cargo run --release
 ```
 
+Run the tests with `cargo test`.
+
 ## Controls
 
 The same list is shown in the app with the `?` button in the top right corner.
@@ -230,16 +232,21 @@ assets/icons/              Boss, save, secret and portal icons, embedded at buil
 packaging/linux/           Desktop entry for the AppImage
 .github/workflows/         Release workflow
 build.rs                   Embeds the icon into the Windows executable
-src/main.rs                Window, main loop and input
-src/world.rs               Map generation and manual room placement
-src/render.rs              Map, header, legend, tooltip, shortcuts popup and room picker drawing
+src/main.rs                Window and frame loop
+src/app.rs                 App state, input, room placement and per frame work
+src/world/                 Map data (mod.rs), generation (generate.rs), manual edits (edit.rs)
+src/render/                Frame drawing (mod.rs), map (map.rs), overlays (hud.rs),
+                           room picker (picker.rs), colors (theme.rs)
+src/layout.rs              Cell size and header height
 src/view.rs                Camera pan, zoom and fit
-src/editor.rs              Editor panel
+src/editor/                Editor panel: state (mod.rs), validated fields (fields.rs),
+                           settings tab, biomes tab and shared widgets
 src/biome.rs               Biomes and biomes.json
 src/settings.rs            Generation settings and settings.json
 src/storage.rs             App folder and JSON reading and writing
+src/color.rs               #RRGGBB conversion
 src/icons.rs               SVG icon rasterization
-src/export.rs              Zip export with map.png, map.svg and map.json
+src/export/                Zip export (mod.rs) with map.png, map.svg and map.json
 ```
 
 ## License

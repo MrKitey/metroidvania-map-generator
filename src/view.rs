@@ -1,6 +1,6 @@
 //! Camera control: pan, zoom and fit-to-map.
 
-use crate::render::{Layout, MARGIN, TOP};
+use crate::layout::{Layout, MARGIN, TOP};
 use crate::world::World;
 use macroquad::prelude::*;
 

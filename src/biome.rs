@@ -1,5 +1,6 @@
 //! Biome definitions and their storage in a JSON file.
 
+use crate::color::{parse_hex, to_hex};
 use crate::storage;
 use crate::world::Extras;
 use macroquad::color::Color;
@@ -12,7 +13,8 @@ const BIOMES_FILE: &str = "biomes.json";
 /// Default and maximum number of secret, boss, save and portal rooms per biome.
 pub const DEFAULT_COUNT: u32 = 1;
 pub const MAX_COUNT: u32 = 5;
-/// Every biome has at least the corridor that links it to the map.
+/// Lowest corridor count. The corridor to the parent biome is always built, so 0 and 1
+/// give the same map, and only the counts above 1 add corridors.
 pub const MIN_CORRIDORS: u32 = 0;
 
 pub struct Biome {
@@ -81,7 +83,7 @@ pub fn default_biomes() -> Vec<Biome> {
 /// `{"name": "Castle", "color": "#464E78", "corridors": 1, "secrets": 1, "bosses": 1,
 /// "saves": 1, "portals": 1}`. The counts may be missing in older files.
 #[derive(Serialize, Deserialize)]
-struct Entry {
+pub struct Entry {
     name: String,
     color: String,
     #[serde(default = "default_count")]
@@ -94,6 +96,20 @@ struct Entry {
     saves: u32,
     #[serde(default = "default_count")]
     portals: u32,
+}
+
+impl From<&Biome> for Entry {
+    fn from(b: &Biome) -> Entry {
+        Entry {
+            name: b.name.clone(),
+            color: to_hex(b.fill),
+            corridors: b.corridors,
+            secrets: b.secrets,
+            bosses: b.bosses,
+            saves: b.saves,
+            portals: b.portals,
+        }
+    }
 }
 
 fn default_count() -> u32 {
@@ -131,33 +147,6 @@ pub fn load() -> Vec<Biome> {
 
 /// Writes the biomes in the format read by `read`. Returns the path written to.
 pub fn save(biomes: &[Biome]) -> Result<PathBuf, Box<dyn Error>> {
-    let entries: Vec<Entry> = biomes
-        .iter()
-        .map(|b| Entry {
-            name: b.name.clone(),
-            color: to_hex(b.fill),
-            corridors: b.corridors,
-            secrets: b.secrets,
-            bosses: b.bosses,
-            saves: b.saves,
-            portals: b.portals,
-        })
-        .collect();
+    let entries: Vec<Entry> = biomes.iter().map(Entry::from).collect();
     storage::write_json(BIOMES_FILE, &entries)
-}
-
-/// Formats a color as `#RRGGBB`.
-pub fn to_hex(color: Color) -> String {
-    let [r, g, b, _]: [u8; 4] = color.into();
-    format!("#{r:02X}{g:02X}{b:02X}")
-}
-
-/// Parses `#RRGGBB`. Returns None if the text does not match.
-pub fn parse_hex(text: &str) -> Option<Color> {
-    let hex = text.trim().strip_prefix('#')?;
-    if hex.len() != 6 {
-        return None;
-    }
-    let channel = |i: usize| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok();
-    Some(Color::from_rgba(channel(0)?, channel(2)?, channel(4)?, 255))
 }

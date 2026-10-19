@@ -1,18 +1,61 @@
-//! Marker icons, rasterized from embedded SVG files at the size they are drawn.
+//! Room icons, rasterized from embedded SVG files at the size they are drawn.
 
 use crate::world::{Marker, RoomKind};
 use macroquad::prelude::*;
 use resvg::{tiny_skia, usvg};
 
-/// Embedded SVG sources. The SVG export reuses them as they are.
-pub const BOSS_SVG: &str = include_str!("../assets/icons/boss.svg");
-pub const SAVE_SVG: &str = include_str!("../assets/icons/save.svg");
-pub const SECRET_SVG: &str = include_str!("../assets/icons/secret.svg");
-pub const PORTAL_SVG: &str = include_str!("../assets/icons/portal.svg");
-
 /// Raster size limits, in pixels per side.
 const MIN_PX: u32 = 8;
 const MAX_PX: u32 = 512;
+
+/// One of the icons shown on rooms and in the legend.
+#[derive(Clone, Copy)]
+pub enum IconId {
+    Boss,
+    Save,
+    Secret,
+    Portal,
+}
+
+impl IconId {
+    pub const ALL: [IconId; 4] = [IconId::Boss, IconId::Save, IconId::Secret, IconId::Portal];
+
+    /// Icon of a room kind, for the kinds that have one.
+    pub fn of_kind(kind: RoomKind) -> Option<IconId> {
+        match kind {
+            RoomKind::Secret => Some(IconId::Secret),
+            RoomKind::Portal => Some(IconId::Portal),
+            RoomKind::Normal | RoomKind::Corridor => None,
+        }
+    }
+
+    pub fn of_marker(marker: Marker) -> IconId {
+        match marker {
+            Marker::Boss => IconId::Boss,
+            Marker::Save => IconId::Save,
+        }
+    }
+
+    /// Short name, used as the icon id in the SVG export.
+    pub fn name(self) -> &'static str {
+        match self {
+            IconId::Boss => "boss",
+            IconId::Save => "save",
+            IconId::Secret => "secret",
+            IconId::Portal => "portal",
+        }
+    }
+
+    /// Embedded SVG source. The SVG export reuses it as it is.
+    pub fn svg(self) -> &'static str {
+        match self {
+            IconId::Boss => include_str!("../assets/icons/boss.svg"),
+            IconId::Save => include_str!("../assets/icons/save.svg"),
+            IconId::Secret => include_str!("../assets/icons/secret.svg"),
+            IconId::Portal => include_str!("../assets/icons/portal.svg"),
+        }
+    }
+}
 
 struct Icon {
     tree: usvg::Tree,
@@ -63,36 +106,19 @@ fn rasterize(tree: &usvg::Tree, px: u32) -> Texture2D {
     Texture2D::from_rgba8(px as u16, px as u16, &bytes)
 }
 
+/// Texture cache of all icons, one raster size per icon.
 pub struct Icons {
-    boss: Icon,
-    save: Icon,
-    secret: Icon,
-    portal: Icon,
+    icons: [Icon; 4],
 }
 
 impl Icons {
     pub fn new() -> Icons {
         Icons {
-            boss: Icon::new(BOSS_SVG.as_bytes()),
-            save: Icon::new(SAVE_SVG.as_bytes()),
-            secret: Icon::new(SECRET_SVG.as_bytes()),
-            portal: Icon::new(PORTAL_SVG.as_bytes()),
+            icons: IconId::ALL.map(|id| Icon::new(id.svg().as_bytes())),
         }
     }
 
-    /// Icon of a room kind, for the kinds that have one.
-    pub fn kind(&mut self, kind: RoomKind, px: u32) -> Option<&Texture2D> {
-        match kind {
-            RoomKind::Secret => Some(self.secret.texture(px)),
-            RoomKind::Portal => Some(self.portal.texture(px)),
-            RoomKind::Normal | RoomKind::Corridor => None,
-        }
-    }
-
-    pub fn get(&mut self, marker: Marker, px: u32) -> &Texture2D {
-        match marker {
-            Marker::Boss => self.boss.texture(px),
-            Marker::Save => self.save.texture(px),
-        }
+    pub fn get(&mut self, id: IconId, px: u32) -> &Texture2D {
+        self.icons[id as usize].texture(px)
     }
 }
