@@ -24,6 +24,8 @@ pub const DEFAULT_ROOM_SIZES: &[(u32, u32)] = &[
     (4, 3),
     (1, 5),
 ];
+/// Allowed boss room sizes. Long and thin, like corridors.
+pub const DEFAULT_BOSS_SIZES: &[(u32, u32)] = &[(2, 2), (2, 3), (3, 3)];
 
 /// Values are stored as read. The editor validates them when parsing its fields.
 /// Fields missing from the file take their default value.
@@ -37,6 +39,8 @@ pub struct Settings {
     pub max_rooms: usize,
     /// (width, height) in cells.
     pub room_sizes: Vec<(u32, u32)>,
+    /// (width, height) in cells.
+    pub boss_sizes: Vec<(u32, u32)>,
 }
 
 impl Default for Settings {
@@ -46,6 +50,7 @@ impl Default for Settings {
             min_rooms: DEFAULT_MIN_ROOMS,
             max_rooms: DEFAULT_MAX_ROOMS,
             room_sizes: DEFAULT_ROOM_SIZES.to_vec(),
+            boss_sizes: DEFAULT_BOSS_SIZES.to_vec(),
         }
     }
 }

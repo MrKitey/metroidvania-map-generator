@@ -15,8 +15,10 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Random maps made of rectangular rooms on a grid, connected through doors.
 - Biomes grown one after another, each linked to the map by a corridor.
 - Secret rooms: 0 to 5 per biome, added as 1x1 dead ends.
+- Save rooms: 0 to 5 per biome, added as 1x1 dead ends.
+- Boss rooms: 0 to 5 per biome, long thin rooms with one entrance and one exit.
 - Same seed and settings always give the same map.
-- Boss and save markers on any room.
+- Boss and save markers can also be toggled on any room.
 - Room tooltip with its size in cells and in pixels.
 - Clickable seed in the bottom right corner, copied to the clipboard.
 - Editor panel for generation settings, room sizes and biomes.
@@ -97,9 +99,12 @@ Press Tab to open the panel on the right.
 
 - Seed: shows the current seed. Type one and press "Use seed" to rebuild that map.
 - Screen size: size of one in-game screen in pixels. One cell stands for one screen.
-- Min and max rooms per biome. Max 0 means no limit. Secret rooms are not counted.
+- Min and max rooms per biome. Max 0 means no limit. Secret, boss and save rooms are
+  not counted, nor the room behind each boss.
 - Room sizes: allowed room sizes in cells, from 1 to 10 per side. Add, edit, delete or
   reset them to the defaults.
+- Boss room sizes: allowed sizes for boss rooms, edited the same way. The default is
+  long and thin rooms, 3 to 5 cells.
 - "Generate" builds a new map with a random seed. "Save settings" writes `settings.json`.
 
 Changes apply on the next generation.
@@ -107,7 +112,8 @@ Changes apply on the next generation.
 **Biomes tab**
 
 - One foldable entry per biome, with its name, a hex color field and a color picker.
-- "Secret rooms" slider: number of secret rooms in the biome, from 0 to 5. Applies on the
+- "Secret rooms", "Boss rooms" and "Save rooms" sliders: number of each in the biome,
+  from 0 to 5, 1 by default. A boss room is followed by a normal room. Applies on the
   next generation.
 - "Add" creates a biome, "Import" loads biomes from a JSON file, "Save" writes
   `biomes.json`.
@@ -146,12 +152,12 @@ Files are stored in `Documents/Metroidvania Map Generator/`, in the user's Docum
 If that folder cannot be found, the working directory is used. Missing or invalid files
 fall back to the defaults.
 
-`biomes.json`, also the format used by "Import". `secrets` defaults to 1 when missing:
+`biomes.json`, also the format used by "Import". `secrets`, `bosses` and `saves` default to 1 when missing:
 
 ```json
 [
-  { "name": "Castle", "color": "#465078", "secrets": 1 },
-  { "name": "Caves", "color": "#64462D", "secrets": 2 }
+  { "name": "Castle", "color": "#465078", "secrets": 1, "bosses": 1, "saves": 1 },
+  { "name": "Caves", "color": "#64462D", "secrets": 2, "bosses": 0, "saves": 2 }
 ]
 ```
 
@@ -162,7 +168,8 @@ fall back to the defaults.
   "viewport": [640, 360],
   "min_rooms": 5,
   "max_rooms": 50,
-  "room_sizes": [[1, 1], [2, 1], [1, 2], [2, 2]]
+  "room_sizes": [[1, 1], [2, 1], [1, 2], [2, 2]],
+  "boss_sizes": [[2, 2], [2, 3], [3, 3]]
 }
 ```
 

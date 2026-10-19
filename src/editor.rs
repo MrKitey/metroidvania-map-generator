@@ -1,8 +1,9 @@
 //! Side panel to edit generation settings and biomes.
 
-use crate::biome::{self, Biome, MAX_SECRETS};
+use crate::biome::{self, Biome, MAX_COUNT};
 use crate::settings::{
-    self, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, Settings,
+    self, DEFAULT_BOSS_SIZES, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES,
+    DEFAULT_VIEWPORT, Settings,
 };
 use macroquad::color::hsl_to_rgb;
 use macroquad::prelude::*;
@@ -23,6 +24,8 @@ const TABS_GAP: f32 = 8.0;
 const NODE_ID: u64 = 1_000_000;
 /// Base id of the room size fields, far from the biome field ids.
 const SIZE_ID: u64 = 500_000;
+/// Base id of the boss room size fields.
+const BOSS_SIZE_ID: u64 = 600_000;
 /// Width of a field followed by a button on the same line.
 const SIZE_FIELD: Vec2 = vec2(200.0, 19.0);
 /// Room size column: one width or height field, and its header above.
@@ -64,6 +67,56 @@ fn wrapped_label(ui: &mut Ui, text: &str) {
     }
 }
 
+/// Slider for a room count between 0 and `MAX_COUNT`.
+/// The slider works in floats, rounding makes it step between integers.
+fn count_slider(ui: &mut Ui, id: u64, label: &str, value: &mut u32) {
+    let mut v = *value as f32;
+    ui.slider(id, label, 0.0..MAX_COUNT as f32, &mut v);
+    *value = (v.round() as u32).min(MAX_COUNT);
+}
+
+/// Editable list of room sizes: width and height fields with a delete button per row,
+/// then "Add size" and "Reset". `id` is the base id of the fields.
+fn size_list(ui: &mut Ui, fields: &mut Vec<(String, String)>, id: u64, defaults: &[(u32, u32)]) {
+    widgets::Label::new("Width").size(SIDE_FIELD).ui(ui);
+    ui.same_line(0.0);
+    widgets::Label::new("Height").size(SIDE_FIELD).ui(ui);
+    let mut remove = None;
+    for (i, (w, h)) in fields.iter_mut().enumerate() {
+        let id = id + 2 * i as u64;
+        widgets::InputText::new(id).size(SIDE_FIELD).ui(ui, w);
+        ui.same_line(0.0);
+        widgets::InputText::new(id + 1).size(SIDE_FIELD).ui(ui, h);
+        ui.same_line(0.0);
+        if ui.button(None, "Delete") {
+            remove = Some(i);
+        }
+    }
+    if let Some(i) = remove {
+        fields.remove(i);
+    }
+    if ui.button(None, "Add size") {
+        fields.push(("1".to_owned(), "1".to_owned()));
+    }
+    ui.same_line(0.0);
+    if ui.button(None, "Reset") {
+        *fields = size_fields(defaults);
+    }
+}
+
+/// Valid sizes only. Falls back to `defaults` if none is valid.
+fn valid_sizes(fields: &[(String, String)], defaults: &[(u32, u32)]) -> Vec<(u32, u32)> {
+    let sizes: Vec<(u32, u32)> = fields
+        .iter()
+        .filter_map(|(w, h)| Some((parse_side(w)?, parse_side(h)?)))
+        .collect();
+    if sizes.is_empty() {
+        defaults.to_vec()
+    } else {
+        sizes
+    }
+}
+
 /// Width and height field texts for each size.
 fn size_fields(sizes: &[(u32, u32)]) -> Vec<(String, String)> {
     sizes
@@ -90,6 +143,8 @@ pub struct Editor {
     max_rooms: String,
     /// Width and height fields of each allowed room size.
     sizes: Vec<(String, String)>,
+    /// Same for the allowed boss room sizes.
+    boss_sizes: Vec<(String, String)>,
     /// Shows the current seed, can be edited and applied with "Use seed".
     seed: String,
     /// One `#RRGGBB` field per biome, rebuilt when the biome count changes.
@@ -131,6 +186,7 @@ impl Editor {
             min_rooms: settings.min_rooms.to_string(),
             max_rooms: settings.max_rooms.to_string(),
             sizes: size_fields(&settings.room_sizes),
+            boss_sizes: size_fields(&settings.boss_sizes),
             seed: seed.to_string(),
             hex: Vec::new(),
             picker: picker_texture(),
@@ -173,16 +229,12 @@ impl Editor {
 
     /// Valid sizes only. Falls back to the defaults if none is valid.
     pub fn room_sizes(&self) -> Vec<(u32, u32)> {
-        let sizes: Vec<(u32, u32)> = self
-            .sizes
-            .iter()
-            .filter_map(|(w, h)| Some((parse_side(w)?, parse_side(h)?)))
-            .collect();
-        if sizes.is_empty() {
-            DEFAULT_ROOM_SIZES.to_vec()
-        } else {
-            sizes
-        }
+        valid_sizes(&self.sizes, DEFAULT_ROOM_SIZES)
+    }
+
+    /// Valid boss room sizes only. Falls back to the defaults if none is valid.
+    pub fn boss_sizes(&self) -> Vec<(u32, u32)> {
+        valid_sizes(&self.boss_sizes, DEFAULT_BOSS_SIZES)
     }
 
     /// Current field values, validated, in the format saved to disk.
@@ -192,6 +244,7 @@ impl Editor {
             min_rooms: self.min_rooms(),
             max_rooms: self.max_rooms.trim().parse().unwrap_or(DEFAULT_MAX_ROOMS),
             room_sizes: self.room_sizes(),
+            boss_sizes: self.boss_sizes(),
         }
     }
 
@@ -258,30 +311,11 @@ impl Editor {
 
                     let label = format!("Room sizes (1 to {MAX_ROOM_SIDE})");
                     widgets::TreeNode::new(8, label.as_str()).ui(ui, |ui| {
-                        widgets::Label::new("Width").size(SIDE_FIELD).ui(ui);
-                        ui.same_line(0.0);
-                        widgets::Label::new("Height").size(SIDE_FIELD).ui(ui);
-                        let mut remove_size = None;
-                        for (i, (w, h)) in self.sizes.iter_mut().enumerate() {
-                            let id = SIZE_ID + 2 * i as u64;
-                            widgets::InputText::new(id).size(SIDE_FIELD).ui(ui, w);
-                            ui.same_line(0.0);
-                            widgets::InputText::new(id + 1).size(SIDE_FIELD).ui(ui, h);
-                            ui.same_line(0.0);
-                            if ui.button(None, "Delete") {
-                                remove_size = Some(i);
-                            }
-                        }
-                        if let Some(i) = remove_size {
-                            self.sizes.remove(i);
-                        }
-                        if ui.button(None, "Add size") {
-                            self.sizes.push(("1".to_owned(), "1".to_owned()));
-                        }
-                        ui.same_line(0.0);
-                        if ui.button(None, "Reset") {
-                            self.sizes = size_fields(DEFAULT_ROOM_SIZES);
-                        }
+                        size_list(ui, &mut self.sizes, SIZE_ID, DEFAULT_ROOM_SIZES);
+                    });
+                    let label = format!("Boss room sizes (1 to {MAX_ROOM_SIDE})");
+                    widgets::TreeNode::new(9, label.as_str()).ui(ui, |ui| {
+                        size_list(ui, &mut self.boss_sizes, BOSS_SIZE_ID, DEFAULT_BOSS_SIZES);
                     });
                     ui.separator();
                     ui.canvas().request_space(vec2(0.0, BUTTONS_GAP));
@@ -341,15 +375,9 @@ impl Editor {
                         b.fill = picker_color((mouse - pos) / PICKER_SIZE);
                         self.hex[i] = biome::to_hex(b.fill);
                     }
-                    // The slider works in floats, rounding makes it step between integers.
-                    let mut secrets = b.secrets as f32;
-                    ui.slider(
-                        id + 2,
-                        "Secret rooms",
-                        0.0..MAX_SECRETS as f32,
-                        &mut secrets,
-                    );
-                    b.secrets = (secrets.round() as u32).min(MAX_SECRETS);
+                    count_slider(ui, id + 2, "Secret rooms", &mut b.secrets);
+                    count_slider(ui, id + 3, "Boss rooms", &mut b.bosses);
+                    count_slider(ui, id + 4, "Save rooms", &mut b.saves);
                     if ui.button(None, "Delete") {
                         remove = Some(i);
                     }

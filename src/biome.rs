@@ -1,6 +1,7 @@
 //! Biome definitions and their storage in a JSON file.
 
 use crate::storage;
+use crate::world::Extras;
 use macroquad::color::Color;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -8,14 +9,19 @@ use std::path::{Path, PathBuf};
 
 /// Read at startup and written by the editor, in the app folder.
 const BIOMES_FILE: &str = "biomes.json";
-pub const DEFAULT_SECRETS: u32 = 1;
-pub const MAX_SECRETS: u32 = 5;
+/// Default and maximum number of secret, boss and save rooms per biome.
+pub const DEFAULT_COUNT: u32 = 1;
+pub const MAX_COUNT: u32 = 5;
 
 pub struct Biome {
     pub name: String,
     pub fill: Color,
-    /// Number of secret rooms added to the biome, up to `MAX_SECRETS`.
+    /// Number of secret rooms added to the biome, up to `MAX_COUNT`.
     pub secrets: u32,
+    /// Number of boss rooms, up to `MAX_COUNT`.
+    pub bosses: u32,
+    /// Number of save rooms, up to `MAX_COUNT`.
+    pub saves: u32,
 }
 
 impl Biome {
@@ -23,7 +29,17 @@ impl Biome {
         Biome {
             name: name.to_owned(),
             fill: Color::from_rgba(r, g, b, 255),
-            secrets: DEFAULT_SECRETS,
+            secrets: DEFAULT_COUNT,
+            bosses: DEFAULT_COUNT,
+            saves: DEFAULT_COUNT,
+        }
+    }
+
+    pub fn extras(&self) -> Extras {
+        Extras {
+            secrets: self.secrets,
+            bosses: self.bosses,
+            saves: self.saves,
         }
     }
 
@@ -51,18 +67,23 @@ pub fn default_biomes() -> Vec<Biome> {
     ]
 }
 
-/// One biome as stored in JSON: `{"name": "Castle", "color": "#464E78", "secrets": 1}`.
-/// `secrets` may be missing in older files.
+/// One biome as stored in JSON:
+/// `{"name": "Castle", "color": "#464E78", "secrets": 1, "bosses": 1, "saves": 1}`.
+/// The counts may be missing in older files.
 #[derive(Serialize, Deserialize)]
 struct Entry {
     name: String,
     color: String,
-    #[serde(default = "default_secrets")]
+    #[serde(default = "default_count")]
     secrets: u32,
+    #[serde(default = "default_count")]
+    bosses: u32,
+    #[serde(default = "default_count")]
+    saves: u32,
 }
 
-fn default_secrets() -> u32 {
-    DEFAULT_SECRETS
+fn default_count() -> u32 {
+    DEFAULT_COUNT
 }
 
 /// Reads a JSON list of biomes. Entries with an invalid color are skipped.
@@ -75,7 +96,9 @@ pub fn read(path: &Path) -> Result<Vec<Biome>, Box<dyn Error>> {
             Some(Biome {
                 fill: parse_hex(&e.color)?,
                 name: e.name,
-                secrets: e.secrets.min(MAX_SECRETS),
+                secrets: e.secrets.min(MAX_COUNT),
+                bosses: e.bosses.min(MAX_COUNT),
+                saves: e.saves.min(MAX_COUNT),
             })
         })
         .collect();
@@ -98,6 +121,8 @@ pub fn save(biomes: &[Biome]) -> Result<PathBuf, Box<dyn Error>> {
             name: b.name.clone(),
             color: to_hex(b.fill),
             secrets: b.secrets,
+            bosses: b.bosses,
+            saves: b.saves,
         })
         .collect();
     storage::write_json(BIOMES_FILE, &entries)

@@ -16,8 +16,18 @@ const CELLS_PER_BIOME: u32 = 75;
 const LINK_ATTEMPTS: u32 = 200;
 /// After this many tries, a biome is kept even if it stayed small.
 const BIOME_ATTEMPTS: u32 = 5;
-/// Tries to find a free spot for one secret room.
-const SECRET_ATTEMPTS: u32 = 200;
+/// Tries to find a free spot for one secret, save or boss room.
+const EXTRA_ATTEMPTS: u32 = 200;
+/// Special rooms added to one biome once it is grown.
+#[derive(Clone, Copy)]
+pub struct Extras {
+    /// 1x1 dead ends.
+    pub secrets: u32,
+    /// Rooms with one entrance and one exit, like corridors.
+    pub bosses: u32,
+    /// 1x1 dead ends with a save marker.
+    pub saves: u32,
+}
 
 /// Uniform in [low, high). `gen_range` truncates toward zero, which can return `high` for negative ranges.
 fn range(low: i32, high: i32) -> i32 {
@@ -33,7 +43,7 @@ pub enum RoomKind {
     Secret,
 }
 
-/// Icon placed by the user on a room.
+/// Icon on a room. Placed by the generator, and toggled by the user.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Marker {
     Boss,
@@ -73,22 +83,26 @@ pub struct World {
     pub biomes: Vec<usize>,
     /// Allowed room sizes, as (width, height) in cells.
     sizes: Vec<(u32, u32)>,
+    /// Allowed boss room sizes, as (width, height) in cells.
+    boss_sizes: Vec<(u32, u32)>,
 }
 
 impl World {
-    /// `cells` is the target number of room cells. `secrets` holds the secret room count of
+    /// `cells` is the target number of room cells. `extras` holds the special rooms of
     /// each biome, so its length is the biome count. It and `min_rooms` must be at least 1,
-    /// and `max_rooms` at least `min_rooms`. Every biome ends with that many normal rooms.
-    /// `sizes` must not be empty.
+    /// and `max_rooms` at least `min_rooms`. Every biome ends with that many normal rooms,
+    /// not counting the special rooms and the room behind each boss.
+    /// `sizes` and `boss_sizes` must not be empty.
     pub fn generate(
         cells: u32,
         seed: u64,
-        secrets: &[u32],
+        extras: &[Extras],
         min_rooms: usize,
         max_rooms: usize,
         sizes: &[(u32, u32)],
+        boss_sizes: &[(u32, u32)],
     ) -> World {
-        let biome_count = secrets.len();
+        let biome_count = extras.len();
         // Same seed and settings always give the same map.
         srand(seed);
         let mut world = World {
@@ -97,6 +111,7 @@ impl World {
             doors: Vec::new(),
             biomes: Vec::new(),
             sizes: sizes.to_vec(),
+            boss_sizes: boss_sizes.to_vec(),
         };
 
         // Pick which biomes appear and in which order. Each gets the same cell quota.
@@ -118,7 +133,7 @@ impl World {
             world.truncate(0, 0);
         }
         world.biomes.push(root);
-        world.add_secrets(root, secrets[root]);
+        world.add_extras(root, extras[root]);
 
         // Next biomes: link to a random placed biome, then grow. A failed try is rolled
         // back so the next one starts from a clean state.
@@ -135,7 +150,7 @@ impl World {
                 // accepted once the early attempts are used up.
                 if rooms >= min_rooms && (cells >= quota / 3 || attempt >= BIOME_ATTEMPTS - 1) {
                     world.biomes.push(child);
-                    world.add_secrets(child, secrets[child]);
+                    world.add_extras(child, extras[child]);
                     break;
                 }
                 world.truncate(rooms_len, doors_len);
@@ -158,10 +173,14 @@ impl World {
             })
     }
 
-    /// Indices of the non-corridor rooms of a biome.
+    /// Indices of the rooms of a biome that can receive new rooms. Corridors, secrets and
+    /// rooms with a marker are left out, so their door count never changes.
     fn normal_rooms(&self, biome: usize) -> Vec<usize> {
         (0..self.rooms.len())
-            .filter(|&i| self.rooms[i].biome == biome && self.rooms[i].kind == RoomKind::Normal)
+            .filter(|&i| {
+                let r = &self.rooms[i];
+                r.biome == biome && r.kind == RoomKind::Normal && r.marker.is_none()
+            })
             .collect()
     }
 
@@ -195,20 +214,53 @@ impl World {
         (cells, rooms.len())
     }
 
-    /// Attaches `count` 1x1 secret rooms to random normal rooms of the biome.
-    /// A secret is skipped if no free spot is found.
-    fn add_secrets(&mut self, biome: usize, count: u32) {
+    /// Adds the special rooms of a biome. Bosses go first because they need the most space.
+    /// A room is skipped if no free spot is found.
+    fn add_extras(&mut self, biome: usize, extras: Extras) {
+        for _ in 0..extras.bosses {
+            self.add_boss(biome);
+        }
+        for _ in 0..extras.saves {
+            self.add_dead_end(biome, RoomKind::Normal, Some(Marker::Save));
+        }
+        for _ in 0..extras.secrets {
+            self.add_dead_end(biome, RoomKind::Secret, None);
+        }
+    }
+
+    /// Attaches a 1x1 room to a random normal room of the biome. Nothing is attached to it.
+    fn add_dead_end(&mut self, biome: usize, kind: RoomKind, marker: Option<Marker>) {
         let rooms = self.normal_rooms(biome);
-        for _ in 0..count {
-            for _ in 0..SECRET_ATTEMPTS {
-                let from = *rooms.choose().unwrap();
-                if self
-                    .try_attach(from, gen_range(0, 4), 1, 1, biome, RoomKind::Secret)
-                    .is_some()
-                {
-                    break;
-                }
+        for _ in 0..EXTRA_ATTEMPTS {
+            let from = *rooms.choose().unwrap();
+            if let Some(idx) = self.try_attach(from, gen_range(0, 4), 1, 1, biome, kind) {
+                self.rooms[idx].marker = marker;
+                return;
             }
+        }
+    }
+
+    /// Attaches a boss room to a random normal room of the biome, then a normal room
+    /// behind it. The boss room has one entrance and one exit. Both rooms are removed
+    /// if the second one does not fit.
+    fn add_boss(&mut self, biome: usize) {
+        let rooms = self.normal_rooms(biome);
+        for _ in 0..EXTRA_ATTEMPTS {
+            let from = *rooms.choose().unwrap();
+            let (w, h) = *self.boss_sizes.choose().unwrap();
+            let Some(boss) = self.try_attach(from, gen_range(0, 4), w, h, biome, RoomKind::Normal)
+            else {
+                continue;
+            };
+            let (w, h) = *self.sizes.choose().unwrap();
+            if self
+                .try_attach(boss, gen_range(0, 4), w, h, biome, RoomKind::Normal)
+                .is_some()
+            {
+                self.rooms[boss].marker = Some(Marker::Boss);
+                return;
+            }
+            self.remove_last();
         }
     }
 

@@ -391,11 +391,16 @@ fn draw_help(reserved: f32, open: bool) {
 /// Shows the room name and its size, in cells and in pixels, next to the cursor.
 fn draw_tooltip(r: &Room, biomes: &[Biome], layout: &Layout) {
     let biome = &biomes[r.biome].name;
-    let name = match r.kind {
+    let mut name = match r.kind {
         RoomKind::Normal => biome.clone(),
         RoomKind::Corridor => "Corridor".to_owned(),
         RoomKind::Secret => format!("{biome} (secret)"),
     };
+    match r.marker {
+        Some(Marker::Boss) => name.push_str(" (boss)"),
+        Some(Marker::Save) => name.push_str(" (save)"),
+        None => {}
+    }
     let text = format!(
         "{}  {}x{} : {}x{} px",
         name,

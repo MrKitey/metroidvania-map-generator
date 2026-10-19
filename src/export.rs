@@ -47,6 +47,8 @@ struct BiomeEntry {
     name: String,
     color: String,
     secrets: u32,
+    bosses: u32,
+    saves: u32,
 }
 
 /// Position and size in cells. `biome` is an index into `biomes`.
@@ -141,6 +143,8 @@ fn map_file<'a>(map: &MapData<'a>) -> MapFile<'a> {
                 name: b.name.clone(),
                 color: biome::to_hex(b.fill),
                 secrets: b.secrets,
+                bosses: b.bosses,
+                saves: b.saves,
             })
             .collect(),
         used_biomes: &world.biomes,
