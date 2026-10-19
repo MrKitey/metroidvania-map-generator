@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release
+      - run: cargo build --release --locked
       - name: Rename executable
         shell: bash
         run: cp "target/release/$APP.exe" "$APP-$GITHUB_REF_NAME-windows-x86_64.exe"
@@ -42,7 +42,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
-      - run: cargo build --release
+      - run: cargo build --release --locked
       - name: Build AppImage
         env:
           ARCH: x86_64
