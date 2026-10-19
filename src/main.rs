@@ -3,6 +3,9 @@
 //! Generates a random map of rooms grouped by biome, shows it with pan and zoom,
 //! and lets the user mark boss and save rooms.
 
+// No console window behind the app in Windows release builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod biome;
 mod editor;
 mod icons;

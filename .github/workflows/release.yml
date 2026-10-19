@@ -1,0 +1,79 @@
+# Builds the Windows .exe and the Linux AppImage, then publishes them in a GitHub release.
+# Triggered by pushing a tag such as v0.1.0, which must match the Cargo.toml version.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  APP: metroidvania-map-generator
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - name: Rename executable
+        shell: bash
+        run: cp "target/release/$APP.exe" "$APP-$GITHUB_REF_NAME-windows-x86_64.exe"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: "*.exe"
+          if-no-files-found: error
+
+  linux:
+    # Oldest supported runner, so the AppImage runs on older glibc versions too.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check tag matches Cargo.toml version
+        run: test "${GITHUB_REF_NAME#v}" = "$(cargo pkgid | sed 's/.*[#@]//')"
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+      - run: cargo build --release
+      - name: Build AppImage
+        env:
+          ARCH: x86_64
+          # The runner has no FUSE, so appimagetool runs from an extracted copy.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp "target/release/$APP" AppDir/usr/bin/
+          cp "packaging/linux/$APP.desktop" AppDir/
+          cp assets/icon.png "AppDir/$APP.png"
+          ln -s "usr/bin/$APP" AppDir/AppRun
+          curl -fsSL -o appimagetool "$APPIMAGETOOL_URL"
+          echo "$APPIMAGETOOL_SHA256  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          ./appimagetool AppDir "$APP-$GITHUB_REF_NAME-linux-x86_64.AppImage"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux
+          path: "*.AppImage"
+          if-no-files-found: error
+
+  release:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            *.exe
+            *.AppImage
+          generate_release_notes: true

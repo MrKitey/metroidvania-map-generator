@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Metroidvania Map Generator
+Comment=Generate random Metroidvania style maps
+Exec=metroidvania-map-generator
+Icon=metroidvania-map-generator
+Categories=Development;
+Terminal=false
