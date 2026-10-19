@@ -1,10 +1,11 @@
 //! Side panel to edit generation settings and biomes.
 
-use crate::biome::{self, Biome, MAX_COUNT};
+use crate::biome::{self, Biome, MAX_COUNT, MIN_CORRIDORS};
 use crate::settings::{
-    self, DEFAULT_BOSS_SIZES, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES,
-    DEFAULT_VIEWPORT, Settings,
+    self, DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS,
+    DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, Settings,
 };
+use crate::world::Sizes;
 use macroquad::color::hsl_to_rgb;
 use macroquad::prelude::*;
 use macroquad::ui::{Skin, Ui, root_ui, widgets};
@@ -26,6 +27,8 @@ const NODE_ID: u64 = 1_000_000;
 const SIZE_ID: u64 = 500_000;
 /// Base id of the boss room size fields.
 const BOSS_SIZE_ID: u64 = 600_000;
+/// Base id of the corridor size fields.
+const CORRIDOR_SIZE_ID: u64 = 700_000;
 /// Width of a field followed by a button on the same line.
 const SIZE_FIELD: Vec2 = vec2(200.0, 19.0);
 /// Room size column: one width or height field, and its header above.
@@ -67,12 +70,12 @@ fn wrapped_label(ui: &mut Ui, text: &str) {
     }
 }
 
-/// Slider for a room count between 0 and `MAX_COUNT`.
+/// Slider for a count between `min` and `MAX_COUNT`.
 /// The slider works in floats, rounding makes it step between integers.
-fn count_slider(ui: &mut Ui, id: u64, label: &str, value: &mut u32) {
+fn count_slider(ui: &mut Ui, id: u64, label: &str, min: u32, value: &mut u32) {
     let mut v = *value as f32;
-    ui.slider(id, label, 0.0..MAX_COUNT as f32, &mut v);
-    *value = (v.round() as u32).min(MAX_COUNT);
+    ui.slider(id, label, min as f32..MAX_COUNT as f32, &mut v);
+    *value = (v.round() as u32).clamp(min, MAX_COUNT);
 }
 
 /// Editable list of room sizes: width and height fields with a delete button per row,
@@ -145,6 +148,8 @@ pub struct Editor {
     sizes: Vec<(String, String)>,
     /// Same for the allowed boss room sizes.
     boss_sizes: Vec<(String, String)>,
+    /// Same for the allowed corridor sizes.
+    corridor_sizes: Vec<(String, String)>,
     /// Shows the current seed, can be edited and applied with "Use seed".
     seed: String,
     /// One `#RRGGBB` field per biome, rebuilt when the biome count changes.
@@ -187,6 +192,7 @@ impl Editor {
             max_rooms: settings.max_rooms.to_string(),
             sizes: size_fields(&settings.room_sizes),
             boss_sizes: size_fields(&settings.boss_sizes),
+            corridor_sizes: size_fields(&settings.corridor_sizes),
             seed: seed.to_string(),
             hex: Vec::new(),
             picker: picker_texture(),
@@ -237,6 +243,20 @@ impl Editor {
         valid_sizes(&self.boss_sizes, DEFAULT_BOSS_SIZES)
     }
 
+    /// Valid corridor sizes only. Falls back to the defaults if none is valid.
+    pub fn corridor_sizes(&self) -> Vec<(u32, u32)> {
+        valid_sizes(&self.corridor_sizes, DEFAULT_CORRIDOR_SIZES)
+    }
+
+    /// All allowed sizes, ready for the generator.
+    pub fn sizes(&self) -> Sizes {
+        Sizes {
+            rooms: self.room_sizes(),
+            boss: self.boss_sizes(),
+            corridor: self.corridor_sizes(),
+        }
+    }
+
     /// Current field values, validated, in the format saved to disk.
     pub fn settings(&self) -> Settings {
         Settings {
@@ -245,6 +265,7 @@ impl Editor {
             max_rooms: self.max_rooms.trim().parse().unwrap_or(DEFAULT_MAX_ROOMS),
             room_sizes: self.room_sizes(),
             boss_sizes: self.boss_sizes(),
+            corridor_sizes: self.corridor_sizes(),
         }
     }
 
@@ -317,6 +338,15 @@ impl Editor {
                     widgets::TreeNode::new(9, label.as_str()).ui(ui, |ui| {
                         size_list(ui, &mut self.boss_sizes, BOSS_SIZE_ID, DEFAULT_BOSS_SIZES);
                     });
+                    let label = format!("Corridor room sizes (1 to {MAX_ROOM_SIDE})");
+                    widgets::TreeNode::new(10, label.as_str()).ui(ui, |ui| {
+                        size_list(
+                            ui,
+                            &mut self.corridor_sizes,
+                            CORRIDOR_SIZE_ID,
+                            DEFAULT_CORRIDOR_SIZES,
+                        );
+                    });
                     ui.separator();
                     ui.canvas().request_space(vec2(0.0, BUTTONS_GAP));
 
@@ -375,9 +405,10 @@ impl Editor {
                         b.fill = picker_color((mouse - pos) / PICKER_SIZE);
                         self.hex[i] = biome::to_hex(b.fill);
                     }
-                    count_slider(ui, id + 2, "Secret rooms", &mut b.secrets);
-                    count_slider(ui, id + 3, "Boss rooms", &mut b.bosses);
-                    count_slider(ui, id + 4, "Save rooms", &mut b.saves);
+                    count_slider(ui, id + 2, "Secret rooms", 0, &mut b.secrets);
+                    count_slider(ui, id + 3, "Boss rooms", 0, &mut b.bosses);
+                    count_slider(ui, id + 4, "Save rooms", 0, &mut b.saves);
+                    count_slider(ui, id + 5, "Corridors", MIN_CORRIDORS, &mut b.corridors);
                     if ui.button(None, "Delete") {
                         remove = Some(i);
                     }

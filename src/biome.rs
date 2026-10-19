@@ -12,10 +12,14 @@ const BIOMES_FILE: &str = "biomes.json";
 /// Default and maximum number of secret, boss and save rooms per biome.
 pub const DEFAULT_COUNT: u32 = 1;
 pub const MAX_COUNT: u32 = 5;
+/// Every biome has at least the corridor that links it to the map.
+pub const MIN_CORRIDORS: u32 = 0;
 
 pub struct Biome {
     pub name: String,
     pub fill: Color,
+    /// Number of corridors, from `MIN_CORRIDORS` to `MAX_COUNT`.
+    pub corridors: u32,
     /// Number of secret rooms added to the biome, up to `MAX_COUNT`.
     pub secrets: u32,
     /// Number of boss rooms, up to `MAX_COUNT`.
@@ -29,6 +33,7 @@ impl Biome {
         Biome {
             name: name.to_owned(),
             fill: Color::from_rgba(r, g, b, 255),
+            corridors: DEFAULT_COUNT,
             secrets: DEFAULT_COUNT,
             bosses: DEFAULT_COUNT,
             saves: DEFAULT_COUNT,
@@ -37,6 +42,7 @@ impl Biome {
 
     pub fn extras(&self) -> Extras {
         Extras {
+            corridors: self.corridors,
             secrets: self.secrets,
             bosses: self.bosses,
             saves: self.saves,
@@ -68,12 +74,14 @@ pub fn default_biomes() -> Vec<Biome> {
 }
 
 /// One biome as stored in JSON:
-/// `{"name": "Castle", "color": "#464E78", "secrets": 1, "bosses": 1, "saves": 1}`.
-/// The counts may be missing in older files.
+/// `{"name": "Castle", "color": "#464E78", "corridors": 1, "secrets": 1, "bosses": 1,
+/// "saves": 1}`. The counts may be missing in older files.
 #[derive(Serialize, Deserialize)]
 struct Entry {
     name: String,
     color: String,
+    #[serde(default = "default_count")]
+    corridors: u32,
     #[serde(default = "default_count")]
     secrets: u32,
     #[serde(default = "default_count")]
@@ -96,6 +104,7 @@ pub fn read(path: &Path) -> Result<Vec<Biome>, Box<dyn Error>> {
             Some(Biome {
                 fill: parse_hex(&e.color)?,
                 name: e.name,
+                corridors: e.corridors.clamp(MIN_CORRIDORS, MAX_COUNT),
                 secrets: e.secrets.min(MAX_COUNT),
                 bosses: e.bosses.min(MAX_COUNT),
                 saves: e.saves.min(MAX_COUNT),
@@ -120,6 +129,7 @@ pub fn save(biomes: &[Biome]) -> Result<PathBuf, Box<dyn Error>> {
         .map(|b| Entry {
             name: b.name.clone(),
             color: to_hex(b.fill),
+            corridors: b.corridors,
             secrets: b.secrets,
             bosses: b.bosses,
             saves: b.saves,

@@ -56,8 +56,7 @@ fn generate(cells: u32, seed: u64, biomes: &[biome::Biome], editor: &Editor) -> 
         &biomes.iter().map(|b| b.extras()).collect::<Vec<_>>(),
         editor.min_rooms(),
         editor.max_rooms(),
-        &editor.room_sizes(),
-        &editor.boss_sizes(),
+        editor.sizes(),
     )
 }
 

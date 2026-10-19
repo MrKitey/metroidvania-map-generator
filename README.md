@@ -16,7 +16,9 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Biomes grown one after another, each linked to the map by a corridor.
 - Secret rooms: 0 to 5 per biome, added as 1x1 dead ends.
 - Save rooms: 0 to 5 per biome, added as 1x1 dead ends.
-- Boss rooms: 0 to 5 per biome, long thin rooms with one entrance and one exit.
+- Boss rooms: 0 to 5 per biome, with one entrance and one exit.
+- Corridors: 1 to 5 per biome. Extra corridors join two biomes that face each other and
+  create loops. Two corridors never come closer than 3 cells, diagonals included.
 - Same seed and settings always give the same map.
 - Boss and save markers can also be toggled on any room.
 - Room tooltip with its size in cells and in pixels.
@@ -103,8 +105,10 @@ Press Tab to open the panel on the right.
   not counted, nor the room behind each boss.
 - Room sizes: allowed room sizes in cells, from 1 to 10 per side. Add, edit, delete or
   reset them to the defaults.
-- Boss room sizes: allowed sizes for boss rooms, edited the same way. The default is
-  long and thin rooms, 3 to 5 cells.
+- Boss room sizes: allowed sizes for boss rooms, edited the same way.
+- Corridor room sizes: allowed sizes for corridors, edited the same way. The default is
+  long and thin rooms, 3 to 5 cells. Extra corridors between biomes need a size 1 cell
+  thick.
 - "Generate" builds a new map with a random seed. "Save settings" writes `settings.json`.
 
 Changes apply on the next generation.
@@ -113,8 +117,11 @@ Changes apply on the next generation.
 
 - One foldable entry per biome, with its name, a hex color field and a color picker.
 - "Secret rooms", "Boss rooms" and "Save rooms" sliders: number of each in the biome,
-  from 0 to 5, 1 by default. A boss room is followed by a normal room. Applies on the
-  next generation.
+  from 0 to 5, 1 by default. A boss room is followed by a normal room.
+- "Corridors" slider: from 1 to 5, 1 by default. The first corridor links the biome to
+  the map. Each other one is built from the biome to a room of another biome, if a free
+  straight line exists. The first biome has no parent, so it only gets the others.
+- Sliders apply on the next generation.
 - "Add" creates a biome, "Import" loads biomes from a JSON file, "Save" writes
   `biomes.json`.
 
@@ -156,8 +163,8 @@ fall back to the defaults.
 
 ```json
 [
-  { "name": "Castle", "color": "#465078", "secrets": 1, "bosses": 1, "saves": 1 },
-  { "name": "Caves", "color": "#64462D", "secrets": 2, "bosses": 0, "saves": 2 }
+  { "name": "Castle", "color": "#465078", "corridors": 1, "secrets": 1, "bosses": 1, "saves": 1 },
+  { "name": "Caves", "color": "#64462D", "corridors": 3, "secrets": 2, "bosses": 0, "saves": 2 }
 ]
 ```
 
@@ -169,7 +176,8 @@ fall back to the defaults.
   "min_rooms": 5,
   "max_rooms": 50,
   "room_sizes": [[1, 1], [2, 1], [1, 2], [2, 2]],
-  "boss_sizes": [[2, 2], [2, 3], [3, 3]]
+  "boss_sizes": [[2, 2], [2, 3], [3, 3]],
+  "corridor_sizes": [[3, 1], [4, 1], [5, 1], [1, 3], [1, 4], [1, 5]]
 }
 ```
 

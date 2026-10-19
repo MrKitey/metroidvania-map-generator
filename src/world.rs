@@ -6,8 +6,12 @@
 //!
 //! Biomes are grown one after another: the first one starts at the origin, then each
 //! next biome is linked to an already placed biome by a corridor.
+//!
+//! Once every biome is placed, extra corridors can join two biomes that face each other.
+//! They create loops, so the map is a tree only before that step.
 
 use macroquad::rand::{ChooseRandom, gen_range, srand};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 /// Average number of room cells per biome. Drives how many biomes a map uses.
@@ -18,15 +22,42 @@ const LINK_ATTEMPTS: u32 = 200;
 const BIOME_ATTEMPTS: u32 = 5;
 /// Tries to find a free spot for one secret, save or boss room.
 const EXTRA_ATTEMPTS: u32 = 200;
-/// Special rooms added to one biome once it is grown.
+/// Cells kept free of other corridors around a corridor, diagonals included.
+const CORRIDOR_SPACING: i32 = 2;
+/// Longest gap, in cells, that an extra corridor can cross.
+const MAX_BRIDGE: i32 = 10;
+
+/// Allowed sizes of each kind of room, as (width, height) in cells. None may be empty.
+pub struct Sizes {
+    pub rooms: Vec<(u32, u32)>,
+    pub boss: Vec<(u32, u32)>,
+    pub corridor: Vec<(u32, u32)>,
+}
+
+/// Special rooms and corridors of one biome.
 #[derive(Clone, Copy)]
 pub struct Extras {
+    /// Corridors of the biome. The first one links it to its parent biome, the others
+    /// join it to a room of another biome. The first biome has no parent, so it only
+    /// gets the others.
+    pub corridors: u32,
     /// 1x1 dead ends.
     pub secrets: u32,
     /// Rooms with one entrance and one exit, like corridors.
     pub bosses: u32,
     /// 1x1 dead ends with a save marker.
     pub saves: u32,
+}
+
+/// Top-left cell and size of an extra corridor of `len` cells whose first cell is (x, y),
+/// going in direction `dir` (0 right, 1 left, 2 down, 3 up).
+fn bridge_rect(dir: i32, x: i32, y: i32, len: i32) -> (i32, i32, i32, i32) {
+    match dir {
+        0 => (x, y, len, 1),
+        1 => (x - len + 1, y, len, 1),
+        2 => (x, y, 1, len),
+        _ => (x, y - len + 1, 1, len),
+    }
 }
 
 /// Uniform in [low, high). `gen_range` truncates toward zero, which can return `high` for negative ranges.
@@ -37,7 +68,7 @@ fn range(low: i32, high: i32) -> i32 {
 #[derive(Clone, Copy, PartialEq)]
 pub enum RoomKind {
     Normal,
-    /// Long thin room joining two biomes. Belongs to the parent biome.
+    /// Long thin room joining two biomes. Belongs to the biome it starts from.
     Corridor,
     /// 1x1 dead end added after a biome is grown. Nothing is attached to it.
     Secret,
@@ -77,14 +108,10 @@ pub struct World {
     /// Maps each occupied cell to the index of the room covering it.
     grid: HashMap<(i32, i32), usize>,
     pub rooms: Vec<Room>,
-    /// One door per room except the first, pushed in the same order as `rooms`.
     pub doors: Vec<Door>,
     /// Biomes actually used, in placement order.
     pub biomes: Vec<usize>,
-    /// Allowed room sizes, as (width, height) in cells.
-    sizes: Vec<(u32, u32)>,
-    /// Allowed boss room sizes, as (width, height) in cells.
-    boss_sizes: Vec<(u32, u32)>,
+    sizes: Sizes,
 }
 
 impl World {
@@ -92,15 +119,13 @@ impl World {
     /// each biome, so its length is the biome count. It and `min_rooms` must be at least 1,
     /// and `max_rooms` at least `min_rooms`. Every biome ends with that many normal rooms,
     /// not counting the special rooms and the room behind each boss.
-    /// `sizes` and `boss_sizes` must not be empty.
     pub fn generate(
         cells: u32,
         seed: u64,
         extras: &[Extras],
         min_rooms: usize,
         max_rooms: usize,
-        sizes: &[(u32, u32)],
-        boss_sizes: &[(u32, u32)],
+        sizes: Sizes,
     ) -> World {
         let biome_count = extras.len();
         // Same seed and settings always give the same map.
@@ -110,8 +135,7 @@ impl World {
             rooms: Vec::new(),
             doors: Vec::new(),
             biomes: Vec::new(),
-            sizes: sizes.to_vec(),
-            boss_sizes: boss_sizes.to_vec(),
+            sizes,
         };
 
         // Pick which biomes appear and in which order. Each gets the same cell quota.
@@ -125,7 +149,7 @@ impl World {
         // it reaches the minimum room count.
         let root = order[0];
         loop {
-            let (w, h) = *world.sizes.choose().unwrap();
+            let (w, h) = *world.sizes.rooms.choose().unwrap();
             world.place(0, 0, w, h, root, RoomKind::Normal);
             if world.grow(root, quota, min_rooms, max_rooms).1 >= min_rooms {
                 break;
@@ -154,6 +178,14 @@ impl World {
                     break;
                 }
                 world.truncate(rooms_len, doors_len);
+            }
+        }
+
+        // Extra corridors come last, once every biome has its neighbors.
+        for i in 0..world.biomes.len() {
+            let biome = world.biomes[i];
+            for _ in 1..extras[biome].corridors {
+                world.add_bridge(biome);
             }
         }
         world
@@ -204,7 +236,7 @@ impl World {
                 break;
             }
             let from = *rooms.choose().unwrap();
-            let (w, h) = *self.sizes.choose().unwrap();
+            let (w, h) = *self.sizes.rooms.choose().unwrap();
             let dir = gen_range(0, 4);
             if let Some(idx) = self.try_attach(from, dir, w, h, biome, RoomKind::Normal) {
                 cells += w * h;
@@ -247,12 +279,12 @@ impl World {
         let rooms = self.normal_rooms(biome);
         for _ in 0..EXTRA_ATTEMPTS {
             let from = *rooms.choose().unwrap();
-            let (w, h) = *self.boss_sizes.choose().unwrap();
+            let (w, h) = *self.sizes.boss.choose().unwrap();
             let Some(boss) = self.try_attach(from, gen_range(0, 4), w, h, biome, RoomKind::Normal)
             else {
                 continue;
             };
-            let (w, h) = *self.sizes.choose().unwrap();
+            let (w, h) = *self.sizes.rooms.choose().unwrap();
             if self
                 .try_attach(boss, gen_range(0, 4), w, h, biome, RoomKind::Normal)
                 .is_some()
@@ -269,15 +301,23 @@ impl World {
     fn link(&mut self, parent: usize, child: usize) -> bool {
         for _ in 0..LINK_ATTEMPTS {
             let from = *self.normal_rooms(parent).choose().unwrap();
-            let dir = gen_range(0, 4);
-            let len = gen_range(3, 6);
-            // Horizontal corridor for left/right, vertical for up/down.
-            let (cw, ch) = if dir < 2 { (len, 1) } else { (1, len) };
+            let (cw, ch) = *self.sizes.corridor.choose().unwrap();
+            // A wide corridor goes left or right, a tall one goes up or down.
+            let dir = match cw.cmp(&ch) {
+                Ordering::Greater => gen_range(0, 2),
+                Ordering::Less => gen_range(2, 4),
+                Ordering::Equal => gen_range(0, 4),
+            };
             let Some(corridor) = self.try_attach(from, dir, cw, ch, parent, RoomKind::Corridor)
             else {
                 continue;
             };
-            let (w, h) = *self.sizes.choose().unwrap();
+            let c = &self.rooms[corridor];
+            if self.corridor_near(c.x, c.y, c.w as i32, c.h as i32, Some(corridor)) {
+                self.remove_last();
+                continue;
+            }
+            let (w, h) = *self.sizes.rooms.choose().unwrap();
             if self
                 .try_attach(corridor, dir, w, h, child, RoomKind::Normal)
                 .is_some()
@@ -287,6 +327,90 @@ impl World {
             self.remove_last();
         }
         false
+    }
+
+    /// True if another corridor lies within `CORRIDOR_SPACING` cells of the rectangle,
+    /// diagonals included. `except` is the corridor that owns the rectangle, if placed.
+    fn corridor_near(&self, x: i32, y: i32, w: i32, h: i32, except: Option<usize>) -> bool {
+        let s = CORRIDOR_SPACING;
+        (y - s..y + h + s).any(|cy| {
+            (x - s..x + w + s).any(|cx| {
+                self.room_at(cx, cy)
+                    .is_some_and(|i| Some(i) != except && self.rooms[i].kind == RoomKind::Corridor)
+            })
+        })
+    }
+
+    /// Builds a corridor in a straight line from a normal room of the biome to a normal
+    /// room of another biome, with a door at each end. The corridor must fit a size of
+    /// the corridor list exactly, 1 cell thick. Nothing is built if no spot exists.
+    fn add_bridge(&mut self, biome: usize) {
+        // (from, dir, x, y, len, to): (x, y) is the first corridor cell next to `from`.
+        let mut spots = Vec::new();
+        for from in self.normal_rooms(biome) {
+            let r = &self.rooms[from];
+            let (rx, ry, rw, rh) = (r.x, r.y, r.w as i32, r.h as i32);
+            for dir in 0..4 {
+                let side = if dir < 2 { rh } else { rw };
+                for i in 0..side {
+                    let (x, y, dx, dy) = match dir {
+                        0 => (rx + rw, ry + i, 1, 0),
+                        1 => (rx - 1, ry + i, -1, 0),
+                        2 => (rx + i, ry + rh, 0, 1),
+                        _ => (rx + i, ry - 1, 0, -1),
+                    };
+                    // Walk over free cells until a room is hit.
+                    let Some((len, to)) = (0..=MAX_BRIDGE)
+                        .find_map(|k| Some((k, self.room_at(x + dx * k, y + dy * k)?)))
+                    else {
+                        continue;
+                    };
+                    let size = if dir < 2 {
+                        (len as u32, 1)
+                    } else {
+                        (1, len as u32)
+                    };
+                    let target = &self.rooms[to];
+                    let (cx, cy, cw, ch) = bridge_rect(dir, x, y, len);
+                    if len > 0
+                        && target.biome != biome
+                        && target.kind == RoomKind::Normal
+                        && target.marker.is_none()
+                        && self.sizes.corridor.contains(&size)
+                        && !self.corridor_near(cx, cy, cw, ch, None)
+                    {
+                        spots.push((from, dir, x, y, len, to));
+                    }
+                }
+            }
+        }
+        if spots.is_empty() {
+            return;
+        }
+        let (from, dir, x, y, len, to) = spots[gen_range(0, spots.len())];
+        // Corridor top-left cell and size, then the door cells at both ends.
+        let (cx, cy, w, h) = bridge_rect(dir, x, y, len);
+        let ((x1, y1), (x2, y2), vertical) = match dir {
+            0 => ((x, y), (x + len, y), true),
+            1 => ((x + 1, y), (x - len + 1, y), true),
+            2 => ((x, y), (x, y + len), false),
+            _ => ((x, y + 1), (x, y - len + 1), false),
+        };
+        let idx = self.place(cx, cy, w as u32, h as u32, biome, RoomKind::Corridor);
+        self.doors.push(Door {
+            a: from,
+            b: idx,
+            x: x1,
+            y: y1,
+            vertical,
+        });
+        self.doors.push(Door {
+            a: idx,
+            b: to,
+            x: x2,
+            y: y2,
+            vertical,
+        });
     }
 
     /// Places a w x h room against one side of room `from`, plus a door between them.

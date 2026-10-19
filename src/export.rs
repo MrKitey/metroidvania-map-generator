@@ -46,6 +46,7 @@ struct MapFile<'a> {
 struct BiomeEntry {
     name: String,
     color: String,
+    corridors: u32,
     secrets: u32,
     bosses: u32,
     saves: u32,
@@ -142,6 +143,7 @@ fn map_file<'a>(map: &MapData<'a>) -> MapFile<'a> {
             .map(|b| BiomeEntry {
                 name: b.name.clone(),
                 color: biome::to_hex(b.fill),
+                corridors: b.corridors,
                 secrets: b.secrets,
                 bosses: b.bosses,
                 saves: b.saves,
