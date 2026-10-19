@@ -79,6 +79,32 @@ pub fn room_icons(r: &Room, layout: &Layout, side: f32) -> Vec<(IconId, Vec2, f3
         .collect()
 }
 
+/// Grid line color, transparent white.
+const GRID_COLOR: Color = Color::new(1.0, 1.0, 1.0, 0.08);
+/// Smallest cell on screen, in pixels. Below it the grid is too dense and is skipped.
+const MIN_GRID_CELL_PX: f32 = 6.0;
+
+/// Draws one line per cell edge over `area`, one pixel thick. Meant to be drawn
+/// before the map so the rooms cover it.
+pub fn draw_grid(layout: &Layout, scale: f32, area: Rect) {
+    if layout.cw.min(layout.ch) * scale < MIN_GRID_CELL_PX {
+        return;
+    }
+    let thickness = 1.0 / scale;
+    let first_x = (area.x / layout.cw).floor() as i32;
+    let last_x = (area.right() / layout.cw).ceil() as i32;
+    for i in first_x..=last_x {
+        let x = i as f32 * layout.cw;
+        draw_line(x, area.y, x, area.bottom(), thickness, GRID_COLOR);
+    }
+    let first_y = (area.y / layout.ch).floor() as i32;
+    let last_y = (area.bottom() / layout.ch).ceil() as i32;
+    for j in first_y..=last_y {
+        let y = j as f32 * layout.ch;
+        draw_line(area.x, y, area.right(), y, thickness, GRID_COLOR);
+    }
+}
+
 /// Draws rooms, doors and icons.
 pub fn draw_map(
     world: &World,

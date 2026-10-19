@@ -6,7 +6,7 @@ mod picker;
 mod theme;
 
 pub use hud::{COPIED_TIME, Hud};
-pub use map::{MapView, door_rect, draw_map, icon_side_px, line_thickness, room_icons, room_rect};
+pub use map::{MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect};
 pub use picker::{Ghost, Picker, picker_layout};
 pub use theme::{door_color, room_border, room_fill};
 
@@ -25,6 +25,7 @@ pub struct Frame<'a> {
     pub hud: &'a Hud,
     pub hovered: Option<usize>,
     pub help_open: bool,
+    pub grid: bool,
     /// Open room picker, if any.
     pub picker: Option<&'a Picker>,
     /// Room being placed, if any.
@@ -58,9 +59,13 @@ pub fn draw_world(
 ) {
     clear_background(theme::BACKGROUND);
     set_camera(f.camera);
+    let area = visible_area(f.camera);
+    if f.grid {
+        draw_grid(f.layout, f.view.scale, area);
+    }
     let view = MapView {
         scale: f.view.scale,
-        visible: Some(visible_area(f.camera)),
+        visible: Some(area),
         hovered: f.hovered,
     };
     draw_map(world, biomes, f.layout, &view, icons);

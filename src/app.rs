@@ -73,6 +73,7 @@ pub struct App {
     /// Time of the last seed copy, used to show the "copied" feedback.
     copied_at: f64,
     help_open: bool,
+    grid: bool,
     /// Top-left corner of the open room picker.
     picker: Option<Vec2>,
     /// Room chosen in the picker, being placed.
@@ -99,6 +100,7 @@ impl App {
             fit: true,
             copied_at: f64::NEG_INFINITY,
             help_open: false,
+            grid: true,
             picker: None,
             placing: None,
             notice: None,
@@ -183,6 +185,7 @@ impl App {
             hud: &hud,
             hovered,
             help_open: self.help_open,
+            grid: self.grid,
             picker: picker_ui.as_ref(),
             ghost,
             notice,
@@ -241,6 +244,9 @@ impl App {
             }
             if is_key_pressed(KeyCode::C) {
                 self.fit = true;
+            }
+            if is_key_pressed(KeyCode::G) {
+                self.grid = !self.grid;
             }
             if (is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Up))
                 && self.cells < MAX_CELLS
