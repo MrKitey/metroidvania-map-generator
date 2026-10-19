@@ -8,10 +8,14 @@ use std::path::{Path, PathBuf};
 
 /// Read at startup and written by the editor, in the app folder.
 const BIOMES_FILE: &str = "biomes.json";
+pub const DEFAULT_SECRETS: u32 = 1;
+pub const MAX_SECRETS: u32 = 5;
 
 pub struct Biome {
     pub name: String,
     pub fill: Color,
+    /// Number of secret rooms added to the biome, up to `MAX_SECRETS`.
+    pub secrets: u32,
 }
 
 impl Biome {
@@ -19,6 +23,7 @@ impl Biome {
         Biome {
             name: name.to_owned(),
             fill: Color::from_rgba(r, g, b, 255),
+            secrets: DEFAULT_SECRETS,
         }
     }
 
@@ -41,11 +46,18 @@ pub fn default_biomes() -> Vec<Biome> {
     ]
 }
 
-/// One biome as stored in JSON: `{"name": "Castle", "color": "#464E78"}`.
+/// One biome as stored in JSON: `{"name": "Castle", "color": "#464E78", "secrets": 1}`.
+/// `secrets` may be missing in older files.
 #[derive(Serialize, Deserialize)]
 struct Entry {
     name: String,
     color: String,
+    #[serde(default = "default_secrets")]
+    secrets: u32,
+}
+
+fn default_secrets() -> u32 {
+    DEFAULT_SECRETS
 }
 
 /// Reads a JSON list of biomes. Entries with an invalid color are skipped.
@@ -58,6 +70,7 @@ pub fn read(path: &Path) -> Result<Vec<Biome>, Box<dyn Error>> {
             Some(Biome {
                 fill: parse_hex(&e.color)?,
                 name: e.name,
+                secrets: e.secrets.min(MAX_SECRETS),
             })
         })
         .collect();
@@ -79,6 +92,7 @@ pub fn save(biomes: &[Biome]) -> Result<PathBuf, Box<dyn Error>> {
         .map(|b| Entry {
             name: b.name.clone(),
             color: to_hex(b.fill),
+            secrets: b.secrets,
         })
         .collect();
     storage::write_json(BIOMES_FILE, &entries)

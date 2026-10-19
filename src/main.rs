@@ -50,7 +50,7 @@ fn generate(cells: u32, seed: u64, biomes: &[biome::Biome], editor: &Editor) -> 
     World::generate(
         cells,
         seed,
-        biomes.len(),
+        &biomes.iter().map(|b| b.secrets).collect::<Vec<_>>(),
         editor.min_rooms(),
         editor.max_rooms(),
         &editor.room_sizes(),

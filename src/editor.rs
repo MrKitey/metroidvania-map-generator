@@ -1,6 +1,6 @@
 //! Side panel to edit generation settings and biomes.
 
-use crate::biome::{self, Biome};
+use crate::biome::{self, Biome, MAX_SECRETS};
 use crate::settings::{self, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, Settings};
 use macroquad::color::hsl_to_rgb;
 use macroquad::prelude::*;
@@ -323,6 +323,10 @@ impl Editor {
                         b.fill = picker_color((mouse - pos) / PICKER_SIZE);
                         self.hex[i] = biome::to_hex(b.fill);
                     }
+                    // The slider works in floats, rounding makes it step between integers.
+                    let mut secrets = b.secrets as f32;
+                    ui.slider(id + 2, "Secret rooms", 0.0..MAX_SECRETS as f32, &mut secrets);
+                    b.secrets = (secrets.round() as u32).min(MAX_SECRETS);
                     if ui.button(None, "Delete") {
                         remove = Some(i);
                     }

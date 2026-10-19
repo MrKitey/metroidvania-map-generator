@@ -77,7 +77,7 @@ fn room_fill(world: &World, biomes: &[Biome], idx: usize) -> Color {
     let r = &world.rooms[idx];
     let fill = biomes[r.biome].fill;
     match r.kind {
-        RoomKind::Normal => fill,
+        RoomKind::Normal | RoomKind::Secret => fill,
         RoomKind::Corridor => darker(fill),
     }
 }
@@ -149,7 +149,7 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
         let (x, y) = (r.x as f32 * cw, r.y as f32 * ch);
         let (w, h) = (r.w as f32 * cw, r.h as f32 * ch);
         let border = match r.kind {
-            RoomKind::Normal => biomes[r.biome].border(),
+            RoomKind::Normal | RoomKind::Secret => biomes[r.biome].border(),
             RoomKind::Corridor => CORRIDOR_BORDER,
         };
         draw_rectangle(x, y, w, h, room_fill(world, biomes, i));
@@ -175,20 +175,37 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
         }
     }
 
-    // Markers are drawn in screen space, from icons rasterized at their screen size,
-    // so they stay sharp at any zoom.
+    // Icons are drawn in screen space, from textures rasterized at their screen size,
+    // so they stay sharp at any zoom. One raster size for all icons, otherwise the
+    // cache would rasterize again every frame.
     set_default_camera();
     let side = (cw.min(ch) * 0.7 * f.view.scale).max(12.0);
+    let px = side.ceil() as u32;
     for r in &world.rooms {
-        let Some(marker) = r.marker else { continue };
+        let secret = r.kind == RoomKind::Secret;
+        if !secret && r.marker.is_none() {
+            continue;
+        }
         let center = vec2((r.x as f32 + r.w as f32 / 2.0) * cw, (r.y as f32 + r.h as f32 / 2.0) * ch);
         let c = f.camera.world_to_screen(center);
-        let params = DrawTextureParams {
-            dest_size: Some(vec2(side, side)),
-            ..Default::default()
+        // A secret room with a marker shows both icons side by side, smaller.
+        let both = secret && r.marker.is_some();
+        let s = if both { side * 0.6 } else { side };
+        let draw = |texture: &Texture2D, x: f32| {
+            let params = DrawTextureParams {
+                dest_size: Some(vec2(s, s)),
+                ..Default::default()
+            };
+            draw_texture_ex(texture, x, c.y - s / 2.0, WHITE, params);
         };
-        let texture = icons.get(marker, side.ceil() as u32);
-        draw_texture_ex(texture, c.x - side / 2.0, c.y - side / 2.0, WHITE, params);
+        let mut x = if both { c.x - s } else { c.x - s / 2.0 };
+        if secret {
+            draw(icons.secret(px), x);
+            x += s;
+        }
+        if let Some(marker) = r.marker {
+            draw(icons.get(marker, px), x);
+        }
     }
 
     // Opaque header so the map does not show through the text when panned under it.
@@ -261,9 +278,11 @@ fn draw_help(reserved: f32, open: bool) {
 
 /// Shows the room name and its size, in cells and in pixels, next to the cursor.
 fn draw_tooltip(r: &Room, biomes: &[Biome], layout: &Layout) {
+    let biome = &biomes[r.biome].name;
     let name = match r.kind {
-        RoomKind::Normal => biomes[r.biome].name.as_str(),
-        RoomKind::Corridor => "Corridor",
+        RoomKind::Normal => biome.clone(),
+        RoomKind::Corridor => "Corridor".to_owned(),
+        RoomKind::Secret => format!("{biome} (secret)"),
     };
     let text = format!(
         "{}  {}x{} : {}x{} px",

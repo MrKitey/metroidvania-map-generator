@@ -16,6 +16,8 @@ const CELLS_PER_BIOME: u32 = 75;
 const LINK_ATTEMPTS: u32 = 200;
 /// After this many tries, a biome is kept even if it stayed small.
 const BIOME_ATTEMPTS: u32 = 5;
+/// Tries to find a free spot for one secret room.
+const SECRET_ATTEMPTS: u32 = 200;
 
 /// Uniform in [low, high). `gen_range` truncates toward zero, which can return `high` for negative ranges.
 fn range(low: i32, high: i32) -> i32 {
@@ -27,6 +29,8 @@ pub enum RoomKind {
     Normal,
     /// Long thin room joining two biomes. Belongs to the parent biome.
     Corridor,
+    /// 1x1 dead end added after a biome is grown. Nothing is attached to it.
+    Secret,
 }
 
 /// Icon placed by the user on a room.
@@ -72,17 +76,19 @@ pub struct World {
 }
 
 impl World {
-    /// `cells` is the target number of room cells. `biome_count` and `min_rooms` must be at least 1,
+    /// `cells` is the target number of room cells. `secrets` holds the secret room count of
+    /// each biome, so its length is the biome count. It and `min_rooms` must be at least 1,
     /// and `max_rooms` at least `min_rooms`. Every biome ends with that many normal rooms.
     /// `sizes` must not be empty.
     pub fn generate(
         cells: u32,
         seed: u64,
-        biome_count: usize,
+        secrets: &[u32],
         min_rooms: usize,
         max_rooms: usize,
         sizes: &[(u32, u32)],
     ) -> World {
+        let biome_count = secrets.len();
         // Same seed and settings always give the same map.
         srand(seed);
         let mut world = World {
@@ -112,6 +118,7 @@ impl World {
             world.truncate(0, 0);
         }
         world.biomes.push(root);
+        world.add_secrets(root, secrets[root]);
 
         // Next biomes: link to a random placed biome, then grow. A failed try is rolled
         // back so the next one starts from a clean state.
@@ -128,6 +135,7 @@ impl World {
                 // accepted once the early attempts are used up.
                 if rooms >= min_rooms && (cells >= quota / 3 || attempt >= BIOME_ATTEMPTS - 1) {
                     world.biomes.push(child);
+                    world.add_secrets(child, secrets[child]);
                     break;
                 }
                 world.truncate(rooms_len, doors_len);
@@ -174,6 +182,20 @@ impl World {
             }
         }
         (cells, rooms.len())
+    }
+
+    /// Attaches `count` 1x1 secret rooms to random normal rooms of the biome.
+    /// A secret is skipped if no free spot is found.
+    fn add_secrets(&mut self, biome: usize, count: u32) {
+        let rooms = self.normal_rooms(biome);
+        for _ in 0..count {
+            for _ in 0..SECRET_ATTEMPTS {
+                let from = *rooms.choose().unwrap();
+                if self.try_attach(from, gen_range(0, 4), 1, 1, biome, RoomKind::Secret).is_some() {
+                    break;
+                }
+            }
+        }
     }
 
     /// Builds a corridor from a parent biome room, then the first child room at its end.

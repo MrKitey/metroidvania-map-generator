@@ -52,6 +52,7 @@ fn rasterize(tree: &usvg::Tree, px: u32) -> Texture2D {
 pub struct Icons {
     boss: Icon,
     save: Icon,
+    secret: Icon,
 }
 
 impl Icons {
@@ -59,7 +60,12 @@ impl Icons {
         Icons {
             boss: Icon::new(include_bytes!("../assets/icons/boss.svg")),
             save: Icon::new(include_bytes!("../assets/icons/save.svg")),
+            secret: Icon::new(include_bytes!("../assets/icons/secret.svg")),
         }
+    }
+
+    pub fn secret(&mut self, px: u32) -> &Texture2D {
+        self.secret.texture(px)
     }
 
     pub fn get(&mut self, marker: Marker, px: u32) -> &Texture2D {
