@@ -3,7 +3,7 @@
 use crate::biome::Biome;
 use crate::icons::Icons;
 use crate::view::View;
-use crate::world::{Room, RoomKind, World};
+use crate::world::{Marker, Room, RoomKind, World};
 use macroquad::prelude::*;
 
 /// Height of the header bar, in screen pixels.
@@ -14,6 +14,14 @@ const BACKGROUND: Color = Color::from_rgba(15, 15, 22, 255);
 const CORRIDOR_BORDER: Color = Color::from_rgba(150, 150, 150, 255);
 /// Color of doors between two different biomes.
 const TRANSITION_DOOR: Color = Color::from_rgba(240, 230, 180, 255);
+/// Rooms with a boss or save marker use these instead of their biome colors.
+const BOSS_FILL: Color = Color::from_rgba(0x80, 0x00, 0x00, 255);
+const BOSS_BORDER: Color = Color::from_rgba(0xFF, 0x00, 0x00, 255);
+const SAVE_FILL: Color = Color::from_rgba(0x00, 0x80, 0x00, 255);
+const SAVE_BORDER: Color = Color::from_rgba(0x00, 0xFF, 0x00, 255);
+/// Secret rooms use these too.
+const SECRET_FILL: Color = Color::from_rgba(0x80, 0x80, 0x00, 255);
+const SECRET_BORDER: Color = Color::from_rgba(0xFF, 0xFF, 0x00, 255);
 const SEED_SIZE: u16 = 20;
 /// Seconds the "copied" feedback stays on the seed label.
 pub const COPIED_TIME: f64 = 1.5;
@@ -78,9 +86,15 @@ fn darker(c: Color) -> Color {
 /// Biome color for a room. Corridors use a darker shade.
 fn room_fill(world: &World, biomes: &[Biome], idx: usize) -> Color {
     let r = &world.rooms[idx];
+    match r.marker {
+        Some(Marker::Boss) => return BOSS_FILL,
+        Some(Marker::Save) => return SAVE_FILL,
+        None => {}
+    }
     let fill = biomes[r.biome].fill;
     match r.kind {
-        RoomKind::Normal | RoomKind::Secret => fill,
+        RoomKind::Normal => fill,
+        RoomKind::Secret => SECRET_FILL,
         RoomKind::Corridor => darker(fill),
     }
 }
@@ -188,7 +202,8 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
 }
 
 /// Draws rooms, doors and icons in world units, with the camera already set.
-/// `scale` is pixels per world unit, used to rasterize icons at their drawn size.
+/// `scale` is pixels per world unit, used to rasterize icons at their drawn size and
+/// to size the boss border in pixels.
 pub fn draw_map(
     world: &World,
     biomes: &[Biome],
@@ -204,12 +219,16 @@ pub fn draw_map(
     for (i, r) in world.rooms.iter().enumerate() {
         let (x, y) = (r.x as f32 * cw, r.y as f32 * ch);
         let (w, h) = (r.w as f32 * cw, r.h as f32 * ch);
-        let border = match r.kind {
-            RoomKind::Normal | RoomKind::Secret => biomes[r.biome].border(),
-            RoomKind::Corridor => CORRIDOR_BORDER,
+        let (border, thickness) = match (r.marker, r.kind) {
+            // One screen pixel thicker than the other rooms, at any zoom.
+            (Some(Marker::Boss), _) => (BOSS_BORDER, t + 1.0 / scale),
+            (Some(Marker::Save), _) => (SAVE_BORDER, t + 1.0 / scale),
+            (_, RoomKind::Secret) => (SECRET_BORDER, t + 1.0 / scale),
+            (_, RoomKind::Normal) => (biomes[r.biome].border(), t),
+            (_, RoomKind::Corridor) => (CORRIDOR_BORDER, t),
         };
         draw_rectangle(x, y, w, h, room_fill(world, biomes, i));
-        draw_rectangle_lines(x, y, w, h, t, border);
+        draw_rectangle_lines(x, y, w, h, thickness, border);
         if hovered == Some(i) {
             draw_rectangle(x, y, w, h, Color::new(1.0, 1.0, 1.0, 0.15));
         }

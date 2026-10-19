@@ -168,7 +168,7 @@ fall back to the defaults.
 
 ## Releases
 
-Pushing a tag such as `v0.2.0` runs `.github/workflows/release.yml`. It builds the Windows
+Pushing a tag such as `v0.3.0` runs `.github/workflows/release.yml`. It builds the Windows
 `.exe` and the Linux AppImage, then publishes both in a GitHub release.
 
 - The tag must match the `version` in `Cargo.toml`, otherwise the workflow fails.
@@ -176,8 +176,8 @@ Pushing a tag such as `v0.2.0` runs `.github/workflows/release.yml`. It builds t
   `Cargo.lock` is updated, and commit both files together.
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 ## Project structure
