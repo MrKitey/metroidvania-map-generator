@@ -21,7 +21,9 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Corridors: 0 to 5 per biome. Extra corridors join two biomes that face each other and
   create loops. Two corridors never come closer than 3 cells, diagonals included.
 - Same seed and settings always give the same map.
-- Boss and save markers can also be toggled on any room.
+- Boss, save, secret and portal rooms can also be set on any room with the keyboard.
+  Each one replaces the previous type of the room.
+- Legend of the biomes and of the room types on the left.
 - Room tooltip with its size in cells and in pixels.
 - Clickable seed in the bottom right corner, copied to the clipboard.
 - Editor panel for generation settings, room sizes and biomes.
@@ -81,8 +83,10 @@ The same list is shown in the app with the `?` button in the top right corner.
 | Mouse wheel | Zoom |
 | Middle drag | Pan |
 | C | Recenter the map |
-| Left click on a room | Toggle boss marker |
-| Right click on a room | Toggle save marker |
+| B | Boss room under the cursor, press again to clear |
+| S | Save room under the cursor, press again to clear |
+| H | Secret room under the cursor, press again to clear |
+| P | Portal room under the cursor, press again to clear |
 | Tab | Open or close the editor |
 | Esc | Close the shortcuts popup, or quit |
 

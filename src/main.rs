@@ -1,7 +1,7 @@
 //! Metroidvania map generator.
 //!
 //! Generates a random map of rooms grouped by biome, shows it with pan and zoom,
-//! and lets the user mark boss and save rooms.
+//! and lets the user mark boss, save, secret and portal rooms with the keyboard.
 
 // No console window behind the app in Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -21,7 +21,7 @@ use macroquad::prelude::*;
 use render::{Frame, Layout};
 use std::time::{SystemTime, UNIX_EPOCH};
 use view::View;
-use world::{Marker, World};
+use world::{Marker, RoomKind, World};
 
 /// Map size limits, as a number of room cells.
 const MIN_CELLS: u32 = 96;
@@ -69,6 +69,7 @@ async fn main() {
     let mut world = generate(cells, seed, &biomes, &editor);
     let mut view = View::new();
     let mut icons = icons::Icons::new();
+    let mut legend_icons = icons::Icons::new();
     // Set when the view must be refit to the map, done once the layout is known.
     let mut fit = true;
     // Time of the last seed copy, used to show the "copied" feedback.
@@ -202,12 +203,19 @@ async fn main() {
             world.room_at(x, y)
         };
 
-        if let Some(i) = hovered {
-            if is_mouse_button_pressed(MouseButton::Left) {
+        // Room shortcuts act on the room under the cursor.
+        if let (Some(i), false) = (hovered, editor.open) {
+            if is_key_pressed(KeyCode::B) {
                 world.toggle_marker(i, Marker::Boss);
             }
-            if is_mouse_button_pressed(MouseButton::Right) {
+            if is_key_pressed(KeyCode::S) {
                 world.toggle_marker(i, Marker::Save);
+            }
+            if is_key_pressed(KeyCode::H) {
+                world.toggle_kind(i, RoomKind::Secret);
+            }
+            if is_key_pressed(KeyCode::P) {
+                world.toggle_kind(i, RoomKind::Portal);
             }
         }
 
@@ -222,7 +230,7 @@ async fn main() {
             help_open,
             notice: notice_text,
         };
-        render::draw_world(&world, &biomes, &frame, &mut icons);
+        render::draw_world(&world, &biomes, &frame, &mut icons, &mut legend_icons);
         next_frame().await;
     }
 }

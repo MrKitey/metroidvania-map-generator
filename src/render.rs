@@ -35,8 +35,10 @@ const SHORTCUTS: &[(&str, &str)] = &[
     ("Wheel", "Zoom"),
     ("Middle drag", "Pan"),
     ("C", "Recenter"),
-    ("Left click", "Boss marker"),
-    ("Right click", "Save marker"),
+    ("B", "Boss room"),
+    ("S", "Save room"),
+    ("H", "Secret room"),
+    ("P", "Portal room"),
     ("Tab", "Editor"),
     ("Esc", "Quit"),
 ];
@@ -51,6 +53,45 @@ const ROW_H: f32 = 24.0;
 const LEGEND_TEXT: u16 = 20;
 /// Side of the biome color square in the legend.
 const SWATCH: f32 = 14.0;
+/// Side of the room type icon box in the legend, and of the icon inside it.
+const ICON_BOX: f32 = 20.0;
+const ICON_PX: u32 = 16;
+/// Space between the biome legend and the room type legend.
+const LEGEND_GAP: f32 = 8.0;
+
+/// Icon of a legend entry.
+enum LegendIcon {
+    Marker(Marker),
+    Kind(RoomKind),
+}
+
+/// Room types listed in the legend, as (name, fill, border, icon).
+const LEGEND_ROOMS: &[(&str, Color, Color, LegendIcon)] = &[
+    (
+        "Boss",
+        BOSS_FILL,
+        BOSS_BORDER,
+        LegendIcon::Marker(Marker::Boss),
+    ),
+    (
+        "Save",
+        SAVE_FILL,
+        SAVE_BORDER,
+        LegendIcon::Marker(Marker::Save),
+    ),
+    (
+        "Secret",
+        SECRET_FILL,
+        SECRET_BORDER,
+        LegendIcon::Kind(RoomKind::Secret),
+    ),
+    (
+        "Portal",
+        PORTAL_FILL,
+        PORTAL_BORDER,
+        LegendIcon::Kind(RoomKind::Portal),
+    ),
+];
 const BUTTON_BG: Color = Color::from_rgba(35, 35, 50, 255);
 const BUTTON_HOVER: Color = Color::from_rgba(55, 55, 75, 255);
 
@@ -169,7 +210,15 @@ pub fn seed_rect(seed: u64, copied: bool, reserved: f32) -> Rect {
 }
 
 /// Draws one frame. The map uses the map camera, the rest uses screen pixels.
-pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons) {
+/// `legend_icons` is a second set used at a fixed size, so the map zoom does not
+/// make the legend icons rasterize again every frame.
+pub fn draw_world(
+    world: &World,
+    biomes: &[Biome],
+    f: &Frame,
+    icons: &mut Icons,
+    legend_icons: &mut Icons,
+) {
     clear_background(BACKGROUND);
     set_camera(f.camera);
     draw_map(world, biomes, f.layout, f.view.scale, f.hovered, icons);
@@ -182,7 +231,8 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
         info = format!("{info}    {notice}");
     }
     draw_text(info, MARGIN, TOP / 2.0 + 7.0, 20.0, WHITE);
-    draw_legend(world, biomes);
+    let biomes_bottom = draw_legend(world, biomes);
+    draw_room_legend(biomes_bottom + LEGEND_GAP, legend_icons);
 
     // Backdrop keeps the label readable over the map. Brighter on hover to show it is clickable.
     let (text, rect, baseline) = seed_label(f.seed, f.copied, f.reserved);
@@ -316,7 +366,8 @@ fn draw_export_button(reserved: f32) {
 
 /// Biomes used in this map, one per row, in a column on the left, vertically centered
 /// below the header. Drawn over the map on a translucent backdrop.
-fn draw_legend(world: &World, biomes: &[Biome]) {
+/// Returns the y of the bottom edge of the block.
+fn draw_legend(world: &World, biomes: &[Biome]) -> f32 {
     let names_w = world
         .biomes
         .iter()
@@ -340,6 +391,48 @@ fn draw_legend(world: &World, biomes: &[Biome]) {
             row_y + ROW_H * 0.7,
             LEGEND_TEXT as f32,
             biome.border(),
+        );
+    }
+    y + h
+}
+
+/// Room types, one per row with its icon and name, in a block starting at `y`
+/// on the left, under the biome legend.
+fn draw_room_legend(y: f32, icons: &mut Icons) {
+    let names_w = LEGEND_ROOMS
+        .iter()
+        .map(|r| measure_text(r.0, None, LEGEND_TEXT, 1.0).width)
+        .fold(0.0, f32::max);
+    let w = PAD + ICON_BOX + PAD + names_w + PAD;
+    let h = PAD + LEGEND_ROOMS.len() as f32 * ROW_H + PAD;
+    let x = MARGIN;
+    draw_rectangle(x, y, w, h, Color::new(0.0, 0.0, 0.0, 0.6));
+
+    for (i, (name, fill, border, icon)) in LEGEND_ROOMS.iter().enumerate() {
+        let row_y = y + PAD + i as f32 * ROW_H;
+        let box_y = row_y + (ROW_H - ICON_BOX) / 2.0;
+        draw_rectangle(x + PAD, box_y, ICON_BOX, ICON_BOX, *fill);
+        draw_rectangle_lines(x + PAD, box_y, ICON_BOX, ICON_BOX, 2.0, *border);
+        let texture = match icon {
+            LegendIcon::Marker(m) => Some(icons.get(*m, ICON_PX)),
+            LegendIcon::Kind(k) => icons.kind(*k, ICON_PX),
+        };
+        if let Some(texture) = texture {
+            let side = ICON_PX as f32;
+            let params = DrawTextureParams {
+                dest_size: Some(vec2(side, side)),
+                ..Default::default()
+            };
+            let offset = (ICON_BOX - side) / 2.0;
+            draw_texture_ex(texture, x + PAD + offset, box_y + offset, WHITE, params);
+        }
+        let text_x = x + PAD + ICON_BOX + PAD;
+        draw_text(
+            name,
+            text_x,
+            row_y + ROW_H * 0.7,
+            LEGEND_TEXT as f32,
+            *border,
         );
     }
 }

@@ -493,13 +493,32 @@ impl World {
     }
 
     /// Sets the marker, or clears it if the room already has this one.
+    /// A new marker replaces the secret or portal kind.
     pub fn toggle_marker(&mut self, idx: usize, marker: Marker) {
         let room = &mut self.rooms[idx];
-        room.marker = if room.marker == Some(marker) {
-            None
+        if room.marker == Some(marker) {
+            room.marker = None;
+            return;
+        }
+        room.marker = Some(marker);
+        if matches!(room.kind, RoomKind::Secret | RoomKind::Portal) {
+            room.kind = RoomKind::Normal;
+        }
+    }
+
+    /// Sets the kind (secret or portal), or goes back to normal if the room already has it.
+    /// A new kind replaces the marker. Corridors keep their kind.
+    pub fn toggle_kind(&mut self, idx: usize, kind: RoomKind) {
+        let room = &mut self.rooms[idx];
+        if room.kind == RoomKind::Corridor {
+            return;
+        }
+        if room.kind == kind {
+            room.kind = RoomKind::Normal;
         } else {
-            Some(marker)
-        };
+            room.kind = kind;
+            room.marker = None;
+        }
     }
 
     /// Index of the room covering cell (x, y), if any.
