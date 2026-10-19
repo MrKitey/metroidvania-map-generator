@@ -2,38 +2,59 @@
 
 A desktop tool that generates random Metroidvania style maps. Rooms are grouped by biome,
 biomes are linked by corridors, and every room is reachable. You can pan, zoom, mark boss
-and save rooms, and tune the generation from a built-in editor.
+and save rooms, tune the generation from a built-in editor, and export the result.
 
 Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 
-![Screenshot](docs/screenshot.png)![Screenshot](docs/screenshot_2.png)
+![Screenshot](docs/screenshot.png)
+
+![Screenshot](docs/screenshot_2.png)
 
 ## Features
 
 - Random maps made of rectangular rooms on a grid, connected through doors.
 - Biomes grown one after another, each linked to the map by a corridor.
+- Secret rooms: 0 to 5 per biome, added as 1x1 dead ends.
 - Same seed and settings always give the same map.
 - Boss and save markers on any room.
 - Room tooltip with its size in cells and in pixels.
 - Clickable seed in the bottom right corner, copied to the clipboard.
 - Editor panel for generation settings, room sizes and biomes.
 - Biomes and settings saved as JSON. Biomes can be imported from any JSON file.
+- Export of the map as a zip holding a PNG image and a JSON description.
+
+## Download
+
+Prebuilt files are available on the
+[releases page](https://github.com/MrKitey/metroidvania-map-generator/releases):
+
+- Windows: `metroidvania-map-generator-<version>-windows-x86_64.exe`. The file is not
+  signed, so Windows SmartScreen shows a warning on first launch.
+- Linux: `metroidvania-map-generator-<version>-linux-x86_64.AppImage`. Make it executable,
+  then run it:
+
+```sh
+chmod +x metroidvania-map-generator-*-linux-x86_64.AppImage
+./metroidvania-map-generator-*-linux-x86_64.AppImage
+```
+
+On Linux, the file dialogs for import and export need a running `xdg-desktop-portal`.
 
 ## Requirements
 
+To build from source:
+
 - Rust with edition 2024 support. Install it from [rustup.rs](https://rustup.rs).
-- On Linux, the system libraries required by macroquad:
+- On Linux, the system libraries required by macroquad and the file dialog:
 
 ```sh
 # Debian, Ubuntu
-apt install pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+apt install pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libwayland-dev
 # Fedora
-dnf install libX11-devel libXi-devel mesa-libGL-devel alsa-lib-devel
+dnf install libX11-devel libXi-devel mesa-libGL-devel alsa-lib-devel wayland-devel
 # Arch
-pacman -S pkg-config libx11 libxi mesa-libgl alsa-lib
+pacman -S pkg-config libx11 libxi mesa-libgl alsa-lib wayland
 ```
-
-- On Linux, a running `xdg-desktop-portal` for the biome import file dialog.
 
 ## Build and run
 
@@ -63,6 +84,11 @@ The same list is shown in the app with the `?` button in the top right corner.
 Keyboard shortcuts other than Tab are disabled while the editor is open, so typing in its
 fields is safe.
 
+The header holds two buttons in the top right corner:
+
+- The download arrow exports the map. See [Export](#export).
+- The `?` button opens the shortcuts popup.
+
 ## Editor
 
 Press Tab to open the panel on the right.
@@ -71,7 +97,7 @@ Press Tab to open the panel on the right.
 
 - Seed: shows the current seed. Type one and press "Use seed" to rebuild that map.
 - Screen size: size of one in-game screen in pixels. One cell stands for one screen.
-- Min and max rooms per biome. Max 0 means no limit.
+- Min and max rooms per biome. Max 0 means no limit. Secret rooms are not counted.
 - Room sizes: allowed room sizes in cells, from 1 to 10 per side. Add, edit, delete or
   reset them to the defaults.
 - "Generate" builds a new map with a random seed. "Save settings" writes `settings.json`.
@@ -81,8 +107,38 @@ Changes apply on the next generation.
 **Biomes tab**
 
 - One foldable entry per biome, with its name, a hex color field and a color picker.
+- "Secret rooms" slider: number of secret rooms in the biome, from 0 to 5. Applies on the
+  next generation.
 - "Add" creates a biome, "Import" loads biomes from a JSON file, "Save" writes
   `biomes.json`.
+
+## Export
+
+The export button opens a save dialog and writes a zip, named `map-<seed>.zip` by default:
+
+- `map.png`: the whole map on a transparent background, with rooms, doors and icons.
+  One cell is 32 pixels tall. Large maps are scaled down to fit 8192 pixels per side.
+- `map.json`: the seed, the map size in cells, the settings, the biomes, and every room
+  and door.
+
+Rooms and doors in `map.json` use cell coordinates. `biome` is an index into `biomes`,
+`a` and `b` are indices into `rooms`:
+
+```json
+{
+  "seed": 1792399893864564562,
+  "cells": 768,
+  "rooms": [
+    { "x": 0, "y": 0, "w": 1, "h": 3, "biome": 3, "kind": "normal", "marker": "boss" }
+  ],
+  "doors": [
+    { "a": 0, "b": 1, "x": 1, "y": 2, "vertical": true }
+  ]
+}
+```
+
+`kind` is `normal`, `corridor` or `secret`. `marker` is `boss`, `save` or `null`. A door is
+on the left edge of cell (x, y) when `vertical` is true, otherwise on its top edge.
 
 ## Data files
 
@@ -90,12 +146,12 @@ Files are stored in `Documents/Metroidvania Map Generator/`, in the user's Docum
 If that folder cannot be found, the working directory is used. Missing or invalid files
 fall back to the defaults.
 
-`biomes.json`, also the format used by "Import":
+`biomes.json`, also the format used by "Import". `secrets` defaults to 1 when missing:
 
 ```json
 [
-  { "name": "Castle", "color": "#465078" },
-  { "name": "Caves", "color": "#64462D" }
+  { "name": "Castle", "color": "#465078", "secrets": 1 },
+  { "name": "Caves", "color": "#64462D", "secrets": 2 }
 ]
 ```
 
@@ -110,19 +166,38 @@ fall back to the defaults.
 }
 ```
 
+## Releases
+
+Pushing a tag such as `v0.2.0` runs `.github/workflows/release.yml`. It builds the Windows
+`.exe` and the Linux AppImage, then publishes both in a GitHub release.
+
+- The tag must match the `version` in `Cargo.toml`, otherwise the workflow fails.
+- The workflow builds with `--locked`. After changing the version, run `cargo build` so
+  `Cargo.lock` is updated, and commit both files together.
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
 ## Project structure
 
 ```
-assets/icons/   Boss and save marker icons, embedded at build time
-src/main.rs     Window, main loop and input
-src/world.rs    Map generation
-src/render.rs   Map, header, legend, tooltip and shortcuts popup drawing
-src/view.rs     Camera pan, zoom and fit
-src/editor.rs   Editor panel
-src/biome.rs    Biomes and biomes.json
-src/settings.rs Generation settings and settings.json
-src/storage.rs  App folder and JSON reading and writing
-src/icons.rs    SVG icon rasterization
+assets/icon.png, icon.ico  App icon for the AppImage and the Windows executable
+assets/icons/              Boss, save and secret icons, embedded at build time
+packaging/linux/           Desktop entry for the AppImage
+.github/workflows/         Release workflow
+build.rs                   Embeds the icon into the Windows executable
+src/main.rs                Window, main loop and input
+src/world.rs               Map generation
+src/render.rs              Map, header, legend, tooltip and shortcuts popup drawing
+src/view.rs                Camera pan, zoom and fit
+src/editor.rs              Editor panel
+src/biome.rs               Biomes and biomes.json
+src/settings.rs            Generation settings and settings.json
+src/storage.rs             App folder and JSON reading and writing
+src/icons.rs               SVG icon rasterization
+src/export.rs              Zip export with map.png and map.json
 ```
 
 ## License
