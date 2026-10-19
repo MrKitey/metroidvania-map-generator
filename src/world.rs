@@ -12,7 +12,7 @@
 
 use macroquad::rand::{ChooseRandom, gen_range, srand};
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Average number of room cells per biome. Drives how many biomes a map uses.
 const CELLS_PER_BIOME: u32 = 75;
@@ -519,6 +519,68 @@ impl World {
             room.kind = kind;
             room.marker = None;
         }
+    }
+
+    /// True if a w x h room with its top-left cell at (x, y) overlaps no room.
+    pub fn can_place(&self, x: i32, y: i32, w: u32, h: u32) -> bool {
+        self.is_free(x, y, w as i32, h as i32)
+    }
+
+    /// Places a room chosen by the user. It gets one door per touching room, in the middle
+    /// of the shared side, and the biome of the first touching room. With no neighbor it
+    /// gets no door and the first biome. Returns None if the spot is taken.
+    pub fn place_manual(
+        &mut self,
+        (x, y): (i32, i32),
+        (w, h): (u32, u32),
+        kind: RoomKind,
+        marker: Option<Marker>,
+    ) -> Option<usize> {
+        let (wi, hi) = (w as i32, h as i32);
+        if !self.is_free(x, y, wi, hi) {
+            return None;
+        }
+        // Per side (right, left, down, up): each touching room with the door cells it
+        // could use. The door cell is on the new room for left and up, on the neighbor
+        // for right and down, as `Door` expects.
+        let mut sides: [BTreeMap<usize, Vec<(i32, i32)>>; 4] = Default::default();
+        for i in 0..hi {
+            if let Some(n) = self.room_at(x + wi, y + i) {
+                sides[0].entry(n).or_default().push((x + wi, y + i));
+            }
+            if let Some(n) = self.room_at(x - 1, y + i) {
+                sides[1].entry(n).or_default().push((x, y + i));
+            }
+        }
+        for i in 0..wi {
+            if let Some(n) = self.room_at(x + i, y + hi) {
+                sides[2].entry(n).or_default().push((x + i, y + hi));
+            }
+            if let Some(n) = self.room_at(x + i, y - 1) {
+                sides[3].entry(n).or_default().push((x + i, y));
+            }
+        }
+        let biome = sides
+            .iter()
+            .flat_map(|s| s.keys())
+            .next()
+            .map_or(self.biomes[0], |&n| self.rooms[n].biome);
+
+        let idx = self.place(x, y, w, h, biome, kind);
+        self.rooms[idx].marker = marker;
+        for (side, neighbors) in sides.iter().enumerate() {
+            for (&n, cells) in neighbors {
+                let (dx, dy) = cells[cells.len() / 2];
+                self.doors.push(Door {
+                    a: n,
+                    b: idx,
+                    x: dx,
+                    y: dy,
+                    vertical: side < 2,
+                });
+            }
+        }
+        Some(idx)
     }
 
     /// Index of the room covering cell (x, y), if any.

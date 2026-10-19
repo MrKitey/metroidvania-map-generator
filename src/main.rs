@@ -18,7 +18,7 @@ mod world;
 
 use editor::Editor;
 use macroquad::prelude::*;
-use render::{Frame, Layout};
+use render::{Choice, Frame, Ghost, Layout};
 use std::time::{SystemTime, UNIX_EPOCH};
 use view::View;
 use world::{Marker, RoomKind, World};
@@ -75,6 +75,9 @@ async fn main() {
     // Time of the last seed copy, used to show the "copied" feedback.
     let mut copied_at = f64::NEG_INFINITY;
     let mut help_open = false;
+    // Top-left corner of the open room picker, and the room chosen in it, being placed.
+    let mut picker: Option<Vec2> = None;
+    let mut placing: Option<Choice> = None;
     // Last export result and when it happened, shown in the header for a while.
     let mut notice: Option<(String, f64)> = None;
 
@@ -88,6 +91,12 @@ async fn main() {
         let mut escape = is_key_pressed(KeyCode::Escape);
         if escape && help_open {
             help_open = false;
+            escape = false;
+        }
+        // Then the room picker and the room being placed.
+        if escape && (picker.is_some() || placing.is_some()) {
+            picker = None;
+            placing = None;
             escape = false;
         }
 
@@ -139,14 +148,17 @@ async fn main() {
         // Room under the cursor: screen point to world point to cell to room.
         let mouse = Vec2::from(mouse_position());
         let copied = get_time() - copied_at < render::COPIED_TIME;
-        let over_seed = render::seed_rect(seed, copied, reserved).contains(mouse);
+        // The picker is drawn over the header buttons and the seed, so it gets the clicks first.
+        let mut picker_ui = picker.map(|a| render::picker_layout(&editor.sizes(), &layout, a));
+        let over_picker = picker_ui.as_ref().is_some_and(|p| p.rect.contains(mouse));
+        let over_seed = !over_picker && render::seed_rect(seed, copied, reserved).contains(mouse);
         if over_seed && is_mouse_button_pressed(MouseButton::Left) {
             miniquad::window::clipboard_set(&seed.to_string());
             copied_at = get_time();
         }
-        let over_button = render::help_button_rect(reserved).contains(mouse);
-        let over_help =
-            over_button || (help_open && render::help_popup_rect(reserved).contains(mouse));
+        let over_button = !over_picker && render::help_button_rect(reserved).contains(mouse);
+        let over_help = over_button
+            || (!over_picker && help_open && render::help_popup_rect(reserved).contains(mouse));
         // A click outside the open popup only closes it, it does not reach the map.
         let clicked = is_mouse_button_pressed(MouseButton::Left)
             || is_mouse_button_pressed(MouseButton::Right);
@@ -158,7 +170,8 @@ async fn main() {
             consumed = true;
         }
 
-        if render::export_button_rect(reserved).contains(mouse)
+        if !over_picker
+            && render::export_button_rect(reserved).contains(mouse)
             && is_mouse_button_pressed(MouseButton::Left)
         {
             // Blocks the app until the dialog is closed.
@@ -196,11 +209,63 @@ async fn main() {
             .filter(|(_, at)| get_time() - at < NOTICE_TIME)
             .map(|(text, _)| text.as_str());
 
-        let hovered = if over_ui || over_seed || over_help || consumed || mouse.y < render::TOP {
-            None
-        } else {
+        // True when the cursor is over the map itself, not over a panel, button or popup.
+        let on_map = !(over_ui || over_seed || over_help || over_picker || mouse.y < render::TOP);
+        let left = is_mouse_button_pressed(MouseButton::Left);
+        let right = is_mouse_button_pressed(MouseButton::Right);
+
+        // Room being placed. Its position snaps to the cell grid, centered on the cursor
+        // cell. This runs before the picker, so the click that picks a size does not place it.
+        let mut ghost = None;
+        if let Some(choice) = placing {
+            if on_map && !consumed {
+                let (cx, cy) = layout.cell_at(camera.screen_to_world(mouse));
+                let (x, y) = (cx - (choice.w / 2) as i32, cy - (choice.h / 2) as i32);
+                let free = world.can_place(x, y, choice.w, choice.h);
+                if left && free {
+                    let (kind, marker) = choice.pick.spec();
+                    world.place_manual((x, y), (choice.w, choice.h), kind, marker);
+                    placing = None;
+                } else {
+                    ghost = Some(Ghost { x, y, choice, free });
+                }
+            }
+            if right {
+                placing = None;
+                ghost = None;
+                consumed = true;
+            }
+        }
+
+        // Picker clicks: a size starts the placement, a click elsewhere closes the popup.
+        if let Some(p) = &picker_ui
+            && (left || right)
+        {
+            let hit = p.items.iter().find(|(_, r)| r.contains(mouse));
+            if let (true, Some((choice, _))) = (left, hit) {
+                placing = Some(*choice);
+                picker = None;
+            } else if !over_picker {
+                picker = None;
+                consumed = true;
+            }
+        }
+        // Right click on the map opens the picker at the cursor.
+        if picker.is_none() {
+            picker_ui = None;
+            if right && on_map && !consumed && placing.is_none() {
+                picker = Some(mouse);
+            }
+        }
+        if let (Some(a), None) = (picker, &picker_ui) {
+            picker_ui = Some(render::picker_layout(&editor.sizes(), &layout, a));
+        }
+
+        let hovered = if on_map && !consumed && picker.is_none() && placing.is_none() {
             let (x, y) = layout.cell_at(camera.screen_to_world(mouse));
             world.room_at(x, y)
+        } else {
+            None
         };
 
         // Room shortcuts act on the room under the cursor.
@@ -228,6 +293,8 @@ async fn main() {
             reserved,
             hovered,
             help_open,
+            picker: picker_ui.as_ref(),
+            ghost,
             notice: notice_text,
         };
         render::draw_world(&world, &biomes, &frame, &mut icons, &mut legend_icons);

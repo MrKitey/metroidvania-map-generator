@@ -2,7 +2,8 @@
 
 A desktop tool that generates random Metroidvania style maps. Rooms are grouped by biome,
 biomes are linked by corridors, and every room is reachable. You can pan, zoom, mark boss
-and save rooms, tune the generation from a built-in editor, and export the result.
+and save rooms, place rooms by hand, tune the generation from a built-in editor, and
+export the result.
 
 Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 
@@ -23,6 +24,9 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Same seed and settings always give the same map.
 - Boss, save, secret and portal rooms can also be set on any room with the keyboard.
   Each one replaces the previous type of the room.
+- Rooms, boss rooms and corridors can be placed by hand from a right click popup. They
+  snap to the cell grid and get a door to each room they touch. See
+  [Placing rooms](#placing-rooms).
 - Legend of the biomes and of the room types on the left.
 - Room tooltip with its size in cells and in pixels.
 - Clickable seed in the bottom right corner, copied to the clipboard.
@@ -82,13 +86,14 @@ The same list is shown in the app with the `?` button in the top right corner.
 | Left / Down arrows | Smaller map |
 | Mouse wheel | Zoom |
 | Middle drag | Pan |
+| Right click | Open the room picker, see [Placing rooms](#placing-rooms) |
 | C | Recenter the map |
 | B | Boss room under the cursor, press again to clear |
 | S | Save room under the cursor, press again to clear |
 | H | Secret room under the cursor, press again to clear |
 | P | Portal room under the cursor, press again to clear |
 | Tab | Open or close the editor |
-| Esc | Close the shortcuts popup, or quit |
+| Esc | Close the shortcuts popup or the room picker, cancel a placement, or quit |
 
 Keyboard shortcuts other than Tab are disabled while the editor is open, so typing in its
 fields is safe.
@@ -97,6 +102,22 @@ The header holds two buttons in the top right corner:
 
 - The download arrow exports the map. See [Export](#export).
 - The `?` button opens the shortcuts popup.
+
+## Placing rooms
+
+Right click on the map to open a popup listing every room size from the editor, in three
+sections: rooms, boss rooms and corridors. Each size is drawn as a white outline with its
+size in the middle.
+
+- Click a size to close the popup and start placing. The room follows the cursor and
+  snaps to the cell grid, centered on the cursor cell. Each cell is one screen, so the
+  position is always a multiple of the screen size in pixels, shown next to the cursor.
+- The room is green where it fits and red where it overlaps another room.
+- Left click places it. Right click or Esc cancels.
+- The room gets one door per room it touches, in the middle of the shared side, and the
+  biome of the first room it touches. Without a neighbor it has no door.
+- Boss sizes place a room with the boss marker, corridor sizes place a corridor.
+- Placed rooms are lost when the map is regenerated.
 
 ## Editor
 
@@ -210,8 +231,8 @@ packaging/linux/           Desktop entry for the AppImage
 .github/workflows/         Release workflow
 build.rs                   Embeds the icon into the Windows executable
 src/main.rs                Window, main loop and input
-src/world.rs               Map generation
-src/render.rs              Map, header, legend, tooltip and shortcuts popup drawing
+src/world.rs               Map generation and manual room placement
+src/render.rs              Map, header, legend, tooltip, shortcuts popup and room picker drawing
 src/view.rs                Camera pan, zoom and fit
 src/editor.rs              Editor panel
 src/biome.rs               Biomes and biomes.json
