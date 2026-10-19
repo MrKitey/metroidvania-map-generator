@@ -1,20 +1,19 @@
 //! Drawing of the map, the header and the tooltip.
 
 use crate::biome::Biome;
+use crate::icons::Icons;
 use crate::view::View;
-use crate::world::{Marker, Room, RoomKind, World};
+use crate::world::{Room, RoomKind, World};
 use macroquad::prelude::*;
 
 /// Height of the header bar, in screen pixels.
-pub const TOP: f32 = 60.0;
+pub const TOP: f32 = 40.0;
 /// Free space kept around the map when fitting it, in screen pixels.
 pub const MARGIN: f32 = 20.0;
 const BACKGROUND: Color = Color::from_rgba(15, 15, 22, 255);
 const CORRIDOR_BORDER: Color = Color::from_rgba(150, 150, 150, 255);
 /// Color of doors between two different biomes.
 const TRANSITION_DOOR: Color = Color::from_rgba(240, 230, 180, 255);
-const BOSS_COLOR: Color = Color::from_rgba(200, 30, 40, 255);
-const SAVE_COLOR: Color = Color::from_rgba(40, 110, 220, 255);
 const SEED_SIZE: u16 = 20;
 /// Seconds the "copied" feedback stays on the seed label.
 pub const COPIED_TIME: f64 = 1.5;
@@ -37,7 +36,11 @@ const HELP_H: f32 = 28.0;
 const ICON_R: f32 = 10.0;
 /// Inner spacing of the shortcuts button and popup.
 const PAD: f32 = 8.0;
+/// Row height of the shortcuts popup and the biome legend.
 const ROW_H: f32 = 24.0;
+const LEGEND_TEXT: u16 = 20;
+/// Side of the biome color square in the legend.
+const SWATCH: f32 = 14.0;
 const BUTTON_BG: Color = Color::from_rgba(35, 35, 50, 255);
 const BUTTON_HOVER: Color = Color::from_rgba(55, 55, 75, 255);
 
@@ -135,7 +138,7 @@ pub fn seed_rect(seed: u64, copied: bool, reserved: f32) -> Rect {
 }
 
 /// Draws one frame. Rooms and doors use the map camera, the rest uses screen pixels.
-pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame) {
+pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons) {
     clear_background(BACKGROUND);
     set_camera(f.camera);
     let Layout { cw, ch, .. } = *f.layout;
@@ -172,37 +175,26 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame) {
         }
     }
 
-    // Markers are drawn in screen space so the letters stay sharp at any zoom.
+    // Markers are drawn in screen space, from icons rasterized at their screen size,
+    // so they stay sharp at any zoom.
     set_default_camera();
+    let side = (cw.min(ch) * 0.7 * f.view.scale).max(12.0);
     for r in &world.rooms {
         let Some(marker) = r.marker else { continue };
-        let (letter, color) = match marker {
-            Marker::Boss => ("B", BOSS_COLOR),
-            Marker::Save => ("S", SAVE_COLOR),
-        };
         let center = vec2((r.x as f32 + r.w as f32 / 2.0) * cw, (r.y as f32 + r.h as f32 / 2.0) * ch);
         let c = f.camera.world_to_screen(center);
-        let radius = (cw.min(ch) * 0.35 * f.view.scale).max(6.0);
-        draw_circle(c.x, c.y, radius, color);
-        draw_circle_lines(c.x, c.y, radius, 1.5, WHITE);
-        let size = (radius * 1.4) as u16;
-        let dim = measure_text(letter, None, size, 1.0);
-        draw_text(letter, c.x - dim.width / 2.0, c.y + dim.height / 2.0, size as f32, WHITE);
+        let params = DrawTextureParams {
+            dest_size: Some(vec2(side, side)),
+            ..Default::default()
+        };
+        let texture = icons.get(marker, side.ceil() as u32);
+        draw_texture_ex(texture, c.x - side / 2.0, c.y - side / 2.0, WHITE, params);
     }
 
     // Opaque header so the map does not show through the text when panned under it.
     draw_rectangle(0.0, 0.0, screen_width(), TOP, BACKGROUND);
-    draw_text(format!("Rooms {}", world.rooms.len()), MARGIN, 22.0, 20.0, WHITE);
-
-    // Legend of the biomes used in this map.
-    let mut lx = MARGIN;
-    for &b in &world.biomes {
-        let biome = &biomes[b];
-        draw_rectangle(lx, 34.0, 14.0, 14.0, biome.fill);
-        draw_rectangle_lines(lx, 34.0, 14.0, 14.0, 2.0, biome.border());
-        let dim = draw_text(&biome.name, lx + 20.0, 46.0, 20.0, biome.border());
-        lx += dim.width + 40.0;
-    }
+    draw_text(format!("Rooms {}", world.rooms.len()), MARGIN, TOP / 2.0 + 7.0, 20.0, WHITE);
+    draw_legend(world, biomes);
 
     // Backdrop keeps the label readable over the map. Brighter on hover to show it is clickable.
     let (text, rect, baseline) = seed_label(f.seed, f.copied, f.reserved);
@@ -215,6 +207,30 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame) {
         draw_tooltip(&world.rooms[i], biomes, f.layout);
     }
     draw_help(f.reserved, f.help_open);
+}
+
+/// Biomes used in this map, one per row, in a column on the left, vertically centered
+/// below the header. Drawn over the map on a translucent backdrop.
+fn draw_legend(world: &World, biomes: &[Biome]) {
+    let names_w = world
+        .biomes
+        .iter()
+        .map(|&b| measure_text(&biomes[b].name, None, LEGEND_TEXT, 1.0).width)
+        .fold(0.0, f32::max);
+    let w = PAD + SWATCH + PAD + names_w + PAD;
+    let h = PAD + world.biomes.len() as f32 * ROW_H + PAD;
+    let (x, y) = (MARGIN, TOP + (screen_height() - TOP - h) / 2.0);
+    draw_rectangle(x, y, w, h, Color::new(0.0, 0.0, 0.0, 0.6));
+
+    for (i, &b) in world.biomes.iter().enumerate() {
+        let biome = &biomes[b];
+        let row_y = y + PAD + i as f32 * ROW_H;
+        let swatch_y = row_y + (ROW_H - SWATCH) / 2.0;
+        draw_rectangle(x + PAD, swatch_y, SWATCH, SWATCH, biome.fill);
+        draw_rectangle_lines(x + PAD, swatch_y, SWATCH, SWATCH, 2.0, biome.border());
+        let text_x = x + PAD + SWATCH + PAD;
+        draw_text(&biome.name, text_x, row_y + ROW_H * 0.7, LEGEND_TEXT as f32, biome.border());
+    }
 }
 
 /// Shortcuts button with a "?" icon, and the popup listing the shortcuts when open.

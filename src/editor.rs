@@ -4,7 +4,7 @@ use crate::biome::{self, Biome};
 use crate::settings::{self, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, Settings};
 use macroquad::color::hsl_to_rgb;
 use macroquad::prelude::*;
-use macroquad::ui::{Skin, root_ui, widgets};
+use macroquad::ui::{Skin, Ui, root_ui, widgets};
 
 /// Panel width, in screen pixels.
 pub const PANEL_W: f32 = 320.0;
@@ -12,32 +12,64 @@ pub const PANEL_W: f32 = 320.0;
 const PICKER_SIZE: Vec2 = vec2(280.0, 60.0);
 const SWATCH_H: f32 = 12.0;
 const TABS: &[&str] = &["Settings", "Biomes"];
-const TABS_SIZE: Vec2 = vec2(280.0, 24.0);
+/// Full inner width: the panel minus its 1 px borders and the margin on each side.
+const INNER_W: f32 = PANEL_W - 2.0 - 2.0 * PANEL_MARGIN;
+const TABS_SIZE: Vec2 = vec2(INNER_W, 24.0);
+/// Vertical space below the tabs, in pixels.
+const TABS_GAP: f32 = 8.0;
 /// Base id of the biome tree nodes. Each generation uses its own block of 1000 ids.
 const NODE_ID: u64 = 1_000_000;
 /// Base id of the room size fields, far from the biome field ids.
 const SIZE_ID: u64 = 500_000;
 /// Width of a field followed by a button on the same line.
 const SIZE_FIELD: Vec2 = vec2(200.0, 19.0);
+/// Room size column: one width or height field, and its header above.
+const SIDE_FIELD: Vec2 = vec2(100.0, 19.0);
 /// Vertical space above the Settings action buttons, in pixels.
 const BUTTONS_GAP: f32 = 12.0;
 /// Skin margin of the panel. The window adds a 1 px border, so content sits 5 px
 /// from the edges. Also used as the spacing between widgets.
 const PANEL_MARGIN: f32 = 4.0;
-/// Two buttons share a row. Inner width is the panel minus its 1 px borders. macroquad
-/// wraps a widget unless it ends before `inner - 2 * margin`, hence the extra pixel.
-const HALF_BUTTON: Vec2 = vec2((PANEL_W - 2.0 - 4.0 * PANEL_MARGIN) / 2.0 - 1.0, 22.0);
+const HALF_BUTTON: Vec2 = row_button(2);
+const THIRD_BUTTON: Vec2 = row_button(3);
+
+/// Size of each of `n` equal buttons filling a row. Inner width is the panel minus its
+/// 1 px borders. macroquad wraps a widget unless it ends before `inner - 2 * margin`,
+/// hence the extra pixel.
+const fn row_button(n: u32) -> Vec2 {
+    let n = n as f32;
+    vec2((PANEL_W - 2.0 - (n + 2.0) * PANEL_MARGIN) / n - 1.0, 22.0)
+}
 /// Upper bound of the minimum, to keep generation fast.
 const MAX_MIN_ROOMS: usize = 50;
 /// Largest room side, in cells, to keep generation fast.
 const MAX_ROOM_SIDE: u32 = 10;
 
-/// Parses `WxH`, with both sides between 1 and `MAX_ROOM_SIDE`.
-fn parse_size(text: &str) -> Option<(u32, u32)> {
-    let text = text.trim().to_lowercase();
-    let (w, h) = text.split_once('x')?;
-    let side = |s: &str| s.trim().parse().ok().filter(|v| (1..=MAX_ROOM_SIDE).contains(v));
-    Some((side(w)?, side(h)?))
+/// Shows `text` as labels, broken into lines that fit the panel. Breaks between
+/// characters, since paths have few spaces.
+fn wrapped_label(ui: &mut Ui, text: &str) {
+    let mut line = String::new();
+    for c in text.chars() {
+        line.push(c);
+        if line.chars().count() > 1 && ui.calc_size(&line).x > INNER_W {
+            line.pop();
+            ui.label(None, &line);
+            line = c.to_string();
+        }
+    }
+    if !line.is_empty() {
+        ui.label(None, &line);
+    }
+}
+
+/// Width and height field texts for each size.
+fn size_fields(sizes: &[(u32, u32)]) -> Vec<(String, String)> {
+    sizes.iter().map(|(w, h)| (w.to_string(), h.to_string())).collect()
+}
+
+/// Parses one room side, between 1 and `MAX_ROOM_SIDE`.
+fn parse_side(text: &str) -> Option<u32> {
+    text.trim().parse().ok().filter(|v| (1..=MAX_ROOM_SIDE).contains(v))
 }
 
 /// Fields are kept as raw text so the user can type freely. They are parsed on read,
@@ -48,8 +80,8 @@ pub struct Editor {
     viewport_h: String,
     min_rooms: String,
     max_rooms: String,
-    /// One `WxH` field per allowed room size.
-    sizes: Vec<String>,
+    /// Width and height fields of each allowed room size.
+    sizes: Vec<(String, String)>,
     /// Shows the current seed, can be edited and applied with "Use seed".
     seed: String,
     /// One `#RRGGBB` field per biome, rebuilt when the biome count changes.
@@ -90,7 +122,7 @@ impl Editor {
             viewport_h: settings.viewport.1.to_string(),
             min_rooms: settings.min_rooms.to_string(),
             max_rooms: settings.max_rooms.to_string(),
-            sizes: settings.room_sizes.iter().map(|(w, h)| format!("{w}x{h}")).collect(),
+            sizes: size_fields(&settings.room_sizes),
             seed: seed.to_string(),
             hex: Vec::new(),
             picker: picker_texture(),
@@ -132,7 +164,11 @@ impl Editor {
 
     /// Valid sizes only. Falls back to the defaults if none is valid.
     pub fn room_sizes(&self) -> Vec<(u32, u32)> {
-        let sizes: Vec<(u32, u32)> = self.sizes.iter().filter_map(|s| parse_size(s)).collect();
+        let sizes: Vec<(u32, u32)> = self
+            .sizes
+            .iter()
+            .filter_map(|(w, h)| Some((parse_side(w)?, parse_side(h)?)))
+            .collect();
         if sizes.is_empty() {
             DEFAULT_ROOM_SIZES.to_vec()
         } else {
@@ -185,7 +221,9 @@ impl Editor {
             .label("Editor")
             .movable(false)
             .ui(&mut root_ui(), |ui| {
-                if ui.tabbar(7, TABS_SIZE, TABS) == 0 {
+                let tab = ui.tabbar(7, TABS_SIZE, TABS);
+                ui.canvas().request_space(vec2(0.0, TABS_GAP));
+                if tab == 0 {
                     widgets::InputText::new(6).size(SIZE_FIELD).ui(ui, &mut self.seed);
                     ui.same_line(0.0);
                     if ui.button(None, "Use seed") {
@@ -207,13 +245,17 @@ impl Editor {
                     ui.input_text(5, "Maximum", &mut self.max_rooms);
                     ui.separator();
 
-                    let label = format!("Room sizes (WxH, 1 to {MAX_ROOM_SIDE})");
+                    let label = format!("Room sizes (1 to {MAX_ROOM_SIDE})");
                     widgets::TreeNode::new(8, label.as_str()).ui(ui, |ui| {
+                        widgets::Label::new("Width").size(SIDE_FIELD).ui(ui);
+                        ui.same_line(0.0);
+                        widgets::Label::new("Height").size(SIDE_FIELD).ui(ui);
                         let mut remove_size = None;
-                        for (i, size) in self.sizes.iter_mut().enumerate() {
-                            widgets::InputText::new(SIZE_ID + i as u64)
-                                .size(SIZE_FIELD)
-                                .ui(ui, size);
+                        for (i, (w, h)) in self.sizes.iter_mut().enumerate() {
+                            let id = SIZE_ID + 2 * i as u64;
+                            widgets::InputText::new(id).size(SIDE_FIELD).ui(ui, w);
+                            ui.same_line(0.0);
+                            widgets::InputText::new(id + 1).size(SIDE_FIELD).ui(ui, h);
                             ui.same_line(0.0);
                             if ui.button(None, "Delete") {
                                 remove_size = Some(i);
@@ -223,7 +265,11 @@ impl Editor {
                             self.sizes.remove(i);
                         }
                         if ui.button(None, "Add size") {
-                            self.sizes.push("1x1".to_owned());
+                            self.sizes.push(("1".to_owned(), "1".to_owned()));
+                        }
+                        ui.same_line(0.0);
+                        if ui.button(None, "Reset") {
+                            self.sizes = size_fields(DEFAULT_ROOM_SIZES);
                         }
                     });
                     ui.separator();
@@ -239,7 +285,7 @@ impl Editor {
                             Err(e) => format!("Error: {e}"),
                         };
                     }
-                    ui.label(None, &self.status);
+                    wrapped_label(ui, &self.status);
                     return;
                 }
 
@@ -284,11 +330,12 @@ impl Editor {
                 }
                 ui.separator();
 
-                if ui.button(None, "Add biome") {
+                if widgets::Button::new("Add").size(THIRD_BUTTON).ui(ui) {
                     biomes.push(Biome::new("New", 128, 128, 128));
                     regen = true;
                 }
-                if ui.button(None, "Import biomes") {
+                ui.same_line(0.0);
+                if widgets::Button::new("Import").size(THIRD_BUTTON).ui(ui) {
                     // Blocks the app until the dialog is closed.
                     let picked = rfd::FileDialog::new().add_filter("JSON", &["json"]).pick_file();
                     if let Some(path) = picked {
@@ -305,13 +352,14 @@ impl Editor {
                         }
                     }
                 }
-                if ui.button(None, "Save") {
+                ui.same_line(0.0);
+                if widgets::Button::new("Save").size(THIRD_BUTTON).ui(ui) {
                     self.status = match biome::save(biomes) {
                         Ok(path) => format!("Saved to {}", path.display()),
                         Err(e) => format!("Error: {e}"),
                     };
                 }
-                ui.label(None, &self.status);
+                wrapped_label(ui, &self.status);
             });
         root_ui().pop_skin();
 

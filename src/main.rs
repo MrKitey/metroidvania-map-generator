@@ -5,6 +5,7 @@
 
 mod biome;
 mod editor;
+mod icons;
 mod render;
 mod settings;
 mod storage;
@@ -61,6 +62,7 @@ async fn main() {
     let mut editor = Editor::new(seed, &settings::load());
     let mut world = generate(cells, seed, &biomes, &editor);
     let mut view = View::new();
+    let mut icons = icons::Icons::new();
     // Set when the view must be refit to the map, done once the layout is known.
     let mut fit = true;
     // Time of the last seed copy, used to show the "copied" feedback.
@@ -169,7 +171,7 @@ async fn main() {
             hovered,
             help_open,
         };
-        render::draw_world(&world, &biomes, &frame);
+        render::draw_world(&world, &biomes, &frame, &mut icons);
         next_frame().await;
     }
 }
