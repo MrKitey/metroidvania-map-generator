@@ -97,7 +97,10 @@ fn render_png(map: &MapData, icons: &mut Icons) -> Result<Vec<u8>, Box<dyn Error
     let max = vec2(x1 as f32 * cw, y1 as f32 * ch) + PADDING;
     let size = max - min;
     let scale = PX_PER_UNIT.min(MAX_SIDE / size.x).min(MAX_SIDE / size.y);
-    let (w, h) = ((size.x * scale).ceil() as u32, (size.y * scale).ceil() as u32);
+    let (w, h) = (
+        (size.x * scale).ceil() as u32,
+        (size.y * scale).ceil() as u32,
+    );
 
     let target = render_target(w, h);
     // macroquad does not flip y for render targets, and OpenGL reads rows bottom up,

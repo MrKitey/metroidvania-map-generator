@@ -30,7 +30,12 @@ impl Biome {
     /// Fill color blended 55% toward white.
     pub fn border(&self) -> Color {
         let lighten = |c: f32| c + (1.0 - c) * 0.55;
-        Color::new(lighten(self.fill.r), lighten(self.fill.g), lighten(self.fill.b), 1.0)
+        Color::new(
+            lighten(self.fill.r),
+            lighten(self.fill.g),
+            lighten(self.fill.b),
+            1.0,
+        )
     }
 }
 

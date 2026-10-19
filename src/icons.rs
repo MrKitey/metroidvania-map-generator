@@ -17,8 +17,12 @@ struct Icon {
 impl Icon {
     /// Panics if the SVG is invalid. The files are embedded, so this fails on every run.
     fn new(svg: &[u8]) -> Icon {
-        let tree = usvg::Tree::from_data(svg, &usvg::Options::default()).expect("invalid embedded SVG");
-        Icon { tree, texture: None }
+        let tree =
+            usvg::Tree::from_data(svg, &usvg::Options::default()).expect("invalid embedded SVG");
+        Icon {
+            tree,
+            texture: None,
+        }
     }
 
     /// Square texture of `px` pixels per side, rasterized again only when the size changes.
@@ -36,7 +40,11 @@ fn rasterize(tree: &usvg::Tree, px: u32) -> Texture2D {
     let mut pixmap = tiny_skia::Pixmap::new(px, px).expect("px is at least MIN_PX");
     let size = tree.size();
     let scale = px as f32 / size.width().max(size.height());
-    resvg::render(tree, tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
+    resvg::render(
+        tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
     // tiny-skia stores premultiplied alpha, macroquad blends straight alpha.
     let bytes: Vec<u8> = pixmap
         .pixels()

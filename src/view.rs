@@ -33,7 +33,10 @@ impl View {
         let (x0, y0, x1, y1) = world.bounds();
         let w = (x1 - x0) as f32 * layout.cw;
         let h = (y1 - y0) as f32 * layout.ch;
-        self.center = vec2(x0 as f32 * layout.cw + w / 2.0, y0 as f32 * layout.ch + h / 2.0);
+        self.center = vec2(
+            x0 as f32 * layout.cw + w / 2.0,
+            y0 as f32 * layout.ch + h / 2.0,
+        );
         let avail_w = screen_width() - reserved - 2.0 * MARGIN;
         let avail_h = screen_height() - TOP - MARGIN;
         self.scale = (avail_w / w).min(avail_h / h).clamp(MIN_SCALE, MAX_SCALE);

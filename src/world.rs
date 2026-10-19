@@ -146,14 +146,16 @@ impl World {
 
     /// Returns (min_x, min_y, max_x, max_y) in cells, max excluded.
     pub fn bounds(&self) -> (i32, i32, i32, i32) {
-        self.rooms.iter().fold((i32::MAX, i32::MAX, i32::MIN, i32::MIN), |b, r| {
-            (
-                b.0.min(r.x),
-                b.1.min(r.y),
-                b.2.max(r.x + r.w as i32),
-                b.3.max(r.y + r.h as i32),
-            )
-        })
+        self.rooms
+            .iter()
+            .fold((i32::MAX, i32::MAX, i32::MIN, i32::MIN), |b, r| {
+                (
+                    b.0.min(r.x),
+                    b.1.min(r.y),
+                    b.2.max(r.x + r.w as i32),
+                    b.3.max(r.y + r.h as i32),
+                )
+            })
     }
 
     /// Indices of the non-corridor rooms of a biome.
@@ -166,9 +168,18 @@ impl World {
     /// Attaches random rooms to random rooms of the biome. Stops at `max_rooms`, or once
     /// both the cell quota and `min_rooms` are reached, or when the try budget runs out.
     /// Returns the biome cell count and normal room count.
-    fn grow(&mut self, biome: usize, quota: u32, min_rooms: usize, max_rooms: usize) -> (u32, usize) {
+    fn grow(
+        &mut self,
+        biome: usize,
+        quota: u32,
+        min_rooms: usize,
+        max_rooms: usize,
+    ) -> (u32, usize) {
         let mut rooms = self.normal_rooms(biome);
-        let mut cells: u32 = rooms.iter().map(|&i| self.rooms[i].w * self.rooms[i].h).sum();
+        let mut cells: u32 = rooms
+            .iter()
+            .map(|&i| self.rooms[i].w * self.rooms[i].h)
+            .sum();
         for _ in 0..(quota + min_rooms as u32) * 30 {
             if rooms.len() >= max_rooms || (cells >= quota && rooms.len() >= min_rooms) {
                 break;
@@ -191,7 +202,10 @@ impl World {
         for _ in 0..count {
             for _ in 0..SECRET_ATTEMPTS {
                 let from = *rooms.choose().unwrap();
-                if self.try_attach(from, gen_range(0, 4), 1, 1, biome, RoomKind::Secret).is_some() {
+                if self
+                    .try_attach(from, gen_range(0, 4), 1, 1, biome, RoomKind::Secret)
+                    .is_some()
+                {
                     break;
                 }
             }
@@ -207,11 +221,15 @@ impl World {
             let len = gen_range(3, 6);
             // Horizontal corridor for left/right, vertical for up/down.
             let (cw, ch) = if dir < 2 { (len, 1) } else { (1, len) };
-            let Some(corridor) = self.try_attach(from, dir, cw, ch, parent, RoomKind::Corridor) else {
+            let Some(corridor) = self.try_attach(from, dir, cw, ch, parent, RoomKind::Corridor)
+            else {
                 continue;
             };
             let (w, h) = *self.sizes.choose().unwrap();
-            if self.try_attach(corridor, dir, w, h, child, RoomKind::Normal).is_some() {
+            if self
+                .try_attach(corridor, dir, w, h, child, RoomKind::Normal)
+                .is_some()
+            {
                 return true;
             }
             self.remove_last();
@@ -294,7 +312,11 @@ impl World {
     /// Sets the marker, or clears it if the room already has this one.
     pub fn toggle_marker(&mut self, idx: usize, marker: Marker) {
         let room = &mut self.rooms[idx];
-        room.marker = if room.marker == Some(marker) { None } else { Some(marker) };
+        room.marker = if room.marker == Some(marker) {
+            None
+        } else {
+            Some(marker)
+        };
     }
 
     /// Index of the room covering cell (x, y), if any.

@@ -64,7 +64,10 @@ impl Layout {
 
     /// Cell containing world point `p`. Uses floor so negative cells are correct.
     pub fn cell_at(&self, p: Vec2) -> (i32, i32) {
-        ((p.x / self.cw).floor() as i32, (p.y / self.ch).floor() as i32)
+        (
+            (p.x / self.cw).floor() as i32,
+            (p.y / self.ch).floor() as i32,
+        )
     }
 }
 
@@ -100,7 +103,12 @@ pub struct Frame<'a> {
 
 /// Square shortcuts button, in the top right corner of the header, left of `reserved`.
 pub fn help_button_rect(reserved: f32) -> Rect {
-    Rect::new(screen_width() - reserved - MARGIN - HELP_H, (TOP - HELP_H) / 2.0, HELP_H, HELP_H)
+    Rect::new(
+        screen_width() - reserved - MARGIN - HELP_H,
+        (TOP - HELP_H) / 2.0,
+        HELP_H,
+        HELP_H,
+    )
 }
 
 /// Widths of the key column and the action column of the popup.
@@ -131,7 +139,11 @@ fn seed_label(seed: u64, copied: bool, reserved: f32) -> (String, Rect, f32) {
     let dim = measure_text(&text, None, SEED_SIZE, 1.0);
     let x = screen_width() - reserved - MARGIN - dim.width;
     let y = screen_height() - MARGIN - dim.height;
-    (text, Rect::new(x, y, dim.width, dim.height), y + dim.offset_y)
+    (
+        text,
+        Rect::new(x, y, dim.width, dim.height),
+        y + dim.offset_y,
+    )
 }
 
 /// Clickable area of the seed label, in screen pixels.
@@ -158,7 +170,13 @@ pub fn draw_world(world: &World, biomes: &[Biome], f: &Frame, icons: &mut Icons)
     // Backdrop keeps the label readable over the map. Brighter on hover to show it is clickable.
     let (text, rect, baseline) = seed_label(f.seed, f.copied, f.reserved);
     let hover = rect.contains(Vec2::from(mouse_position()));
-    draw_rectangle(rect.x - 6.0, rect.y - 6.0, rect.w + 12.0, rect.h + 12.0, BACKGROUND);
+    draw_rectangle(
+        rect.x - 6.0,
+        rect.y - 6.0,
+        rect.w + 12.0,
+        rect.h + 12.0,
+        BACKGROUND,
+    );
     let color = if hover { WHITE } else { LIGHTGRAY };
     draw_text(&text, rect.x, baseline, SEED_SIZE as f32, color);
 
@@ -223,7 +241,10 @@ pub fn draw_map(
         if !secret && r.marker.is_none() {
             continue;
         }
-        let c = vec2((r.x as f32 + r.w as f32 / 2.0) * cw, (r.y as f32 + r.h as f32 / 2.0) * ch);
+        let c = vec2(
+            (r.x as f32 + r.w as f32 / 2.0) * cw,
+            (r.y as f32 + r.h as f32 / 2.0) * ch,
+        );
         // A secret room with a marker shows both icons side by side, smaller.
         let both = secret && r.marker.is_some();
         let s = if both { side * 0.6 } else { side };
@@ -255,7 +276,13 @@ pub fn export_button_rect(reserved: f32) -> Rect {
 fn draw_export_button(reserved: f32) {
     let b = export_button_rect(reserved);
     let hover = b.contains(Vec2::from(mouse_position()));
-    draw_rectangle(b.x, b.y, b.w, b.h, if hover { BUTTON_HOVER } else { BUTTON_BG });
+    draw_rectangle(
+        b.x,
+        b.y,
+        b.w,
+        b.h,
+        if hover { BUTTON_HOVER } else { BUTTON_BG },
+    );
     let c = b.center();
     let (top, tip, half) = (c.y - 8.0, c.y + 4.0, 5.0);
     draw_line(c.x, top, c.x, tip, 2.0, WHITE);
@@ -284,7 +311,13 @@ fn draw_legend(world: &World, biomes: &[Biome]) {
         draw_rectangle(x + PAD, swatch_y, SWATCH, SWATCH, biome.fill);
         draw_rectangle_lines(x + PAD, swatch_y, SWATCH, SWATCH, 2.0, biome.border());
         let text_x = x + PAD + SWATCH + PAD;
-        draw_text(&biome.name, text_x, row_y + ROW_H * 0.7, LEGEND_TEXT as f32, biome.border());
+        draw_text(
+            &biome.name,
+            text_x,
+            row_y + ROW_H * 0.7,
+            LEGEND_TEXT as f32,
+            biome.border(),
+        );
     }
 }
 
@@ -292,24 +325,46 @@ fn draw_legend(world: &World, biomes: &[Biome]) {
 fn draw_help(reserved: f32, open: bool) {
     let button = help_button_rect(reserved);
     let hover = button.contains(Vec2::from(mouse_position()));
-    let bg = if open || hover { BUTTON_HOVER } else { BUTTON_BG };
+    let bg = if open || hover {
+        BUTTON_HOVER
+    } else {
+        BUTTON_BG
+    };
     draw_rectangle(button.x, button.y, button.w, button.h, bg);
 
     let c = button.center();
     draw_circle_lines(c.x, c.y, ICON_R, 1.5, WHITE);
     let q = measure_text("?", None, HELP_TEXT, 1.0);
-    draw_text("?", c.x - q.width / 2.0, c.y + q.height / 2.0, HELP_TEXT as f32, WHITE);
+    draw_text(
+        "?",
+        c.x - q.width / 2.0,
+        c.y + q.height / 2.0,
+        HELP_TEXT as f32,
+        WHITE,
+    );
 
     if !open {
         return;
     }
     let popup = help_popup_rect(reserved);
-    draw_rectangle(popup.x, popup.y, popup.w, popup.h, Color::new(0.0, 0.0, 0.0, 0.9));
+    draw_rectangle(
+        popup.x,
+        popup.y,
+        popup.w,
+        popup.h,
+        Color::new(0.0, 0.0, 0.0, 0.9),
+    );
     draw_rectangle_lines(popup.x, popup.y, popup.w, popup.h, 1.0, CORRIDOR_BORDER);
     let action_x = popup.x + PAD + help_columns().0 + 2.0 * PAD;
     for (i, (key, action)) in SHORTCUTS.iter().enumerate() {
         let baseline = popup.y + PAD + i as f32 * ROW_H + ROW_H * 0.7;
-        draw_text(key, popup.x + PAD, baseline, HELP_TEXT as f32, TRANSITION_DOOR);
+        draw_text(
+            key,
+            popup.x + PAD,
+            baseline,
+            HELP_TEXT as f32,
+            TRANSITION_DOOR,
+        );
         draw_text(action, action_x, baseline, HELP_TEXT as f32, WHITE);
     }
 }
@@ -332,6 +387,12 @@ fn draw_tooltip(r: &Room, biomes: &[Biome], layout: &Layout) {
     );
     let (mx, my) = mouse_position();
     let dim = measure_text(&text, None, 18, 1.0);
-    draw_rectangle(mx + 12.0, my + 8.0, dim.width + 12.0, 24.0, Color::new(0.0, 0.0, 0.0, 0.8));
+    draw_rectangle(
+        mx + 12.0,
+        my + 8.0,
+        dim.width + 12.0,
+        24.0,
+        Color::new(0.0, 0.0, 0.0, 0.8),
+    );
     draw_text(&text, mx + 18.0, my + 25.0, 18.0, WHITE);
 }

@@ -1,7 +1,9 @@
 //! Side panel to edit generation settings and biomes.
 
 use crate::biome::{self, Biome, MAX_SECRETS};
-use crate::settings::{self, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, Settings};
+use crate::settings::{
+    self, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, Settings,
+};
 use macroquad::color::hsl_to_rgb;
 use macroquad::prelude::*;
 use macroquad::ui::{Skin, Ui, root_ui, widgets};
@@ -64,12 +66,18 @@ fn wrapped_label(ui: &mut Ui, text: &str) {
 
 /// Width and height field texts for each size.
 fn size_fields(sizes: &[(u32, u32)]) -> Vec<(String, String)> {
-    sizes.iter().map(|(w, h)| (w.to_string(), h.to_string())).collect()
+    sizes
+        .iter()
+        .map(|(w, h)| (w.to_string(), h.to_string()))
+        .collect()
 }
 
 /// Parses one room side, between 1 and `MAX_ROOM_SIDE`.
 fn parse_side(text: &str) -> Option<u32> {
-    text.trim().parse().ok().filter(|v| (1..=MAX_ROOM_SIDE).contains(v))
+    text.trim()
+        .parse()
+        .ok()
+        .filter(|v| (1..=MAX_ROOM_SIDE).contains(v))
 }
 
 /// Fields are kept as raw text so the user can type freely. They are parsed on read,
@@ -155,7 +163,8 @@ impl Editor {
 
     /// Size of one in-game screen in pixels. Zero or invalid values use the default.
     pub fn viewport(&self) -> (u32, u32) {
-        let parse = |s: &str, default: u32| s.trim().parse().ok().filter(|&v| v > 0).unwrap_or(default);
+        let parse =
+            |s: &str, default: u32| s.trim().parse().ok().filter(|&v| v > 0).unwrap_or(default);
         (
             parse(&self.viewport_w, DEFAULT_VIEWPORT.0),
             parse(&self.viewport_h, DEFAULT_VIEWPORT.1),
@@ -224,7 +233,9 @@ impl Editor {
                 let tab = ui.tabbar(7, TABS_SIZE, TABS);
                 ui.canvas().request_space(vec2(0.0, TABS_GAP));
                 if tab == 0 {
-                    widgets::InputText::new(6).size(SIZE_FIELD).ui(ui, &mut self.seed);
+                    widgets::InputText::new(6)
+                        .size(SIZE_FIELD)
+                        .ui(ui, &mut self.seed);
                     ui.same_line(0.0);
                     if ui.button(None, "Use seed") {
                         match self.seed.trim().parse() {
@@ -279,7 +290,10 @@ impl Editor {
                         regen = true;
                     }
                     ui.same_line(0.0);
-                    if widgets::Button::new("Save settings").size(HALF_BUTTON).ui(ui) {
+                    if widgets::Button::new("Save settings")
+                        .size(HALF_BUTTON)
+                        .ui(ui)
+                    {
                         self.status = match settings::save(&self.settings()) {
                             Ok(path) => format!("Saved to {}", path.display()),
                             Err(e) => format!("Error: {e}"),
@@ -314,7 +328,11 @@ impl Editor {
 
                     let mut canvas = ui.canvas();
                     let pos = canvas.request_space(vec2(PICKER_SIZE.x, SWATCH_H));
-                    canvas.rect(Rect::new(pos.x, pos.y, PICKER_SIZE.x, SWATCH_H), None, b.fill);
+                    canvas.rect(
+                        Rect::new(pos.x, pos.y, PICKER_SIZE.x, SWATCH_H),
+                        None,
+                        b.fill,
+                    );
                     let pos = canvas.request_space(PICKER_SIZE);
                     let rect = Rect::new(pos.x, pos.y, PICKER_SIZE.x, PICKER_SIZE.y);
                     canvas.image(rect, &self.picker);
@@ -325,7 +343,12 @@ impl Editor {
                     }
                     // The slider works in floats, rounding makes it step between integers.
                     let mut secrets = b.secrets as f32;
-                    ui.slider(id + 2, "Secret rooms", 0.0..MAX_SECRETS as f32, &mut secrets);
+                    ui.slider(
+                        id + 2,
+                        "Secret rooms",
+                        0.0..MAX_SECRETS as f32,
+                        &mut secrets,
+                    );
                     b.secrets = (secrets.round() as u32).min(MAX_SECRETS);
                     if ui.button(None, "Delete") {
                         remove = Some(i);
@@ -341,7 +364,9 @@ impl Editor {
                 ui.same_line(0.0);
                 if widgets::Button::new("Import").size(THIRD_BUTTON).ui(ui) {
                     // Blocks the app until the dialog is closed.
-                    let picked = rfd::FileDialog::new().add_filter("JSON", &["json"]).pick_file();
+                    let picked = rfd::FileDialog::new()
+                        .add_filter("JSON", &["json"])
+                        .pick_file();
                     if let Some(path) = picked {
                         match biome::read(&path) {
                             Ok(list) => {

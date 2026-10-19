@@ -103,11 +103,13 @@ async fn main() {
             if is_key_pressed(KeyCode::C) {
                 fit = true;
             }
-            if (is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Up)) && cells < MAX_CELLS {
+            if (is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Up)) && cells < MAX_CELLS
+            {
                 cells += STEP;
                 regen = true;
             }
-            if (is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::Down)) && cells > MIN_CELLS {
+            if (is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::Down)) && cells > MIN_CELLS
+            {
                 cells -= STEP;
                 regen = true;
             }
@@ -142,9 +144,11 @@ async fn main() {
             copied_at = get_time();
         }
         let over_button = render::help_button_rect(reserved).contains(mouse);
-        let over_help = over_button || (help_open && render::help_popup_rect(reserved).contains(mouse));
+        let over_help =
+            over_button || (help_open && render::help_popup_rect(reserved).contains(mouse));
         // A click outside the open popup only closes it, it does not reach the map.
-        let clicked = is_mouse_button_pressed(MouseButton::Left) || is_mouse_button_pressed(MouseButton::Right);
+        let clicked = is_mouse_button_pressed(MouseButton::Left)
+            || is_mouse_button_pressed(MouseButton::Right);
         let mut consumed = false;
         if over_button && is_mouse_button_pressed(MouseButton::Left) {
             help_open = !help_open;
@@ -153,7 +157,9 @@ async fn main() {
             consumed = true;
         }
 
-        if render::export_button_rect(reserved).contains(mouse) && is_mouse_button_pressed(MouseButton::Left) {
+        if render::export_button_rect(reserved).contains(mouse)
+            && is_mouse_button_pressed(MouseButton::Left)
+        {
             // Blocks the app until the dialog is closed.
             let picked = rfd::FileDialog::new()
                 .add_filter("Zip", &["zip"])
@@ -172,7 +178,11 @@ async fn main() {
                     biomes: &biomes,
                     layout: &layout,
                 };
-                let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                let name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
                 let text = match export::write_zip(&path, &map, &mut icons) {
                     Ok(()) => format!("Exported {name}"),
                     Err(e) => format!("Export failed: {e}"),
