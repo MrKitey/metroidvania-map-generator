@@ -65,6 +65,7 @@ async fn main() {
     let mut fit = true;
     // Time of the last seed copy, used to show the "copied" feedback.
     let mut copied_at = f64::NEG_INFINITY;
+    let mut help_open = false;
 
     // One iteration per frame: input, optional regeneration, camera, hover, drawing.
     loop {
@@ -72,10 +73,17 @@ async fn main() {
             editor.open = !editor.open;
         }
 
+        // Escape closes the shortcuts popup first, and only quits when it is closed.
+        let mut escape = is_key_pressed(KeyCode::Escape);
+        if escape && help_open {
+            help_open = false;
+            escape = false;
+        }
+
         let mut regen = false;
         // Shortcuts are disabled while the editor is open so typing in text fields is safe.
         if !editor.open {
-            if is_key_pressed(KeyCode::Escape) {
+            if escape {
                 break;
             }
             if is_key_pressed(KeyCode::R) {
@@ -123,7 +131,19 @@ async fn main() {
             miniquad::window::clipboard_set(&seed.to_string());
             copied_at = get_time();
         }
-        let hovered = if over_ui || over_seed || mouse.y < render::TOP {
+        let over_button = render::help_button_rect(reserved).contains(mouse);
+        let over_help = over_button || (help_open && render::help_popup_rect(reserved).contains(mouse));
+        // A click outside the open popup only closes it, it does not reach the map.
+        let clicked = is_mouse_button_pressed(MouseButton::Left) || is_mouse_button_pressed(MouseButton::Right);
+        let mut consumed = false;
+        if over_button && is_mouse_button_pressed(MouseButton::Left) {
+            help_open = !help_open;
+        } else if help_open && clicked && !over_help {
+            help_open = false;
+            consumed = true;
+        }
+
+        let hovered = if over_ui || over_seed || over_help || consumed || mouse.y < render::TOP {
             None
         } else {
             let (x, y) = layout.cell_at(camera.screen_to_world(mouse));
@@ -147,6 +167,7 @@ async fn main() {
             copied,
             reserved,
             hovered,
+            help_open,
         };
         render::draw_world(&world, &biomes, &frame);
         next_frame().await;
