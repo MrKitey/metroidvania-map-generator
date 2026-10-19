@@ -6,7 +6,7 @@ and save rooms, and tune the generation from a built-in editor.
 
 Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 
-![Screenshot](docs/screenshot.png)
+![Screenshot](docs/screenshot.png)![Screenshot](docs/screenshot_2.png)
 
 ## Features
 
