@@ -2,7 +2,7 @@
 
 use crate::text::icons as text;
 use crate::world::{Marker, RoomKind};
-use macroquad::prelude::*;
+use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 use resvg::{tiny_skia, usvg};
 
 /// Raster size limits, in pixels per side.
@@ -61,7 +61,7 @@ impl IconId {
 struct Icon {
     tree: usvg::Tree,
     /// Last rasterized size and its texture.
-    texture: Option<(u32, Texture2D)>,
+    texture: Option<(u32, TextureHandle)>,
 }
 
 impl Icon {
@@ -76,17 +76,19 @@ impl Icon {
     }
 
     /// Square texture of `px` pixels per side, rasterized again only when the size changes.
-    fn texture(&mut self, px: u32) -> &Texture2D {
+    fn texture(&mut self, ctx: &Context, name: &str, px: u32) -> &TextureHandle {
         let px = px.clamp(MIN_PX, MAX_PX);
         if self.texture.as_ref().is_none_or(|(size, _)| *size != px) {
-            self.texture = Some((px, rasterize(&self.tree, px)));
+            let image = rasterize(&self.tree, px);
+            let handle = ctx.load_texture(format!("{name}-{px}"), image, TextureOptions::LINEAR);
+            self.texture = Some((px, handle));
         }
         &self.texture.as_ref().unwrap().1
     }
 }
 
 /// Renders the SVG scaled to fit a `px` square.
-fn rasterize(tree: &usvg::Tree, px: u32) -> Texture2D {
+fn rasterize(tree: &usvg::Tree, px: u32) -> ColorImage {
     let mut pixmap = tiny_skia::Pixmap::new(px, px).expect("px is at least MIN_PX");
     let size = tree.size();
     let scale = px as f32 / size.width().max(size.height());
@@ -95,7 +97,6 @@ fn rasterize(tree: &usvg::Tree, px: u32) -> Texture2D {
         tiny_skia::Transform::from_scale(scale, scale),
         &mut pixmap.as_mut(),
     );
-    // tiny-skia stores premultiplied alpha, macroquad blends straight alpha.
     let bytes: Vec<u8> = pixmap
         .pixels()
         .iter()
@@ -104,7 +105,7 @@ fn rasterize(tree: &usvg::Tree, px: u32) -> Texture2D {
             [c.red(), c.green(), c.blue(), c.alpha()]
         })
         .collect();
-    Texture2D::from_rgba8(px as u16, px as u16, &bytes)
+    ColorImage::from_rgba_unmultiplied([px as usize, px as usize], &bytes)
 }
 
 /// Texture cache of all icons, one raster size per icon.
@@ -119,7 +120,7 @@ impl Icons {
         }
     }
 
-    pub fn get(&mut self, id: IconId, px: u32) -> &Texture2D {
-        self.icons[id as usize].texture(px)
+    pub fn get(&mut self, ctx: &Context, id: IconId, px: u32) -> &TextureHandle {
+        self.icons[id as usize].texture(ctx, id.name(), px)
     }
 }

@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 dirs = "7.0.0"
-macroquad = "0.4.16"
+eframe = "0.37.0"
+egui = "0.37.0"
+fastrand = "2.5.0"
 png = "0.18.1"
 resvg = { version = "0.48.1", default-features = false }
 rfd = "0.17.2"

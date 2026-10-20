@@ -10,7 +10,7 @@
 //! They create loops, so the map is a tree only before that step.
 
 use super::{Door, Extras, Marker, RoomKind, Sizes, World};
-use macroquad::rand::{ChooseRandom, gen_range, srand};
+use fastrand::Rng;
 use std::cmp::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -54,8 +54,8 @@ impl Dir {
     const ALL: [Dir; 4] = [Dir::Right, Dir::Left, Dir::Down, Dir::Up];
 
     /// Random side among `ALL[low..high]`.
-    fn random(low: u32, high: u32) -> Dir {
-        Dir::ALL[gen_range(low, high) as usize]
+    fn random(rng: &mut Rng, low: usize, high: usize) -> Dir {
+        Dir::ALL[rng.usize(low..high)]
     }
 
     fn is_horizontal(self) -> bool {
@@ -84,9 +84,14 @@ fn bridge_rect(dir: Dir, x: i32, y: i32, len: i32) -> (i32, i32, i32, i32) {
     }
 }
 
-/// Uniform in [low, high). `gen_range` truncates toward zero, which can return `high` for negative ranges.
-fn range(low: i32, high: i32) -> i32 {
-    low + gen_range(0, high - low)
+/// Uniform in [low, high).
+fn range(rng: &mut Rng, low: i32, high: i32) -> i32 {
+    rng.i32(low..high)
+}
+
+/// Random item of a non-empty slice.
+fn pick<'a, T>(rng: &mut Rng, items: &'a [T]) -> &'a T {
+    &items[rng.usize(..items.len())]
 }
 
 /// New seed from the clock, so each regeneration gives a different map.
@@ -100,10 +105,10 @@ pub fn time_seed() -> u64 {
 impl World {
     pub fn generate(params: &Params) -> World {
         // Same seed and settings always give the same map.
-        srand(params.seed);
         Generator {
             world: World::default(),
             p: params,
+            rng: Rng::with_seed(params.seed),
         }
         .run()
     }
@@ -112,6 +117,7 @@ impl World {
 struct Generator<'a> {
     world: World,
     p: &'a Params<'a>,
+    rng: Rng,
 }
 
 impl Generator<'_> {
@@ -121,7 +127,7 @@ impl Generator<'_> {
 
         // Pick which biomes appear and in which order. Each gets the same cell quota.
         let mut order: Vec<usize> = (0..biome_count).collect();
-        order.shuffle();
+        self.rng.shuffle(&mut order);
         let count = (p.cells / CELLS_PER_BIOME).max(2).min(biome_count as u32) as usize;
         order.truncate(count);
         let quota = p.cells / count as u32;
@@ -130,7 +136,7 @@ impl Generator<'_> {
         // it reaches the minimum room count.
         let root = order[0];
         loop {
-            let (w, h) = *p.sizes.rooms.choose().unwrap();
+            let (w, h) = *pick(&mut self.rng, &p.sizes.rooms);
             self.world.place(0, 0, w, h, root, RoomKind::Normal);
             if self.grow(root, quota).1 >= p.min_rooms {
                 break;
@@ -146,7 +152,7 @@ impl Generator<'_> {
         for &child in &order[1..] {
             for attempt in 0.. {
                 let (rooms_len, doors_len) = (self.world.rooms.len(), self.world.doors.len());
-                let parent = self.world.biomes[gen_range(0, self.world.biomes.len())];
+                let parent = self.world.biomes[self.rng.usize(..self.world.biomes.len())];
                 if !self.link(parent, child) {
                     continue;
                 }
@@ -198,9 +204,9 @@ impl Generator<'_> {
             if rooms.len() >= max_rooms || (cells >= quota && rooms.len() >= min_rooms) {
                 break;
             }
-            let from = *rooms.choose().unwrap();
-            let (w, h) = *self.p.sizes.rooms.choose().unwrap();
-            let dir = Dir::random(0, 4);
+            let from = *pick(&mut self.rng, &rooms);
+            let (w, h) = *pick(&mut self.rng, &self.p.sizes.rooms);
+            let dir = Dir::random(&mut self.rng, 0, 4);
             if let Some(idx) = self.try_attach(from, dir, w, h, biome, RoomKind::Normal) {
                 cells += w * h;
                 rooms.push(idx);
@@ -230,8 +236,9 @@ impl Generator<'_> {
     fn add_dead_end(&mut self, biome: usize, kind: RoomKind, marker: Option<Marker>) {
         let rooms = self.normal_rooms(biome);
         for _ in 0..EXTRA_ATTEMPTS {
-            let from = *rooms.choose().unwrap();
-            if let Some(idx) = self.try_attach(from, Dir::random(0, 4), 1, 1, biome, kind) {
+            let from = *pick(&mut self.rng, &rooms);
+            let dir = Dir::random(&mut self.rng, 0, 4);
+            if let Some(idx) = self.try_attach(from, dir, 1, 1, biome, kind) {
                 self.world.rooms[idx].marker = marker;
                 return;
             }
@@ -244,14 +251,14 @@ impl Generator<'_> {
     fn add_boss(&mut self, biome: usize) {
         let rooms = self.normal_rooms(biome);
         for _ in 0..EXTRA_ATTEMPTS {
-            let from = *rooms.choose().unwrap();
-            let (w, h) = *self.p.sizes.boss.choose().unwrap();
-            let dir = Dir::random(0, 4);
+            let from = *pick(&mut self.rng, &rooms);
+            let (w, h) = *pick(&mut self.rng, &self.p.sizes.boss);
+            let dir = Dir::random(&mut self.rng, 0, 4);
             let Some(boss) = self.try_attach(from, dir, w, h, biome, RoomKind::Normal) else {
                 continue;
             };
-            let (w, h) = *self.p.sizes.rooms.choose().unwrap();
-            let dir = Dir::random(0, 4);
+            let (w, h) = *pick(&mut self.rng, &self.p.sizes.rooms);
+            let dir = Dir::random(&mut self.rng, 0, 4);
             if self
                 .try_attach(boss, dir, w, h, biome, RoomKind::Normal)
                 .is_some()
@@ -267,13 +274,14 @@ impl Generator<'_> {
     /// The corridor is removed if the child room does not fit.
     fn link(&mut self, parent: usize, child: usize) -> bool {
         for _ in 0..LINK_ATTEMPTS {
-            let from = *self.normal_rooms(parent).choose().unwrap();
-            let (cw, ch) = *self.p.sizes.corridor.choose().unwrap();
+            let candidates = self.normal_rooms(parent);
+            let from = *pick(&mut self.rng, &candidates);
+            let (cw, ch) = *pick(&mut self.rng, &self.p.sizes.corridor);
             // A wide corridor goes left or right, a tall one goes up or down.
             let dir = match cw.cmp(&ch) {
-                Ordering::Greater => Dir::random(0, 2),
-                Ordering::Less => Dir::random(2, 4),
-                Ordering::Equal => Dir::random(0, 4),
+                Ordering::Greater => Dir::random(&mut self.rng, 0, 2),
+                Ordering::Less => Dir::random(&mut self.rng, 2, 4),
+                Ordering::Equal => Dir::random(&mut self.rng, 0, 4),
             };
             let Some(corridor) = self.try_attach(from, dir, cw, ch, parent, RoomKind::Corridor)
             else {
@@ -284,7 +292,7 @@ impl Generator<'_> {
                 self.world.remove_last();
                 continue;
             }
-            let (w, h) = *self.p.sizes.rooms.choose().unwrap();
+            let (w, h) = *pick(&mut self.rng, &self.p.sizes.rooms);
             if self
                 .try_attach(corridor, dir, w, h, child, RoomKind::Normal)
                 .is_some()
@@ -356,7 +364,7 @@ impl Generator<'_> {
         if spots.is_empty() {
             return;
         }
-        let (from, dir, x, y, len, to) = spots[gen_range(0, spots.len())];
+        let (from, dir, x, y, len, to) = *pick(&mut self.rng, &spots);
         // Corridor top-left cell and size, then the door cells at both ends.
         let (cx, cy, w, h) = bridge_rect(dir, x, y, len);
         let ((x1, y1), (x2, y2)) = match dir {
@@ -404,16 +412,16 @@ impl Generator<'_> {
         // The new room slides along the shared side so that both rooms overlap on at
         // least one cell. The door is picked inside that overlap.
         let (nx, ny, dx, dy) = if dir.is_horizontal() {
-            let ny = range(ry - hi + 1, ry + rh);
-            let dy = range(ry.max(ny), (ry + rh).min(ny + hi));
+            let ny = range(&mut self.rng, ry - hi + 1, ry + rh);
+            let dy = range(&mut self.rng, ry.max(ny), (ry + rh).min(ny + hi));
             if dir == Dir::Right {
                 (rx + rw, ny, rx + rw, dy)
             } else {
                 (rx - wi, ny, rx, dy)
             }
         } else {
-            let nx = range(rx - wi + 1, rx + rw);
-            let dx = range(rx.max(nx), (rx + rw).min(nx + wi));
+            let nx = range(&mut self.rng, rx - wi + 1, rx + rw);
+            let dx = range(&mut self.rng, rx.max(nx), (rx + rw).min(nx + wi));
             if dir == Dir::Down {
                 (nx, ry + rh, dx, ry + rh)
             } else {

@@ -1,183 +1,87 @@
 //! Biomes tab: one folding entry per biome, plus add, import and save.
 
 use super::EditorAction;
-use super::widgets::{THIRD_BUTTON, count_slider, wrapped_label};
-use crate::biome::{self, Biome, MIN_CORRIDORS};
-use crate::color::{parse_hex, to_hex};
+use crate::biome::{self, Biome, MAX_COUNT, MIN_CORRIDORS};
 use crate::text::{biomes, editor as text, files, rooms, status};
-use macroquad::color::hsl_to_rgb;
-use macroquad::prelude::*;
-use macroquad::ui::{Ui, widgets};
 
-/// Color picker size: hue along x, lightness from white to black along y.
-const PICKER_SIZE: Vec2 = vec2(280.0, 60.0);
-const SWATCH_H: f32 = 12.0;
-/// Base id of the biome fields. Each biome uses a block of `FIELD_STRIDE` ids.
-const FIELD_ID: u64 = 100;
-const FIELD_STRIDE: u64 = 10;
-/// Base id of the biome tree nodes. Each generation uses its own block of 1000 ids.
-const NODE_ID: u64 = 1_000_000;
-const NODE_BLOCK: u64 = 1000;
-
-/// Picker color at `t`, a position normalized to 0..1 on both axes.
-fn picker_color(t: Vec2) -> Color {
-    hsl_to_rgb(t.x, 1.0, 1.0 - t.y)
-}
-
-fn picker_texture() -> Texture2D {
-    let (w, h) = (PICKER_SIZE.x as u16, PICKER_SIZE.y as u16);
-    let mut image = Image::gen_image_color(w, h, BLACK);
-    for x in 0..w as u32 {
-        for y in 0..h as u32 {
-            image.set_pixel(x, y, picker_color(vec2(x as f32, y as f32) / PICKER_SIZE));
-        }
-    }
-    Texture2D::from_image(&image)
-}
-
-pub struct BiomesTab {
-    /// One `#RRGGBB` field per biome, rebuilt when the biome count changes.
-    hex: Vec<String>,
-    picker: Texture2D,
-    /// Index of the unfolded biome. Only one is open at a time.
-    open_biome: Option<usize>,
-    /// Tree node state lives in the UI storage, keyed by id. Changing the
-    /// generation gives every node a new id, which folds them all.
-    generation: u64,
-}
+pub struct BiomesTab;
 
 impl BiomesTab {
     pub fn new() -> BiomesTab {
-        BiomesTab {
-            hex: Vec::new(),
-            picker: picker_texture(),
-            open_biome: None,
-            generation: 0,
-        }
-    }
-
-    /// Rebuilds the color fields if the biome count changed.
-    pub fn sync(&mut self, biomes: &[Biome]) {
-        if self.hex.len() != biomes.len() {
-            self.hex = biomes.iter().map(|b| to_hex(b.fill)).collect();
-        }
-    }
-
-    fn fold_all(&mut self) {
-        self.open_biome = None;
-        self.generation += 1;
+        BiomesTab
     }
 
     /// Returns `Regenerate` when the biome list changed.
     pub fn draw(
         &mut self,
-        ui: &mut Ui,
-        biomes: &mut Vec<Biome>,
+        ui: &mut egui::Ui,
+        biomes_list: &mut Vec<Biome>,
         status: &mut String,
     ) -> Option<EditorAction> {
         let mut action = None;
-        // The list cannot shrink while the loop iterates over it, so removal happens after.
         let mut remove = None;
-        let mut unfolded = None;
 
-        for (i, b) in biomes.iter_mut().enumerate() {
-            let node_id = NODE_ID + self.generation * NODE_BLOCK + i as u64;
-            let mut node = widgets::TreeNode::new(node_id, b.name.as_str());
-            if self.open_biome == Some(i) {
-                node = node.init_unfolded();
-            }
-            let Some(token) = node.begin(ui) else {
-                if self.open_biome == Some(i) {
-                    self.open_biome = None;
-                }
-                continue;
-            };
-            if self.open_biome != Some(i) {
-                unfolded = Some(i);
-            }
-
-            let id = FIELD_ID + i as u64 * FIELD_STRIDE;
-            ui.input_text(id, text::NAME, &mut b.name);
-            ui.input_text(id + 1, text::COLOR, &mut self.hex[i]);
-            if let Some(color) = parse_hex(&self.hex[i]) {
-                b.fill = color;
-            }
-
-            let mut canvas = ui.canvas();
-            let pos = canvas.request_space(vec2(PICKER_SIZE.x, SWATCH_H));
-            canvas.rect(
-                Rect::new(pos.x, pos.y, PICKER_SIZE.x, SWATCH_H),
-                None,
-                b.fill,
-            );
-            let pos = canvas.request_space(PICKER_SIZE);
-            let rect = Rect::new(pos.x, pos.y, PICKER_SIZE.x, PICKER_SIZE.y);
-            canvas.image(rect, &self.picker);
-            let mouse = Vec2::from(mouse_position());
-            if is_mouse_button_down(MouseButton::Left) && rect.contains(mouse) {
-                b.fill = picker_color((mouse - pos) / PICKER_SIZE);
-                self.hex[i] = to_hex(b.fill);
-            }
-            count_slider(ui, id + 2, rooms::SECRET_ROOMS, 0, &mut b.secrets);
-            count_slider(ui, id + 3, rooms::BOSS_ROOMS, 0, &mut b.bosses);
-            count_slider(ui, id + 4, rooms::SAVE_ROOMS, 0, &mut b.saves);
-            count_slider(ui, id + 5, rooms::PORTAL_ROOMS, 0, &mut b.portals);
-            count_slider(
-                ui,
-                id + 6,
-                rooms::CORRIDORS,
-                MIN_CORRIDORS,
-                &mut b.corridors,
-            );
-            if ui.button(None, text::DELETE) {
-                remove = Some(i);
-            }
-            token.end(ui);
+        for (i, b) in biomes_list.iter_mut().enumerate() {
+            ui.push_id(i, |ui| {
+                egui::CollapsingHeader::new(b.name.clone()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(text::NAME);
+                        ui.text_edit_singleline(&mut b.name);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label(text::COLOR);
+                        let mut rgb = [b.fill.r(), b.fill.g(), b.fill.b()];
+                        if ui.color_edit_button_srgb(&mut rgb).changed() {
+                            b.fill = egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
+                        }
+                    });
+                    count_slider(ui, rooms::SECRET_ROOMS, 0, &mut b.secrets);
+                    count_slider(ui, rooms::BOSS_ROOMS, 0, &mut b.bosses);
+                    count_slider(ui, rooms::SAVE_ROOMS, 0, &mut b.saves);
+                    count_slider(ui, rooms::PORTAL_ROOMS, 0, &mut b.portals);
+                    count_slider(ui, rooms::CORRIDORS, MIN_CORRIDORS, &mut b.corridors);
+                    if ui.button(text::DELETE).clicked() {
+                        remove = Some(i);
+                    }
+                });
+            });
         }
         ui.separator();
 
-        if widgets::Button::new(text::ADD).size(THIRD_BUTTON).ui(ui) {
-            biomes.push(Biome::new(biomes::NEW, 128, 128, 128));
-            action = Some(EditorAction::Regenerate);
-        }
-        ui.same_line(0.0);
-        if widgets::Button::new(text::IMPORT).size(THIRD_BUTTON).ui(ui) {
-            // Blocks the app until the dialog is closed.
-            let picked = rfd::FileDialog::new()
-                .add_filter(files::JSON_FILTER, &[files::JSON_EXT])
-                .pick_file();
-            if let Some(path) = picked {
-                match biome::read(&path) {
-                    Ok(list) => {
-                        *biomes = list;
-                        // Forces a rebuild even if the biome count is unchanged.
-                        self.hex.clear();
-                        self.fold_all();
-                        action = Some(EditorAction::Regenerate);
-                        *status = status::imported(&path);
+        ui.horizontal(|ui| {
+            if ui.button(text::ADD).clicked() {
+                biomes_list.push(Biome::new(biomes::NEW, 128, 128, 128));
+                action = Some(EditorAction::Regenerate);
+            }
+            if ui.button(text::IMPORT).clicked() {
+                let picked = rfd::FileDialog::new()
+                    .add_filter(files::JSON_FILTER, &[files::JSON_EXT])
+                    .pick_file();
+                if let Some(path) = picked {
+                    match biome::read(&path) {
+                        Ok(list) => {
+                            *biomes_list = list;
+                            action = Some(EditorAction::Regenerate);
+                            *status = status::imported(&path);
+                        }
+                        Err(e) => *status = status::error(e),
                     }
-                    Err(e) => *status = status::error(e),
                 }
             }
+            if ui.button(text::SAVE).clicked() {
+                *status = match biome::save(biomes_list) {
+                    Ok(path) => status::saved_to(&path),
+                    Err(e) => status::error(e),
+                };
+            }
+        });
+        if !status.is_empty() {
+            ui.label(status.as_str());
         }
-        ui.same_line(0.0);
-        if widgets::Button::new(text::SAVE).size(THIRD_BUTTON).ui(ui) {
-            *status = match biome::save(biomes) {
-                Ok(path) => status::saved_to(&path),
-                Err(e) => status::error(e),
-            };
-        }
-        wrapped_label(ui, status);
 
-        if let Some(i) = unfolded {
-            self.fold_all();
-            self.open_biome = Some(i);
-        }
         if let Some(i) = remove {
-            // The generator needs at least one biome.
-            if biomes.len() > 1 {
-                biomes.remove(i);
-                self.fold_all();
+            if biomes_list.len() > 1 {
+                biomes_list.remove(i);
                 action = Some(EditorAction::Regenerate);
             } else {
                 *status = status::AT_LEAST_ONE_BIOME.to_owned();
@@ -185,4 +89,12 @@ impl BiomesTab {
         }
         action
     }
+}
+
+fn count_slider(ui: &mut egui::Ui, label: &str, min: u32, value: &mut u32) {
+    ui.add(
+        egui::Slider::new(value, min..=MAX_COUNT)
+            .integer()
+            .text(label),
+    );
 }

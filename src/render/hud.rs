@@ -1,168 +1,117 @@
-//! Screen overlays: header, legends, seed label, buttons, shortcuts popup and tooltip.
-//! Everything here is in screen pixels.
+//! Screen overlays: legends, seed label, shortcuts popup and tooltip.
+//! Everything here is in screen points.
 
 use super::picker::Ghost;
 use super::theme::*;
 use crate::biome::Biome;
 use crate::icons::{IconId, Icons};
-use crate::layout::{Layout, MARGIN, TOP};
+use crate::layout::{Layout, MARGIN};
 use crate::text::hud::{self as t, SHORTCUTS};
 use crate::world::{Marker, Room, RoomKind, World};
-use macroquad::prelude::*;
-use std::sync::OnceLock;
+use egui::{Align2, Color32, Context, FontId, Pos2, Rect, Stroke, StrokeKind, Ui, pos2, vec2};
 
-const SEED_SIZE: u16 = 20;
 /// Seconds the "copied" feedback stays on the seed label.
 pub const COPIED_TIME: f64 = 1.5;
 
-const HELP_TEXT: u16 = 24;
-const HELP_H: f32 = 28.0;
-/// Radius of the "?" icon circle.
-const ICON_R: f32 = 10.0;
-/// Side of the biome color square in the legend.
-const SWATCH: f32 = 14.0;
-/// Side of the room type icon box in the legend, and of the icon inside it.
+const SEED_SIZE: f32 = 16.0;
 const ICON_BOX: f32 = 20.0;
 const ICON_PX: u32 = 16;
-/// Side of the icon dragged from the legend, in pixels.
 const DRAG_ICON_PX: u32 = 32;
-/// Space between the biome legend and the room type legend.
+const SWATCH: f32 = 14.0;
 const LEGEND_GAP: f32 = 8.0;
-const TOOLTIP_TEXT: u16 = 18;
+const TOOLTIP_TEXT: f32 = 14.0;
 
 /// Room types listed in the legend, as (name, fill, border, icon).
-const LEGEND_ROOMS: &[(&str, Color, Color, IconId)] = &[
+const LEGEND_ROOMS: &[(&str, Color32, Color32, IconId)] = &[
     (t::LEGEND_BOSS, BOSS_FILL, BOSS_BORDER, IconId::Boss),
     (t::LEGEND_SAVE, SAVE_FILL, SAVE_BORDER, IconId::Save),
     (t::LEGEND_SECRET, SECRET_FILL, SECRET_BORDER, IconId::Secret),
     (t::LEGEND_PORTAL, PORTAL_FILL, PORTAL_BORDER, IconId::Portal),
 ];
 
-/// Widths of the key column and the action column of the shortcuts popup.
-/// The texts never change, so they are measured once.
-fn help_columns() -> (f32, f32) {
-    static COLUMNS: OnceLock<(f32, f32)> = OnceLock::new();
-    *COLUMNS.get_or_init(|| {
-        let width = |text: &str| measure_text(text, None, HELP_TEXT, 1.0).width;
-        let key_w = SHORTCUTS.iter().map(|s| width(s.0)).fold(0.0, f32::max);
-        let action_w = SHORTCUTS.iter().map(|s| width(s.1)).fold(0.0, f32::max);
-        (key_w, action_w)
+fn text_width(ctx: &Context, text: &str, size: f32) -> f32 {
+    ctx.fonts_mut(|f| {
+        f.layout_no_wrap(text.to_owned(), FontId::proportional(size), Color32::WHITE)
+            .size()
+            .x
     })
 }
 
-/// Positions of the clickable overlays for one frame. They sit left of `reserved`,
-/// the screen width taken by the editor panel. Built once, so hit tests and drawing agree.
+/// Positions of the clickable overlays for one frame.
 pub struct Hud {
     seed_text: String,
     /// Clickable area of the seed label, in the bottom right corner of the map area.
     pub seed: Rect,
-    seed_baseline: f32,
-    /// Square shortcuts button, in the top right corner of the header.
-    pub help: Rect,
-    /// Shortcuts popup, just below the button and right aligned with it.
-    pub popup: Rect,
-    /// Export button, just left of the shortcuts button.
-    pub export: Rect,
 }
 
 impl Hud {
-    pub fn new(seed: u64, copied: bool, reserved: f32) -> Hud {
+    pub fn new(ctx: &Context, seed: u64, copied: bool, map: Rect) -> Hud {
         let seed_text = t::seed(seed, copied);
-        let dim = measure_text(&seed_text, None, SEED_SIZE, 1.0);
-        let x = screen_width() - reserved - MARGIN - dim.width;
-        let y = screen_height() - MARGIN - dim.height;
-
-        let help = Rect::new(
-            screen_width() - reserved - MARGIN - HELP_H,
-            (TOP - HELP_H) / 2.0,
-            HELP_H,
-            HELP_H,
-        );
-        let (key_w, action_w) = help_columns();
-        let w = PAD + key_w + 2.0 * PAD + action_w + PAD;
-        let h = PAD + SHORTCUTS.len() as f32 * ROW_H + PAD;
+        let w = text_width(ctx, &seed_text, SEED_SIZE);
+        let h = SEED_SIZE + 4.0;
+        let x = map.max.x - MARGIN - w;
+        let y = map.max.y - MARGIN - h;
         Hud {
             seed_text,
-            seed: Rect::new(x, y, dim.width, dim.height),
-            seed_baseline: y + dim.offset_y,
-            help,
-            popup: Rect::new(help.right() - w, help.bottom() + 6.0, w, h),
-            export: Rect::new(help.x - PAD - HELP_H, help.y, HELP_H, HELP_H),
+            seed: Rect::from_min_size(pos2(x, y), vec2(w, h)),
         }
     }
 }
 
-/// Opaque header with the room count and the notice, then the biome legend and the
-/// room type legend on the left. `legend_icons` is a second icon set used at a fixed
-/// size, so the map zoom does not make the legend icons rasterize again every frame.
-pub fn draw_header(
-    world: &World,
-    biomes: &[Biome],
-    notice: Option<&str>,
-    legend: &RoomLegend,
-    legend_icons: &mut Icons,
-) {
-    // Opaque so the map does not show through the text when panned under it.
-    draw_rectangle(0.0, 0.0, screen_width(), TOP, BACKGROUND);
-    let info = t::header(world.rooms.len(), notice);
-    draw_text(info, MARGIN, TOP / 2.0 + 7.0, 20.0, WHITE);
-    draw_legend(world, biomes);
-    draw_room_legend(legend, legend_icons);
-}
-
 /// Seed label over a backdrop, so it stays readable over the map.
-/// Brighter on hover to show it is clickable.
-pub fn draw_seed(hud: &Hud) {
-    let rect = hud.seed;
-    let hover = rect.contains(Vec2::from(mouse_position()));
-    draw_rectangle(
-        rect.x - 6.0,
-        rect.y - 6.0,
-        rect.w + 12.0,
-        rect.h + 12.0,
-        BACKGROUND,
-    );
-    let color = if hover { WHITE } else { LIGHTGRAY };
-    draw_text(
+pub fn draw_seed(ui: &Ui, hud: &Hud) {
+    let painter = ui.painter();
+    let hover = ui
+        .input(|i| i.pointer.hover_pos())
+        .is_some_and(|p| hud.seed.contains(p));
+    painter.rect_filled(hud.seed.expand(6.0), 4.0, BACKGROUND);
+    painter.text(
+        hud.seed.min,
+        Align2::LEFT_TOP,
         &hud.seed_text,
-        rect.x,
-        hud.seed_baseline,
-        SEED_SIZE as f32,
-        color,
+        FontId::proportional(SEED_SIZE),
+        if hover {
+            Color32::WHITE
+        } else {
+            Color32::LIGHT_GRAY
+        },
     );
 }
 
-/// Area of the biome legend: one row per biome used in this map, in a column on the
-/// left, vertically centered below the header.
-fn biome_legend_rect(world: &World, biomes: &[Biome]) -> Rect {
+fn biome_legend_rect(ctx: &Context, world: &World, biomes: &[Biome], map: Rect) -> Rect {
     let names_w = world
         .biomes
         .iter()
-        .map(|&b| measure_text(&biomes[b].name, None, LEGEND_TEXT, 1.0).width)
+        .map(|&b| text_width(ctx, &biomes[b].name, LEGEND_TEXT))
         .fold(0.0, f32::max);
     let w = PAD + SWATCH + PAD + names_w + PAD;
     let h = PAD + world.biomes.len() as f32 * ROW_H + PAD;
-    Rect::new(MARGIN, TOP + (screen_height() - TOP - h) / 2.0, w, h)
+    Rect::from_min_size(
+        pos2(map.min.x + MARGIN, map.min.y + (map.height() - h) / 2.0),
+        vec2(w, h),
+    )
 }
 
-/// Biomes used in this map, one per row. Drawn over the map on a translucent backdrop.
-fn draw_legend(world: &World, biomes: &[Biome]) {
-    let area = biome_legend_rect(world, biomes);
-    let (x, y) = (area.x, area.y);
-    draw_rectangle(x, y, area.w, area.h, Color::new(0.0, 0.0, 0.0, 0.6));
-
+fn draw_legend(ui: &Ui, world: &World, biomes: &[Biome], area: Rect) {
+    let painter = ui.painter();
+    painter.rect_filled(area, 4.0, Color32::from_rgba_unmultiplied(0, 0, 0, 153));
     for (i, &b) in world.biomes.iter().enumerate() {
         let biome = &biomes[b];
-        let row_y = y + PAD + i as f32 * ROW_H;
+        let row_y = area.min.y + PAD + i as f32 * ROW_H;
         let swatch_y = row_y + (ROW_H - SWATCH) / 2.0;
-        draw_rectangle(x + PAD, swatch_y, SWATCH, SWATCH, biome.fill);
-        draw_rectangle_lines(x + PAD, swatch_y, SWATCH, SWATCH, 2.0, biome.border());
-        let text_x = x + PAD + SWATCH + PAD;
-        draw_text(
+        let swatch = Rect::from_min_size(pos2(area.min.x + PAD, swatch_y), vec2(SWATCH, SWATCH));
+        painter.rect_filled(swatch, 2.0, biome.fill);
+        painter.rect_stroke(
+            swatch,
+            2.0,
+            Stroke::new(2.0, biome.border()),
+            StrokeKind::Inside,
+        );
+        painter.text(
+            pos2(area.min.x + PAD + SWATCH + PAD, row_y + ROW_H * 0.5),
+            Align2::LEFT_CENTER,
             &biome.name,
-            text_x,
-            row_y + ROW_H * 0.7,
-            LEGEND_TEXT as f32,
+            FontId::proportional(LEGEND_TEXT),
             biome.border(),
         );
     }
@@ -173,176 +122,138 @@ fn draw_legend(world: &World, biomes: &[Biome]) {
 pub struct RoomLegend {
     /// Whole block, backdrop included.
     pub rect: Rect,
+    biome_rect: Rect,
     /// One row per entry of `LEGEND_ROOMS`, in the same order.
     rows: Vec<(IconId, Rect)>,
 }
 
 impl RoomLegend {
-    pub fn new(world: &World, biomes: &[Biome]) -> RoomLegend {
-        let above = biome_legend_rect(world, biomes);
+    pub fn new(ctx: &Context, world: &World, biomes: &[Biome], map: Rect) -> RoomLegend {
+        let biome_rect = biome_legend_rect(ctx, world, biomes, map);
         let names_w = LEGEND_ROOMS
             .iter()
-            .map(|r| measure_text(r.0, None, LEGEND_TEXT, 1.0).width)
+            .map(|r| text_width(ctx, r.0, LEGEND_TEXT))
             .fold(0.0, f32::max);
         let w = PAD + ICON_BOX + PAD + names_w + PAD;
         let h = PAD + LEGEND_ROOMS.len() as f32 * ROW_H + PAD;
-        let rect = Rect::new(MARGIN, above.bottom() + LEGEND_GAP, w, h);
+        let rect = Rect::from_min_size(
+            pos2(biome_rect.min.x, biome_rect.max.y + LEGEND_GAP),
+            vec2(w, h),
+        );
         let rows = LEGEND_ROOMS
             .iter()
             .enumerate()
             .map(|(i, r)| {
-                let y = rect.y + PAD + i as f32 * ROW_H;
-                (r.3, Rect::new(rect.x, y, w, ROW_H))
+                let y = rect.min.y + PAD + i as f32 * ROW_H;
+                (
+                    r.3,
+                    Rect::from_min_size(pos2(rect.min.x, y), vec2(w, ROW_H)),
+                )
             })
             .collect();
-        RoomLegend { rect, rows }
+        RoomLegend {
+            rect,
+            biome_rect,
+            rows,
+        }
     }
 
     /// Icon of the row under `p`, if any.
-    pub fn icon_at(&self, p: Vec2) -> Option<IconId> {
+    pub fn icon_at(&self, p: Pos2) -> Option<IconId> {
         self.rows.iter().find(|(_, r)| r.contains(p)).map(|r| r.0)
     }
 }
 
 /// Room types, one per row with its icon and name.
-fn draw_room_legend(legend: &RoomLegend, icons: &mut Icons) {
-    let (x, y) = (legend.rect.x, legend.rect.y);
-    draw_rectangle(
-        x,
-        y,
-        legend.rect.w,
-        legend.rect.h,
-        Color::new(0.0, 0.0, 0.0, 0.6),
+fn draw_room_legend(ui: &Ui, legend: &RoomLegend, icons: &mut Icons) {
+    let painter = ui.painter();
+    painter.rect_filled(
+        legend.rect,
+        4.0,
+        Color32::from_rgba_unmultiplied(0, 0, 0, 153),
     );
-
+    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
     for (i, (name, fill, border, icon)) in LEGEND_ROOMS.iter().enumerate() {
-        let row_y = y + PAD + i as f32 * ROW_H;
+        let row_y = legend.rect.min.y + PAD + i as f32 * ROW_H;
         let box_y = row_y + (ROW_H - ICON_BOX) / 2.0;
-        draw_rectangle(x + PAD, box_y, ICON_BOX, ICON_BOX, *fill);
-        draw_rectangle_lines(x + PAD, box_y, ICON_BOX, ICON_BOX, 2.0, *border);
-        let side = ICON_PX as f32;
-        let params = DrawTextureParams {
-            dest_size: Some(vec2(side, side)),
-            ..Default::default()
-        };
-        let offset = (ICON_BOX - side) / 2.0;
-        draw_texture_ex(
-            icons.get(*icon, ICON_PX),
-            x + PAD + offset,
-            box_y + offset,
-            WHITE,
-            params,
+        let boxed = Rect::from_min_size(
+            pos2(legend.rect.min.x + PAD, box_y),
+            vec2(ICON_BOX, ICON_BOX),
         );
-        let text_x = x + PAD + ICON_BOX + PAD;
-        draw_text(
-            name,
-            text_x,
-            row_y + ROW_H * 0.7,
-            LEGEND_TEXT as f32,
+        painter.rect_filled(boxed, 2.0, *fill);
+        painter.rect_stroke(boxed, 2.0, Stroke::new(2.0, *border), StrokeKind::Inside);
+        let side = ICON_PX as f32;
+        let offset = (ICON_BOX - side) / 2.0;
+        let dest = Rect::from_min_size(boxed.min + vec2(offset, offset), vec2(side, side));
+        let tex = icons.get(ui.ctx(), *icon, ICON_PX);
+        painter.image(tex.id(), dest, uv, Color32::WHITE);
+        painter.text(
+            pos2(
+                legend.rect.min.x + PAD + ICON_BOX + PAD,
+                row_y + ROW_H * 0.5,
+            ),
+            Align2::LEFT_CENTER,
+            *name,
+            FontId::proportional(LEGEND_TEXT),
             *border,
         );
     }
 }
 
-/// Icon being dragged from the legend, centered on the cursor, in the same colored
-/// square as in the legend and at the same proportions.
-pub fn draw_dragged_icon(icon: IconId, icons: &mut Icons) {
-    let (mx, my) = mouse_position();
+/// Biome legend and room type legend on the left of the map.
+pub fn draw_legends(
+    ui: &Ui,
+    world: &World,
+    biomes: &[Biome],
+    legend: &RoomLegend,
+    legend_icons: &mut Icons,
+) {
+    draw_legend(ui, world, biomes, legend.biome_rect);
+    draw_room_legend(ui, legend, legend_icons);
+}
+
+/// Icon being dragged from the legend, centered on the cursor.
+pub fn draw_dragged_icon(ui: &Ui, icon: IconId, icons: &mut Icons) {
+    let Some(pos) = ui.input(|i| i.pointer.hover_pos()) else {
+        return;
+    };
+    let painter = ui.painter();
     let side = DRAG_ICON_PX as f32;
     let boxed = side * ICON_BOX / ICON_PX as f32;
     if let Some((_, fill, border, _)) = LEGEND_ROOMS.iter().find(|r| r.3 == icon) {
-        draw_rectangle(mx - boxed / 2.0, my - boxed / 2.0, boxed, boxed, *fill);
-        draw_rectangle_lines(
-            mx - boxed / 2.0,
-            my - boxed / 2.0,
-            boxed,
-            boxed,
-            2.0,
-            *border,
-        );
+        let rect = Rect::from_center_size(pos, vec2(boxed, boxed));
+        painter.rect_filled(rect, 2.0, *fill);
+        painter.rect_stroke(rect, 2.0, Stroke::new(2.0, *border), StrokeKind::Inside);
     }
-    let params = DrawTextureParams {
-        dest_size: Some(vec2(side, side)),
-        ..Default::default()
-    };
-    draw_texture_ex(
-        icons.get(icon, DRAG_ICON_PX),
-        mx - side / 2.0,
-        my - side / 2.0,
-        WHITE,
-        params,
+    let dest = Rect::from_center_size(pos, vec2(side, side));
+    let tex = icons.get(ui.ctx(), icon, DRAG_ICON_PX);
+    painter.image(
+        tex.id(),
+        dest,
+        Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)),
+        Color32::WHITE,
     );
 }
 
-/// Square button with a download arrow icon.
-pub fn draw_export_button(hud: &Hud) {
-    let b = hud.export;
-    let hover = b.contains(Vec2::from(mouse_position()));
-    draw_rectangle(
-        b.x,
-        b.y,
-        b.w,
-        b.h,
-        if hover { BUTTON_HOVER } else { BUTTON_BG },
-    );
-    let c = b.center();
-    let (top, tip, half) = (c.y - 8.0, c.y + 4.0, 5.0);
-    draw_line(c.x, top, c.x, tip, 2.0, WHITE);
-    draw_line(c.x - half, tip - half, c.x, tip, 2.0, WHITE);
-    draw_line(c.x + half, tip - half, c.x, tip, 2.0, WHITE);
-    draw_line(c.x - 8.0, c.y + 8.0, c.x + 8.0, c.y + 8.0, 2.0, WHITE);
-}
-
-/// Shortcuts button with a "?" icon, and the popup listing the shortcuts when open.
-pub fn draw_help(hud: &Hud, open: bool) {
-    let button = hud.help;
-    let hover = button.contains(Vec2::from(mouse_position()));
-    let bg = if open || hover {
-        BUTTON_HOVER
-    } else {
-        BUTTON_BG
-    };
-    draw_rectangle(button.x, button.y, button.w, button.h, bg);
-
-    let c = button.center();
-    draw_circle_lines(c.x, c.y, ICON_R, 1.5, WHITE);
-    let q = measure_text(t::HELP_BUTTON, None, HELP_TEXT, 1.0);
-    draw_text(
-        t::HELP_BUTTON,
-        c.x - q.width / 2.0,
-        c.y + q.height / 2.0,
-        HELP_TEXT as f32,
-        WHITE,
-    );
-
-    if !open {
-        return;
-    }
-    let popup = hud.popup;
-    draw_rectangle(
-        popup.x,
-        popup.y,
-        popup.w,
-        popup.h,
-        Color::new(0.0, 0.0, 0.0, 0.9),
-    );
-    draw_rectangle_lines(popup.x, popup.y, popup.w, popup.h, 1.0, CORRIDOR_BORDER);
-    let action_x = popup.x + PAD + help_columns().0 + 2.0 * PAD;
-    for (i, (key, action)) in SHORTCUTS.iter().enumerate() {
-        let baseline = popup.y + PAD + i as f32 * ROW_H + ROW_H * 0.7;
-        draw_text(
-            key,
-            popup.x + PAD,
-            baseline,
-            HELP_TEXT as f32,
-            TRANSITION_DOOR,
-        );
-        draw_text(action, action_x, baseline, HELP_TEXT as f32, WHITE);
-    }
+/// Shortcuts listing, as a floating window.
+pub fn draw_help(ctx: &Context, open: &mut bool) {
+    egui::Window::new("Shortcuts")
+        .open(open)
+        .collapsible(false)
+        .resizable(false)
+        .anchor(Align2::RIGHT_TOP, vec2(-12.0, 48.0))
+        .show(ctx, |ui| {
+            for (key, action) in SHORTCUTS {
+                ui.horizontal(|ui| {
+                    ui.colored_label(TRANSITION_DOOR, *key);
+                    ui.label(*action);
+                });
+            }
+        });
 }
 
 /// Shows the room name and its size, in cells and in pixels, next to the cursor.
-pub fn draw_tooltip(r: &Room, biomes: &[Biome], layout: &Layout) {
+pub fn draw_tooltip(ui: &Ui, r: &Room, biomes: &[Biome], layout: &Layout) {
     let biome = &biomes[r.biome].name;
     let mut name = match r.kind {
         RoomKind::Normal => biome.clone(),
@@ -356,30 +267,31 @@ pub fn draw_tooltip(r: &Room, biomes: &[Biome], layout: &Layout) {
         None => {}
     }
     let px = (r.w * layout.viewport.0, r.h * layout.viewport.1);
-    draw_cursor_label(&t::tooltip(&name, (r.w, r.h), px));
+    draw_cursor_label(ui, &t::tooltip(&name, (r.w, r.h), px));
 }
 
 /// Size and position in pixels of the room being placed, next to the cursor.
-pub fn draw_ghost_label(g: &Ghost, layout: &Layout) {
+pub fn draw_ghost_label(ui: &Ui, g: &Ghost, layout: &Layout) {
     let (vw, vh) = layout.viewport;
-    draw_cursor_label(&t::ghost_label(
-        g.choice.w,
-        g.choice.h,
-        g.x * vw as i32,
-        g.y * vh as i32,
-    ));
+    draw_cursor_label(
+        ui,
+        &t::ghost_label(g.choice.w, g.choice.h, g.x * vw as i32, g.y * vh as i32),
+    );
 }
 
-/// Text on a dark backdrop, next to the cursor.
-fn draw_cursor_label(text: &str) {
-    let (mx, my) = mouse_position();
-    let dim = measure_text(text, None, TOOLTIP_TEXT, 1.0);
-    draw_rectangle(
-        mx + 12.0,
-        my + 8.0,
-        dim.width + 12.0,
-        24.0,
-        Color::new(0.0, 0.0, 0.0, 0.8),
+fn draw_cursor_label(ui: &Ui, text: &str) {
+    let Some(pos) = ui.input(|i| i.pointer.hover_pos()) else {
+        return;
+    };
+    let painter = ui.painter();
+    let w = text_width(ui.ctx(), text, TOOLTIP_TEXT);
+    let rect = Rect::from_min_size(pos + vec2(12.0, 8.0), vec2(w + 12.0, 24.0));
+    painter.rect_filled(rect, 4.0, Color32::from_rgba_unmultiplied(0, 0, 0, 204));
+    painter.text(
+        rect.min + vec2(6.0, 12.0),
+        Align2::LEFT_CENTER,
+        text,
+        FontId::proportional(TOOLTIP_TEXT),
+        Color32::WHITE,
     );
-    draw_text(text, mx + 18.0, my + 25.0, TOOLTIP_TEXT as f32, WHITE);
 }

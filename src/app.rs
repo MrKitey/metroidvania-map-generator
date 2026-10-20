@@ -5,13 +5,14 @@ use crate::biome::{self, Biome};
 use crate::editor::{self, Editor, EditorAction};
 use crate::export::{self, MapData};
 use crate::icons::{IconId, Icons};
-use crate::layout::{Layout, TOP};
+use crate::layout::Layout;
 use crate::render::{self, COPIED_TIME, Frame, Ghost, Hud, Picker, RoomLegend, picker_layout};
 use crate::settings;
+use crate::text;
 use crate::view::View;
 use crate::world::{Choice, Marker, Params, Pick, RoomKind, World, time_seed};
-use macroquad::miniquad::CursorIcon;
-use macroquad::prelude::*;
+use egui::{Color32, CursorIcon, Key, PointerButton, Pos2, Rect, Sense, ViewportCommand};
+use std::time::Duration;
 
 /// Map size limits, as a number of room cells.
 const MIN_CELLS: u32 = 96;
@@ -21,6 +22,7 @@ const STEP: u32 = 64;
 const START_CELLS: u32 = 768;
 /// Seconds the export result stays in the header.
 const NOTICE_TIME: f64 = 4.0;
+const HEADER_H: f32 = 40.0;
 
 /// Builds a world from the biomes and the editor settings.
 fn build_world(cells: u32, seed: u64, biomes: &[Biome], editor: &Editor) -> World {
@@ -37,15 +39,14 @@ fn build_world(cells: u32, seed: u64, biomes: &[Biome], editor: &Editor) -> Worl
 
 /// Mouse state of one frame: where it is, what it is over, and the clicks.
 struct Pointer {
-    pos: Vec2,
+    pos: Pos2,
     left: bool,
+    left_down: bool,
     right: bool,
-    over_editor: bool,
     over_seed: bool,
-    over_help_button: bool,
-    over_help: bool,
     over_picker: bool,
     over_legend: bool,
+    on_map_rect: bool,
     /// Set when a popup used the click, so it must not reach the map.
     consumed: bool,
 }
@@ -53,12 +54,7 @@ struct Pointer {
 impl Pointer {
     /// True when the cursor is over the map itself, not over a panel, button or popup.
     fn on_map(&self) -> bool {
-        !(self.over_editor
-            || self.over_seed
-            || self.over_help
-            || self.over_picker
-            || self.over_legend
-            || self.pos.y < TOP)
+        self.on_map_rect && !(self.over_seed || self.over_picker || self.over_legend)
     }
 }
 
@@ -84,22 +80,22 @@ pub struct App {
     copied_at: f64,
     help_open: bool,
     grid: bool,
+    panning: bool,
     /// Top-left corner of the open room picker.
-    picker: Option<Vec2>,
+    picker: Option<Pos2>,
     /// Room chosen in the picker, being placed.
     placing: Option<Choice>,
     /// Placed room being dragged, if any.
     moving: Option<Moving>,
     /// Icon of the room type legend being dragged onto a room, if any.
     icon_drag: Option<IconId>,
-    /// Cursor currently set on the window, so it is only set again when it changes.
-    cursor: CursorIcon,
     /// Last export result and when it happened, shown in the header for a while.
     notice: Option<(String, f64)>,
 }
 
 impl App {
-    pub fn new() -> App {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> App {
+        render::apply_theme(&cc.egui_ctx);
         let seed = time_seed();
         let biomes = biome::load();
         let editor = Editor::new(seed, &settings::load());
@@ -117,132 +113,211 @@ impl App {
             copied_at: f64::NEG_INFINITY,
             help_open: false,
             grid: true,
+            panning: false,
             picker: None,
             placing: None,
             moving: None,
             icon_drag: None,
-            cursor: CursorIcon::Default,
             notice: None,
         }
     }
 
-    /// Runs one frame: input, optional regeneration, camera, hover and drawing.
-    /// Returns false when the user quits.
-    pub fn frame(&mut self) -> bool {
-        if !self.handle_keys() {
-            return false;
+    fn regen(&mut self) {
+        self.editor.set_seed(self.seed);
+        self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
+        self.fit = true;
+    }
+
+    fn apply_action(&mut self, action: EditorAction) {
+        match action {
+            EditorAction::UseSeed(seed) => {
+                self.seed = seed;
+                self.regen();
+            }
+            EditorAction::Regenerate => {
+                self.seed = time_seed();
+                self.regen();
+            }
+        }
+    }
+}
+
+impl eframe::App for App {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let now = ctx.input(|i| i.time);
+        self.handle_keys(&ctx);
+
+        if self.editor.open {
+            let mut action = None;
+            egui::Panel::right("editor")
+                .default_size(editor::PANEL_W)
+                .min_size(280.0)
+                .show(ui, |ui| {
+                    action = self.editor.draw(ui, &mut self.biomes);
+                });
+            if let Some(action) = action {
+                self.apply_action(action);
+            }
         }
 
-        // Screen width taken by the editor panel on the right.
-        let reserved = if self.editor.open {
-            editor::PANEL_W
-        } else {
-            0.0
-        };
+        egui::Panel::top("header")
+            .exact_size(HEADER_H)
+            .resizable(false)
+            .show_separator_line(false)
+            .show(ui, |ui| {
+                self.draw_header(ui, now);
+            });
+
+        if self.help_open {
+            render::draw_help(&ctx, &mut self.help_open);
+        }
+
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE.fill(render::BACKGROUND))
+            .show(ui, |ui| {
+                self.draw_map_panel(ui, now);
+            });
+
+        if now - self.copied_at < COPIED_TIME
+            || self
+                .notice
+                .as_ref()
+                .is_some_and(|(_, at)| now - at < NOTICE_TIME)
+        {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        Color32::from_rgb(15, 15, 22).to_normalized_gamma_f32()
+    }
+}
+
+impl App {
+    fn draw_header(&mut self, ui: &mut egui::Ui, now: f64) {
+        ui.horizontal_centered(|ui| {
+            let notice = self
+                .notice
+                .as_ref()
+                .filter(|(_, at)| now - at < NOTICE_TIME)
+                .map(|(text, _)| text.as_str());
+            ui.label(text::hud::header(self.world.rooms.len(), notice));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button(text::hud::HELP_BUTTON).clicked() {
+                    self.help_open = !self.help_open;
+                }
+                if ui.button(text::hud::EXPORT).clicked() {
+                    self.export(now);
+                }
+            });
+        });
+    }
+
+    fn draw_map_panel(&mut self, ui: &mut egui::Ui, now: f64) {
+        let ctx = ui.ctx().clone();
+        let (response, _) = ui.allocate_painter(ui.available_size(), Sense::hover());
+        let map_rect = response.rect;
         let layout = Layout::new(self.editor.viewport());
         if self.fit {
-            self.view.fit(&self.world, &layout, reserved);
+            self.view.fit(&self.world, &layout, map_rect);
             self.fit = false;
         }
 
-        let over_editor = self.editor.is_mouse_over();
-        self.view.update(reserved, !over_editor);
-        let camera = self.view.camera(reserved);
+        let pointer_pos = ctx.input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO);
+        if response.contains_pointer() {
+            let wheel = ctx.input(|i| i.smooth_scroll_delta.y);
+            if wheel != 0.0 {
+                self.view.zoom_at(wheel, pointer_pos, map_rect);
+            }
+        }
+        if ctx.input(|i| i.pointer.button_pressed(PointerButton::Middle))
+            && response.contains_pointer()
+        {
+            self.panning = true;
+        }
+        if ctx.input(|i| !i.pointer.button_down(PointerButton::Middle)) {
+            self.panning = false;
+        }
+        if self.panning {
+            self.view.pan(ctx.input(|i| i.pointer.delta()));
+        }
 
-        let copied = get_time() - self.copied_at < COPIED_TIME;
-        let hud = Hud::new(self.seed, copied, reserved);
-        let legend = RoomLegend::new(&self.world, &self.biomes);
-        // The picker is drawn over the header buttons and the seed, so it gets the clicks first.
-        let mouse = Vec2::from(mouse_position());
+        let copied = now - self.copied_at < COPIED_TIME;
+        let hud = Hud::new(&ctx, self.seed, copied, map_rect);
+        let legend = RoomLegend::new(&ctx, &self.world, &self.biomes, map_rect);
         let mut picker_ui = self
             .picker
-            .map(|a| picker_layout(&self.editor.sizes(), &layout, a));
-        let over_picker = picker_ui.as_ref().is_some_and(|p| p.rect.contains(mouse));
-        let over_help_button = !over_picker && hud.help.contains(mouse);
+            .map(|a| picker_layout(&ctx, &self.editor.sizes(), &layout, a, map_rect));
+        let over_picker = picker_ui
+            .as_ref()
+            .is_some_and(|p| p.rect.contains(pointer_pos));
         let mut pointer = Pointer {
-            pos: mouse,
-            left: is_mouse_button_pressed(MouseButton::Left),
-            right: is_mouse_button_pressed(MouseButton::Right),
-            over_editor,
-            over_seed: !over_picker && hud.seed.contains(mouse),
-            over_help_button,
-            over_help: over_help_button
-                || (!over_picker && self.help_open && hud.popup.contains(mouse)),
+            pos: pointer_pos,
+            left: ctx.input(|i| i.pointer.button_pressed(PointerButton::Primary)),
+            left_down: ctx.input(|i| i.pointer.button_down(PointerButton::Primary)),
+            right: ctx.input(|i| i.pointer.button_pressed(PointerButton::Secondary)),
+            over_seed: !over_picker && hud.seed.contains(pointer_pos),
             over_picker,
-            over_legend: !over_picker && legend.rect.contains(mouse),
+            over_legend: !over_picker && legend.rect.contains(pointer_pos),
+            on_map_rect: response.contains_pointer(),
             consumed: false,
         };
 
-        self.click_header(&mut pointer);
-        if !pointer.over_picker && pointer.left && hud.export.contains(pointer.pos) {
-            self.export(&layout);
+        if pointer.over_seed && pointer.left {
+            ctx.copy_text(self.seed.to_string());
+            self.copied_at = now;
         }
-        let ghost = self.update_placing(&mut pointer, &layout, &camera);
-        self.update_picker(&mut pointer, &mut picker_ui, &layout);
+
+        let ghost = self.update_placing(&mut pointer, &layout, map_rect);
+        self.update_picker(&mut pointer, &mut picker_ui);
 
         let hovered = if pointer.on_map()
             && !pointer.consumed
             && self.picker.is_none()
             && self.placing.is_none()
         {
-            let (x, y) = layout.cell_at(camera.screen_to_world(pointer.pos));
+            let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
             self.world.room_at(x, y)
         } else {
             None
         };
         if let Some(i) = hovered {
-            self.room_shortcuts(i);
+            self.room_shortcuts(&ctx, i);
         }
-        let ghost = ghost.or(self.update_moving(&pointer, hovered, &layout, &camera));
+        let ghost = ghost.or(self.update_moving(&pointer, hovered, &layout, map_rect));
         self.update_icon_drag(&pointer, &legend, hovered);
-        self.update_cursor(
-            &pointer,
-            &hud,
-            &legend,
-            picker_ui.as_ref(),
-            ghost.as_ref(),
-            hovered,
-        );
+        self.update_cursor(&ctx, &pointer, picker_ui.as_ref(), ghost.as_ref(), hovered);
 
-        let notice = self
-            .notice
-            .as_ref()
-            .filter(|(_, at)| get_time() - at < NOTICE_TIME)
-            .map(|(text, _)| text.as_str());
         let frame = Frame {
             layout: &layout,
             view: &self.view,
-            camera: &camera,
+            map_rect,
             hud: &hud,
             legend: &legend,
             hovered,
-            help_open: self.help_open,
             grid: self.grid,
             picker: picker_ui.as_ref(),
             ghost,
             dragged_icon: self.icon_drag,
-            notice,
         };
         render::draw_world(
+            ui,
             &self.world,
             &self.biomes,
             &frame,
             &mut self.icons,
             &mut self.legend_icons,
         );
-        true
     }
 
-    /// Keyboard shortcuts and the editor panel, then regeneration if asked.
-    /// Returns false when the user quits.
-    fn handle_keys(&mut self) -> bool {
-        if is_key_pressed(KeyCode::Tab) {
+    /// Keyboard shortcuts. Returns after closing overlays, or quits the window.
+    fn handle_keys(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.key_pressed(Key::Tab)) {
             self.editor.open = !self.editor.open;
         }
 
-        // Escape closes the shortcuts popup first, then the room picker and the room
-        // being placed. It only quits when none is open.
-        let mut escape = is_key_pressed(KeyCode::Escape);
+        let mut escape = ctx.input(|i| i.key_pressed(Key::Escape));
         if escape && self.help_open {
             self.help_open = false;
             escape = false;
@@ -260,100 +335,65 @@ impl App {
             escape = false;
         }
 
-        let mut regen = false;
-        // Shortcuts are disabled while the editor is open so typing in text fields is safe.
         if self.editor.open {
-            match self.editor.draw(&mut self.biomes) {
-                Some(EditorAction::UseSeed(seed)) => {
-                    self.seed = seed;
-                    regen = true;
-                }
-                Some(EditorAction::Regenerate) => {
-                    self.seed = time_seed();
-                    regen = true;
-                }
-                None => {}
-            }
-        } else {
-            if escape {
-                return false;
-            }
-            if is_key_pressed(KeyCode::R) {
-                self.seed = time_seed();
-                regen = true;
-            }
-            if is_key_pressed(KeyCode::C) {
-                self.fit = true;
-            }
-            if is_key_pressed(KeyCode::G) {
-                self.grid = !self.grid;
-            }
-            if (is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Up))
-                && self.cells < MAX_CELLS
-            {
-                self.cells += STEP;
-                regen = true;
-            }
-            if (is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::Down))
-                && self.cells > MIN_CELLS
-            {
-                self.cells -= STEP;
-                regen = true;
-            }
+            return;
+        }
+        if escape {
+            ctx.send_viewport_cmd(ViewportCommand::Close);
+            return;
         }
 
-        if regen {
-            self.editor.set_seed(self.seed);
-            self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
+        let mut regen = false;
+        if ctx.input(|i| i.key_pressed(Key::R)) {
+            self.seed = time_seed();
+            regen = true;
+        }
+        if ctx.input(|i| i.key_pressed(Key::C)) {
             self.fit = true;
         }
-        true
+        if ctx.input(|i| i.key_pressed(Key::G)) {
+            self.grid = !self.grid;
+        }
+        if ctx.input(|i| i.key_pressed(Key::ArrowRight) || i.key_pressed(Key::ArrowUp))
+            && self.cells < MAX_CELLS
+        {
+            self.cells += STEP;
+            regen = true;
+        }
+        if ctx.input(|i| i.key_pressed(Key::ArrowLeft) || i.key_pressed(Key::ArrowDown))
+            && self.cells > MIN_CELLS
+        {
+            self.cells -= STEP;
+            regen = true;
+        }
+        if regen {
+            self.regen();
+        }
     }
 
-    /// Clicks on the seed label and the shortcuts button and popup.
-    fn click_header(&mut self, p: &mut Pointer) {
-        if p.over_seed && p.left {
-            miniquad::window::clipboard_set(&self.seed.to_string());
-            self.copied_at = get_time();
-        }
-        // A click outside the open popup only closes it, it does not reach the map.
-        if p.over_help_button && p.left {
-            self.help_open = !self.help_open;
-        } else if self.help_open && (p.left || p.right) && !p.over_help {
-            self.help_open = false;
-            p.consumed = true;
-        }
-    }
-
-    /// Asks where to save, then writes the zip and shows the result in the header.
-    fn export(&mut self, layout: &Layout) {
+    fn export(&mut self, now: f64) {
         let settings = self.editor.settings();
+        let layout = Layout::new(self.editor.viewport());
         let map = MapData {
             seed: self.seed,
             cells: self.cells,
             settings: &settings,
             world: &self.world,
             biomes: &self.biomes,
-            layout,
+            layout: &layout,
         };
-        if let Some(text) = export::save_with_dialog(&map, &mut self.icons) {
-            self.notice = Some((text, get_time()));
+        if let Some(text) = export::save_with_dialog(&map) {
+            self.notice = Some((text, now));
         }
     }
 
     /// Room being placed. Its position snaps to the cell grid, centered on the cursor
     /// cell. This runs before the picker, so the click that picks a size does not place it.
-    /// Returns the preview to draw.
-    fn update_placing(
-        &mut self,
-        p: &mut Pointer,
-        layout: &Layout,
-        camera: &Camera2D,
-    ) -> Option<Ghost> {
+    fn update_placing(&mut self, p: &mut Pointer, layout: &Layout, map: Rect) -> Option<Ghost> {
         let choice = self.placing?;
         let mut ghost = None;
         if p.on_map() && !p.consumed {
-            let (cx, cy) = layout.cell_at(camera.screen_to_world(p.pos));
+            let (cx, cy) = layout.cell_at(self.view.screen_to_world(p.pos, map));
             let (x, y) = (cx - (choice.w / 2) as i32, cy - (choice.h / 2) as i32);
             let free = self.world.can_place(x, y, choice.w, choice.h);
             if p.left && free {
@@ -375,15 +415,14 @@ impl App {
 
     /// Drags a placed room with the left button. Pressing on a room grabs it, releasing
     /// on the map drops it. A taken spot, Escape or a right click leave it in place.
-    /// Returns the preview to draw while dragging.
     fn update_moving(
         &mut self,
         p: &Pointer,
         hovered: Option<usize>,
         layout: &Layout,
-        camera: &Camera2D,
+        map: Rect,
     ) -> Option<Ghost> {
-        let cell = layout.cell_at(camera.screen_to_world(p.pos));
+        let cell = layout.cell_at(self.view.screen_to_world(p.pos, map));
         let Some(m) = &self.moving else {
             if let (true, Some(room)) = (p.left, hovered) {
                 let r = &self.world.rooms[room];
@@ -400,7 +439,7 @@ impl App {
             self.moving = None;
             return None;
         }
-        if is_mouse_button_down(MouseButton::Left) {
+        if p.left_down {
             return Some(Ghost {
                 x,
                 y,
@@ -412,7 +451,6 @@ impl App {
                 free: self.world.can_move(m.room, x, y),
             });
         }
-        // Button released. A drop on the spot it came from changes nothing.
         let room = m.room;
         if p.on_map() && (x, y) != (r.x, r.y) {
             self.world.move_room(room, x, y);
@@ -421,8 +459,7 @@ impl App {
         None
     }
 
-    /// Drags an icon of the room type legend onto a room. Pressing on a legend row grabs
-    /// the icon, releasing over a room applies it. Escape or a right click cancels.
+    /// Drags an icon of the room type legend onto a room.
     fn update_icon_drag(&mut self, p: &Pointer, legend: &RoomLegend, hovered: Option<usize>) {
         let Some(icon) = self.icon_drag else {
             if p.left
@@ -437,7 +474,7 @@ impl App {
         };
         if p.right {
             self.icon_drag = None;
-        } else if !is_mouse_button_down(MouseButton::Left) {
+        } else if !p.left_down {
             if let Some(room) = hovered {
                 self.tag_room(room, icon);
             }
@@ -445,14 +482,10 @@ impl App {
         }
     }
 
-    /// Cursor that tells what a click or a drag does under the mouse: a hand on buttons
-    /// and picker entries, a cross when placing a room, arrows when moving something,
-    /// and a forbidden sign where a drop is refused.
     fn update_cursor(
-        &mut self,
+        &self,
+        ctx: &egui::Context,
         p: &Pointer,
-        hud: &Hud,
-        legend: &RoomLegend,
         picker: Option<&Picker>,
         ghost: Option<&Ghost>,
         hovered: Option<usize>,
@@ -472,31 +505,22 @@ impl App {
                 None if moving => CursorIcon::NotAllowed,
                 None => CursorIcon::Default,
             }
-        } else if is_mouse_button_down(MouseButton::Middle) && p.on_map() {
+        } else if self.panning {
             CursorIcon::Move
         } else if picker.is_some_and(|ui| ui.items.iter().any(|(_, r)| r.contains(p.pos))) {
-            CursorIcon::Pointer
+            CursorIcon::PointingHand
         } else if p.over_picker {
             CursorIcon::Default
-        } else if p.over_seed
-            || p.over_help_button
-            || hud.export.contains(p.pos)
-            || legend.icon_at(p.pos).is_some()
-        {
-            CursorIcon::Pointer
+        } else if p.over_seed || p.over_legend {
+            CursorIcon::PointingHand
         } else if hovered.is_some() {
-            CursorIcon::Move
+            CursorIcon::Grab
         } else {
             CursorIcon::Default
         };
-        if icon != self.cursor {
-            miniquad::window::set_mouse_cursor(icon);
-            self.cursor = icon;
-        }
+        ctx.set_cursor_icon(icon);
     }
 
-    /// Sets the marker or kind shown by `icon` on a room, or clears it if the room
-    /// already has it.
     fn tag_room(&mut self, room: usize, icon: IconId) {
         match icon {
             IconId::Boss => self.world.toggle_marker(room, Marker::Boss),
@@ -506,9 +530,7 @@ impl App {
         }
     }
 
-    /// Picker clicks: a size starts the placement, a click elsewhere closes the popup.
-    /// A right click on the map opens the picker at the cursor.
-    fn update_picker(&mut self, p: &mut Pointer, picker_ui: &mut Option<Picker>, layout: &Layout) {
+    fn update_picker(&mut self, p: &mut Pointer, picker_ui: &mut Option<Picker>) {
         if let Some(popup) = picker_ui.as_ref()
             && (p.left || p.right)
         {
@@ -533,27 +555,22 @@ impl App {
                 self.picker = Some(p.pos);
             }
         }
-        if let (Some(anchor), None) = (self.picker, &*picker_ui) {
-            *picker_ui = Some(picker_layout(&self.editor.sizes(), layout, anchor));
-        }
     }
 
-    /// Room shortcuts act on the room under the cursor. They are off while the editor
-    /// is open.
-    fn room_shortcuts(&mut self, room: usize) {
+    fn room_shortcuts(&mut self, ctx: &egui::Context, room: usize) {
         if self.editor.open {
             return;
         }
-        if is_key_pressed(KeyCode::B) {
+        if ctx.input(|i| i.key_pressed(Key::B)) {
             self.tag_room(room, IconId::Boss);
         }
-        if is_key_pressed(KeyCode::S) {
+        if ctx.input(|i| i.key_pressed(Key::S)) {
             self.tag_room(room, IconId::Save);
         }
-        if is_key_pressed(KeyCode::H) {
+        if ctx.input(|i| i.key_pressed(Key::H)) {
             self.tag_room(room, IconId::Secret);
         }
-        if is_key_pressed(KeyCode::P) {
+        if ctx.input(|i| i.key_pressed(Key::P)) {
             self.tag_room(room, IconId::Portal);
         }
     }

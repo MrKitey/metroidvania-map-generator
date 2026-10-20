@@ -87,6 +87,8 @@ pub mod hud {
     ];
     /// Glyph on the shortcuts button.
     pub const HELP_BUTTON: &str = "?";
+    /// Label of the export button.
+    pub const EXPORT: &str = "Export";
 
     /// Room type legend.
     pub const LEGEND_BOSS: &str = "Boss";

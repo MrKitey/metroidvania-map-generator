@@ -5,7 +5,7 @@ biomes are linked by corridors, and every room is reachable. You can pan, zoom, 
 and save rooms, place rooms by hand, tune the generation from a built-in editor, and
 export the result.
 
-Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
+Built with Rust and [egui](https://github.com/emilk/egui).
 
 [![Screenshot 1](docs/screenshot-miniature.png)](docs/screenshot.png)
 [![Screenshot 2](docs/screenshot-2-miniature.png)](docs/screenshot-2.png)
@@ -64,15 +64,15 @@ On Linux, the file dialogs for import and export need a running `xdg-desktop-por
 To build from source:
 
 - Rust with edition 2024 support. Install it from [rustup.rs](https://rustup.rs).
-- On Linux, the system libraries required by macroquad and the file dialog:
+- On Linux, the system libraries required by egui/wgpu and the file dialog:
 
 ```sh
 # Debian, Ubuntu
-apt install pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev libwayland-dev
+apt install pkg-config libxkbcommon-dev libwayland-dev libvulkan-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev
 # Fedora
-dnf install libX11-devel libXi-devel mesa-libGL-devel alsa-lib-devel wayland-devel
+dnf install libxkbcommon-devel wayland-devel vulkan-loader-devel libX11-devel libXcursor-devel libXi-devel libXrandr-devel
 # Arch
-pacman -S pkg-config libx11 libxi mesa-libgl alsa-lib wayland
+pacman -S pkg-config libxkbcommon wayland vulkan-icd-loader libx11 libxcursor libxi libxrandr
 ```
 
 ## Build and run
@@ -113,7 +113,7 @@ fields is safe.
 
 The header holds two buttons in the top right corner:
 
-- The download arrow exports the map. See [Export](#export).
+- Export writes the map zip. See [Export](#export).
 - The `?` button opens the shortcuts popup.
 
 ## Placing rooms
@@ -170,7 +170,7 @@ Changes apply on the next generation.
 
 **Biomes tab**
 
-- One foldable entry per biome, with its name, a hex color field and a color picker.
+- One foldable entry per biome, with its name and a color picker.
 - "Secret rooms", "Portal rooms", "Boss rooms" and "Save rooms" sliders: number of each
   in the biome, from 0 to 5, 1 by default. A boss room is followed by a normal room.
 - "Corridors" slider: from 1 to 5, 1 by default. The first corridor links the biome to
@@ -259,7 +259,7 @@ assets/icons/              Boss, save, secret and portal icons, embedded at buil
 packaging/linux/           Desktop entry for the AppImage
 .github/workflows/         Release workflow
 build.rs                   Embeds the icon into the Windows executable
-src/main.rs                Window and frame loop
+src/main.rs                Window and egui loop
 src/app.rs                 App state, input, room placement and per frame work
 src/world/                 Map data (mod.rs), generation (generate.rs), manual edits (edit.rs)
 src/render/                Frame drawing (mod.rs), map (map.rs), overlays (hud.rs),

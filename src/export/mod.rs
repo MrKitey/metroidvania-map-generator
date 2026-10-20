@@ -5,12 +5,11 @@ mod png;
 mod svg;
 
 use crate::biome::Biome;
-use crate::icons::Icons;
 use crate::layout::Layout;
 use crate::settings::Settings;
 use crate::text::{files, status};
 use crate::world::World;
-use macroquad::prelude::*;
+use egui::{Vec2, vec2};
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
@@ -38,16 +37,15 @@ impl MapData<'_> {
         let (x0, y0, x1, y1) = self.world.bounds();
         let (cw, ch) = (self.layout.cw, self.layout.ch);
         (
-            vec2(x0 as f32 * cw, y0 as f32 * ch) - PADDING,
-            vec2(x1 as f32 * cw, y1 as f32 * ch) + PADDING,
+            vec2(x0 as f32 * cw, y0 as f32 * ch) - Vec2::splat(PADDING),
+            vec2(x1 as f32 * cw, y1 as f32 * ch) + Vec2::splat(PADDING),
         )
     }
 }
 
 /// Asks where to save, then writes the zip. Returns the message to show, or None if the
-/// dialog was cancelled. Blocks the app until the dialog is closed. Must be called from
-/// the main loop, since the image is rendered on the GPU.
-pub fn save_with_dialog(map: &MapData, icons: &mut Icons) -> Option<String> {
+/// dialog was cancelled. Blocks the app until the dialog is closed.
+pub fn save_with_dialog(map: &MapData) -> Option<String> {
     let mut path = rfd::FileDialog::new()
         .add_filter(files::ZIP_FILTER, &[files::ZIP_EXT])
         .set_file_name(files::zip_name(map.seed))
@@ -60,15 +58,15 @@ pub fn save_with_dialog(map: &MapData, icons: &mut Icons) -> Option<String> {
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned();
-    Some(match write_zip(&path, map, icons) {
+    Some(match write_zip(&path, map) {
         Ok(()) => status::exported(&name),
         Err(e) => status::export_failed(e),
     })
 }
 
 /// Writes the zip to `path`.
-fn write_zip(path: &Path, map: &MapData, icons: &mut Icons) -> Result<(), Box<dyn Error>> {
-    let png = png::render(map, icons)?;
+fn write_zip(path: &Path, map: &MapData) -> Result<(), Box<dyn Error>> {
+    let png = png::render(map)?;
     let svg = svg::render(map);
     let json = json::render(map)?;
 

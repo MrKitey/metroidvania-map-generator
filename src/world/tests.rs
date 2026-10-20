@@ -1,6 +1,5 @@
 use super::*;
 use crate::settings::{DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ROOM_SIZES};
-use std::sync::Mutex;
 
 const SEEDS: [u64; 4] = [1, 42, 99, 12345];
 const MIN_ROOMS: usize = 5;
@@ -13,10 +12,6 @@ fn sizes() -> Sizes {
     }
 }
 
-/// The generator draws from macroquad's global random state, so tests must not
-/// generate at the same time.
-static RANDOM: Mutex<()> = Mutex::new(());
-
 fn generate_with(cells: u32, seed: u64, corridors: u32) -> World {
     let extras = [Extras {
         corridors,
@@ -25,7 +20,6 @@ fn generate_with(cells: u32, seed: u64, corridors: u32) -> World {
         saves: 1,
         portals: 1,
     }; 6];
-    let _guard = RANDOM.lock().unwrap_or_else(|e| e.into_inner());
     World::generate(&Params {
         cells,
         seed,
@@ -56,9 +50,9 @@ fn same_seed_gives_same_map() {
 #[test]
 fn known_seeds_give_known_maps() {
     for (cells, seed, rooms, doors) in [
-        (768, 1, 218, 217),
-        (768, 42, 228, 227),
-        (96, 7, 32, 31),
+        (768, 1, 215, 214),
+        (768, 42, 206, 205),
+        (96, 7, 38, 37),
         (2048, 99, 335, 334),
     ] {
         let world = generate_with(cells, seed, 1);
@@ -218,14 +212,29 @@ fn moved_room_takes_the_biome_of_its_neighbor() {
     let mut world = generate(768, 1);
     let idx = world.rooms.len() - 1;
     let (w, h) = (world.rooms[idx].w as i32, world.rooms[idx].h as i32);
-    // A free spot just right of a room of another biome.
+    // Biomes of the rooms touching a w x h rectangle at (x, y), the moved room excluded.
+    let around = |x: i32, y: i32| {
+        let mut biomes: Vec<usize> = (0..h)
+            .flat_map(|i| [(x + w, y + i), (x - 1, y + i)])
+            .chain((0..w).flat_map(|i| [(x + i, y + h), (x + i, y - 1)]))
+            .filter_map(|(cx, cy)| world.room_at(cx, cy))
+            .filter(|&n| n != idx)
+            .map(|n| world.rooms[n].biome)
+            .collect();
+        biomes.sort_unstable();
+        biomes.dedup();
+        biomes
+    };
+    // A free spot touching rooms of one other biome only.
+    let own = world.rooms[idx].biome;
     let target = world
         .rooms
         .iter()
-        .enumerate()
-        .filter(|(i, r)| *i != idx && r.biome != world.rooms[idx].biome)
-        .map(|(_, r)| (r.x + r.w as i32, r.y, r.biome))
-        .find(|&(x, y, _)| world.can_move(idx, x, y) && w > 0 && h > 0);
+        .map(|r| (r.x + r.w as i32, r.y))
+        .find_map(|(x, y)| match around(x, y)[..] {
+            [biome] if biome != own && world.can_move(idx, x, y) => Some((x, y, biome)),
+            _ => None,
+        });
     let (x, y, biome) = target.unwrap();
     assert!(world.move_room(idx, x, y));
     assert_eq!(world.rooms[idx].biome, biome);
