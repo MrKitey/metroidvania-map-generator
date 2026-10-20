@@ -9,7 +9,7 @@ use crate::layout::{Layout, TOP};
 use crate::render::{self, COPIED_TIME, Frame, Ghost, Hud, Picker, picker_layout};
 use crate::settings;
 use crate::view::View;
-use crate::world::{Choice, Marker, Params, RoomKind, World, time_seed};
+use crate::world::{Choice, Marker, Params, Pick, RoomKind, World, time_seed};
 use macroquad::prelude::*;
 
 /// Map size limits, as a number of room cells.
@@ -59,6 +59,13 @@ impl Pointer {
     }
 }
 
+/// Room being dragged with the left button.
+struct Moving {
+    room: usize,
+    /// Cell grabbed, relative to the room top-left cell, so the room does not jump.
+    grab: (i32, i32),
+}
+
 pub struct App {
     cells: u32,
     seed: u64,
@@ -78,6 +85,8 @@ pub struct App {
     picker: Option<Vec2>,
     /// Room chosen in the picker, being placed.
     placing: Option<Choice>,
+    /// Placed room being dragged, if any.
+    moving: Option<Moving>,
     /// Last export result and when it happened, shown in the header for a while.
     notice: Option<(String, f64)>,
 }
@@ -103,6 +112,7 @@ impl App {
             grid: true,
             picker: None,
             placing: None,
+            moving: None,
             notice: None,
         }
     }
@@ -172,6 +182,7 @@ impl App {
         if let Some(i) = hovered {
             self.room_shortcuts(i);
         }
+        let ghost = ghost.or(self.update_moving(&pointer, hovered, &layout, &camera));
 
         let notice = self
             .notice
@@ -214,9 +225,10 @@ impl App {
             self.help_open = false;
             escape = false;
         }
-        if escape && (self.picker.is_some() || self.placing.is_some()) {
+        if escape && (self.picker.is_some() || self.placing.is_some() || self.moving.is_some()) {
             self.picker = None;
             self.placing = None;
+            self.moving = None;
             escape = false;
         }
 
@@ -333,6 +345,54 @@ impl App {
         ghost
     }
 
+    /// Drags a placed room with the left button. Pressing on a room grabs it, releasing
+    /// on the map drops it. A taken spot, Escape or a right click leave it in place.
+    /// Returns the preview to draw while dragging.
+    fn update_moving(
+        &mut self,
+        p: &Pointer,
+        hovered: Option<usize>,
+        layout: &Layout,
+        camera: &Camera2D,
+    ) -> Option<Ghost> {
+        let cell = layout.cell_at(camera.screen_to_world(p.pos));
+        let Some(m) = &self.moving else {
+            if let (true, Some(room)) = (p.left, hovered) {
+                let r = &self.world.rooms[room];
+                self.moving = Some(Moving {
+                    room,
+                    grab: (cell.0 - r.x, cell.1 - r.y),
+                });
+            }
+            return None;
+        };
+        let r = &self.world.rooms[m.room];
+        let (x, y) = (cell.0 - m.grab.0, cell.1 - m.grab.1);
+        if p.right {
+            self.moving = None;
+            return None;
+        }
+        if is_mouse_button_down(MouseButton::Left) {
+            return Some(Ghost {
+                x,
+                y,
+                choice: Choice {
+                    pick: Pick::Room,
+                    w: r.w,
+                    h: r.h,
+                },
+                free: self.world.can_move(m.room, x, y),
+            });
+        }
+        // Button released. A drop on the spot it came from changes nothing.
+        let room = m.room;
+        if p.on_map() && (x, y) != (r.x, r.y) {
+            self.world.move_room(room, x, y);
+        }
+        self.moving = None;
+        None
+    }
+
     /// Picker clicks: a size starts the placement, a click elsewhere closes the popup.
     /// A right click on the map opens the picker at the cursor.
     fn update_picker(&mut self, p: &mut Pointer, picker_ui: &mut Option<Picker>, layout: &Layout) {
@@ -350,7 +410,12 @@ impl App {
         }
         if self.picker.is_none() {
             *picker_ui = None;
-            if p.right && p.on_map() && !p.consumed && self.placing.is_none() {
+            if p.right
+                && p.on_map()
+                && !p.consumed
+                && self.placing.is_none()
+                && self.moving.is_none()
+            {
                 self.picker = Some(p.pos);
             }
         }

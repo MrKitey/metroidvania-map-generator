@@ -6,7 +6,9 @@ mod picker;
 mod theme;
 
 pub use hud::{COPIED_TIME, Hud};
-pub use map::{MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect};
+pub use map::{
+    MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect,
+};
 pub use picker::{Ghost, Picker, picker_layout};
 pub use theme::{door_color, room_border, room_fill};
 

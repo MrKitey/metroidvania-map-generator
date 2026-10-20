@@ -189,3 +189,44 @@ fn toggles_follow_the_rules() {
     world.toggle_kind(corridor, RoomKind::Portal);
     assert!(world.rooms[corridor].kind == RoomKind::Corridor);
 }
+
+#[test]
+fn moving_a_room_rebuilds_its_doors() {
+    let mut world = generate(768, 1);
+    let idx = world.rooms.len() - 1;
+    let (w, h) = (world.rooms[idx].w, world.rooms[idx].h);
+    let (_, _, max_x, _) = world.bounds();
+    // Taken spot: nothing changes.
+    let (ox, oy) = (world.rooms[idx].x, world.rooms[idx].y);
+    let doors = world.doors.len();
+    assert!(!world.move_room(idx, world.rooms[0].x, world.rooms[0].y));
+    assert_eq!(world.doors.len(), doors);
+    // Far away: no neighbor, so no door left on this room.
+    assert!(world.move_room(idx, max_x + 5, 0));
+    assert!(world.doors.iter().all(|d| d.a != idx && d.b != idx));
+    assert_eq!(world.room_at(max_x + 5, 0), Some(idx));
+    assert_eq!(world.room_at(ox, oy), None);
+    // Back to its place: the spot is free again and it touches rooms again.
+    assert!(world.can_move(idx, ox, oy));
+    assert!(world.move_room(idx, ox, oy));
+    assert!(world.doors.iter().any(|d| d.a == idx || d.b == idx));
+    assert_eq!((world.rooms[idx].w, world.rooms[idx].h), (w, h));
+}
+
+#[test]
+fn moved_room_takes_the_biome_of_its_neighbor() {
+    let mut world = generate(768, 1);
+    let idx = world.rooms.len() - 1;
+    let (w, h) = (world.rooms[idx].w as i32, world.rooms[idx].h as i32);
+    // A free spot just right of a room of another biome.
+    let target = world
+        .rooms
+        .iter()
+        .enumerate()
+        .filter(|(i, r)| *i != idx && r.biome != world.rooms[idx].biome)
+        .map(|(_, r)| (r.x + r.w as i32, r.y, r.biome))
+        .find(|&(x, y, _)| world.can_move(idx, x, y) && w > 0 && h > 0);
+    let (x, y, biome) = target.unwrap();
+    assert!(world.move_room(idx, x, y));
+    assert_eq!(world.rooms[idx].biome, biome);
+}

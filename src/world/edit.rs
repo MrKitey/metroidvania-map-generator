@@ -1,6 +1,6 @@
 //! Edits made by the user on a generated map.
 
-use super::{Door, Marker, RoomKind, World};
+use super::{Door, Marker, Room, RoomKind, World};
 use std::collections::BTreeMap;
 
 /// Kind of room offered by the room picker.
@@ -74,9 +74,53 @@ impl World {
         if !self.is_free(x, y, wi, hi) {
             return None;
         }
-        // Per side (right, left, down, up): each touching room with the door cells it
-        // could use. The door cell is on the new room for left and up, on the neighbor
-        // for right and down, as `Door` expects.
+        let sides = self.touching(x, y, w, h);
+        let biome = self.neighbor_biome(&sides).unwrap_or(self.biomes[0]);
+
+        let idx = self.place(x, y, w, h, biome, kind);
+        self.rooms[idx].marker = marker;
+        self.add_doors(idx, &sides);
+        Some(idx)
+    }
+
+    /// True if room `idx` can have its top-left cell at (x, y). Its own cells count as free.
+    pub fn can_move(&self, idx: usize, x: i32, y: i32) -> bool {
+        let r = &self.rooms[idx];
+        (y..y + r.h as i32)
+            .all(|cy| (x..x + r.w as i32).all(|cx| self.room_at(cx, cy).is_none_or(|i| i == idx)))
+    }
+
+    /// Moves room `idx` so its top-left cell is at (x, y). Its doors are removed, then it
+    /// gets one door per touching room like `place_manual`, and the biome of the first
+    /// touching room. With no neighbor it keeps its biome. Its kind is kept.
+    /// Returns false, and changes nothing, if the spot is taken.
+    pub fn move_room(&mut self, idx: usize, x: i32, y: i32) -> bool {
+        if !self.can_move(idx, x, y) {
+            return false;
+        }
+        let Room {
+            x: ox, y: oy, w, h, ..
+        } = self.rooms[idx];
+        self.set_cells(ox, oy, w, h, None);
+        self.doors.retain(|d| d.a != idx && d.b != idx);
+        let sides = self.touching(x, y, w, h);
+        let biome = self.neighbor_biome(&sides);
+        let room = &mut self.rooms[idx];
+        room.x = x;
+        room.y = y;
+        if let Some(biome) = biome {
+            room.biome = biome;
+        }
+        self.set_cells(x, y, w, h, Some(idx));
+        self.add_doors(idx, &sides);
+        true
+    }
+
+    /// Per side (right, left, down, up): each room touching the rectangle, with the door
+    /// cells it could use. The door cell is on the rectangle for left and up, on the
+    /// neighbor for right and down, as `Door` expects.
+    fn touching(&self, x: i32, y: i32, w: u32, h: u32) -> [BTreeMap<usize, Vec<(i32, i32)>>; 4] {
+        let (wi, hi) = (w as i32, h as i32);
         let mut sides: [BTreeMap<usize, Vec<(i32, i32)>>; 4] = Default::default();
         for i in 0..hi {
             if let Some(n) = self.room_at(x + wi, y + i) {
@@ -94,14 +138,18 @@ impl World {
                 sides[3].entry(n).or_default().push((x + i, y));
             }
         }
-        let biome = sides
-            .iter()
-            .flat_map(|s| s.keys())
-            .next()
-            .map_or(self.biomes[0], |&n| self.rooms[n].biome);
+        sides
+    }
 
-        let idx = self.place(x, y, w, h, biome, kind);
-        self.rooms[idx].marker = marker;
+    /// Biome of the first touching room, if any.
+    fn neighbor_biome(&self, sides: &[BTreeMap<usize, Vec<(i32, i32)>>; 4]) -> Option<usize> {
+        let n = sides.iter().flat_map(|s| s.keys()).next()?;
+        Some(self.rooms[*n].biome)
+    }
+
+    /// Adds one door between room `idx` and each touching room, in the middle of the
+    /// shared side.
+    fn add_doors(&mut self, idx: usize, sides: &[BTreeMap<usize, Vec<(i32, i32)>>; 4]) {
         for (side, neighbors) in sides.iter().enumerate() {
             for (&n, cells) in neighbors {
                 let (dx, dy) = cells[cells.len() / 2];
@@ -114,6 +162,5 @@ impl World {
                 });
             }
         }
-        Some(idx)
     }
 }

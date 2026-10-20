@@ -21,6 +21,7 @@ const SHORTCUTS: &[(&str, &str)] = &[
     ("Wheel", "Zoom"),
     ("Middle drag", "Pan"),
     ("Right click", "Place a room"),
+    ("Left drag", "Move a room"),
     ("C", "Recenter"),
     ("G", "Grid"),
     ("B", "Boss room"),

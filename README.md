@@ -27,6 +27,9 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Rooms, boss rooms and corridors can be placed by hand from a right click popup. They
   snap to the cell grid and get a door to each room they touch. See
   [Placing rooms](#placing-rooms).
+- Placed rooms can be dragged with the left button to another spot. See
+  [Moving rooms](#moving-rooms).
+- Faint white grid behind the map, one line per cell, toggled with G.
 - Legend of the biomes and of the room types on the left.
 - Room tooltip with its size in cells and in pixels.
 - Clickable seed in the bottom right corner, copied to the clipboard.
@@ -89,13 +92,15 @@ The same list is shown in the app with the `?` button in the top right corner.
 | Mouse wheel | Zoom |
 | Middle drag | Pan |
 | Right click | Open the room picker, see [Placing rooms](#placing-rooms) |
+| Left drag | Move a room, see [Moving rooms](#moving-rooms) |
 | C | Recenter the map |
+| G | Show or hide the grid |
 | B | Boss room under the cursor, press again to clear |
 | S | Save room under the cursor, press again to clear |
 | H | Secret room under the cursor, press again to clear |
 | P | Portal room under the cursor, press again to clear |
 | Tab | Open or close the editor |
-| Esc | Close the shortcuts popup or the room picker, cancel a placement, or quit |
+| Esc | Close the shortcuts popup or the room picker, cancel a placement or a move, or quit |
 
 Keyboard shortcuts other than Tab are disabled while the editor is open, so typing in its
 fields is safe.
@@ -120,6 +125,22 @@ size in the middle.
   biome of the first room it touches. Without a neighbor it has no door.
 - Boss sizes place a room with the boss marker, corridor sizes place a corridor.
 - Placed rooms are lost when the map is regenerated.
+
+## Moving rooms
+
+Press the left button on any room and keep it down to drag it. The room keeps the
+grabbed point under the cursor and snaps to the cell grid. It is green where it fits and
+red where it overlaps another room.
+
+- Release the button to drop it. If the spot is taken, or the cursor is off the map,
+  the room stays where it was. Right click or Esc cancels the drag.
+- The doors of the room are removed. It gets one door per room it touches at the new
+  spot, in the middle of the shared side, and the biome of the first room it touches, so
+  its color follows. Without a neighbor it keeps its biome and has no door.
+- The kind and the marker of the room are kept.
+- A click without leaving the cell changes nothing.
+- A room moved away from the others can leave the map in several parts.
+- Moves are lost when the map is regenerated.
 
 ## Editor
 
