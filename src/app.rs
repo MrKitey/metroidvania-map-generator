@@ -10,6 +10,7 @@ use crate::render::{self, COPIED_TIME, Frame, Ghost, Hud, Picker, RoomLegend, pi
 use crate::settings;
 use crate::view::View;
 use crate::world::{Choice, Marker, Params, Pick, RoomKind, World, time_seed};
+use macroquad::miniquad::CursorIcon;
 use macroquad::prelude::*;
 
 /// Map size limits, as a number of room cells.
@@ -91,6 +92,8 @@ pub struct App {
     moving: Option<Moving>,
     /// Icon of the room type legend being dragged onto a room, if any.
     icon_drag: Option<IconId>,
+    /// Cursor currently set on the window, so it is only set again when it changes.
+    cursor: CursorIcon,
     /// Last export result and when it happened, shown in the header for a while.
     notice: Option<(String, f64)>,
 }
@@ -118,6 +121,7 @@ impl App {
             placing: None,
             moving: None,
             icon_drag: None,
+            cursor: CursorIcon::Default,
             notice: None,
         }
     }
@@ -191,6 +195,14 @@ impl App {
         }
         let ghost = ghost.or(self.update_moving(&pointer, hovered, &layout, &camera));
         self.update_icon_drag(&pointer, &legend, hovered);
+        self.update_cursor(
+            &pointer,
+            &hud,
+            &legend,
+            picker_ui.as_ref(),
+            ghost.as_ref(),
+            hovered,
+        );
 
         let notice = self
             .notice
@@ -430,6 +442,56 @@ impl App {
                 self.tag_room(room, icon);
             }
             self.icon_drag = None;
+        }
+    }
+
+    /// Cursor that tells what a click or a drag does under the mouse: a hand on buttons
+    /// and picker entries, a cross when placing a room, arrows when moving something,
+    /// and a forbidden sign where a drop is refused.
+    fn update_cursor(
+        &mut self,
+        p: &Pointer,
+        hud: &Hud,
+        legend: &RoomLegend,
+        picker: Option<&Picker>,
+        ghost: Option<&Ghost>,
+        hovered: Option<usize>,
+    ) {
+        let moving = self.moving.is_some();
+        let icon = if self.icon_drag.is_some() {
+            if hovered.is_some() {
+                CursorIcon::Move
+            } else {
+                CursorIcon::NotAllowed
+            }
+        } else if moving || self.placing.is_some() {
+            match ghost {
+                Some(g) if !g.free => CursorIcon::NotAllowed,
+                Some(_) if moving => CursorIcon::Move,
+                Some(_) => CursorIcon::Crosshair,
+                None if moving => CursorIcon::NotAllowed,
+                None => CursorIcon::Default,
+            }
+        } else if is_mouse_button_down(MouseButton::Middle) && p.on_map() {
+            CursorIcon::Move
+        } else if picker.is_some_and(|ui| ui.items.iter().any(|(_, r)| r.contains(p.pos))) {
+            CursorIcon::Pointer
+        } else if p.over_picker {
+            CursorIcon::Default
+        } else if p.over_seed
+            || p.over_help_button
+            || hud.export.contains(p.pos)
+            || legend.icon_at(p.pos).is_some()
+        {
+            CursorIcon::Pointer
+        } else if hovered.is_some() {
+            CursorIcon::Move
+        } else {
+            CursorIcon::Default
+        };
+        if icon != self.cursor {
+            miniquad::window::set_mouse_cursor(icon);
+            self.cursor = icon;
         }
     }
 

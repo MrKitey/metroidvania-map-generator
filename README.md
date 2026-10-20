@@ -31,6 +31,9 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
   [Placing rooms](#placing-rooms).
 - Placed rooms can be dragged with the left button to another spot. See
   [Moving rooms](#moving-rooms).
+- The cursor shows what a click does: a hand on buttons, the seed, picker entries and
+  legend icons, a cross when placing a room, arrows over a room that can be dragged, and
+  a forbidden sign where a drop is refused.
 - Faint white grid behind the map, one line per cell, toggled with G.
 - Legend of the biomes and of the room types on the left.
 - Room tooltip with its size in cells and in pixels.
