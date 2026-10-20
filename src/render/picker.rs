@@ -3,6 +3,7 @@
 use super::map::line_thickness;
 use super::theme::{LEGEND_TEXT, PAD, ROW_H};
 use crate::layout::Layout;
+use crate::text::rooms;
 use crate::world::{Choice, Pick, Sizes};
 use macroquad::prelude::*;
 
@@ -32,9 +33,9 @@ pub struct Ghost {
 /// popup is wide enough.
 pub fn picker_layout(sizes: &Sizes, layout: &Layout, anchor: Vec2) -> Picker {
     let sections = [
-        ("Rooms", Pick::Room, &sizes.rooms),
-        ("Boss rooms", Pick::Boss, &sizes.boss),
-        ("Corridors", Pick::Corridor, &sizes.corridor),
+        (rooms::ROOMS, Pick::Room, &sizes.rooms),
+        (rooms::BOSS_ROOMS, Pick::Boss, &sizes.boss),
+        (rooms::CORRIDORS, Pick::Corridor, &sizes.corridor),
     ];
     let max_w = screen_width() * PICKER_MAX_W;
     let mut titles = Vec::new();

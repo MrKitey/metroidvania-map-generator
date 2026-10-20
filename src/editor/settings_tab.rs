@@ -4,6 +4,7 @@ use super::EditorAction;
 use super::fields::{Fields, MAX_MIN_ROOMS, MAX_ROOM_SIDE};
 use super::widgets::{HALF_BUTTON, size_list, wrapped_label};
 use crate::settings::{self, DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ROOM_SIZES};
+use crate::text::{editor as text, status};
 use macroquad::prelude::*;
 use macroquad::ui::{Ui, widgets};
 
@@ -38,30 +39,30 @@ pub fn draw(
         .size(SEED_FIELD)
         .ui(ui, seed);
     ui.same_line(0.0);
-    if ui.button(None, "Use seed") {
+    if ui.button(None, text::USE_SEED) {
         match seed.trim().parse() {
             Ok(seed) => action = Some(EditorAction::UseSeed(seed)),
-            Err(_) => *status = "Invalid seed".to_owned(),
+            Err(_) => *status = status::INVALID_SEED.to_owned(),
         }
     }
     ui.separator();
 
-    ui.label(None, "Screen size (px)");
-    ui.input_text(VIEWPORT_W_ID, "Width", &mut fields.viewport_w);
-    ui.input_text(VIEWPORT_H_ID, "Height", &mut fields.viewport_h);
+    ui.label(None, text::SCREEN_SIZE);
+    ui.input_text(VIEWPORT_W_ID, text::WIDTH, &mut fields.viewport_w);
+    ui.input_text(VIEWPORT_H_ID, text::HEIGHT, &mut fields.viewport_h);
     ui.separator();
 
-    ui.label(None, &format!("Min rooms per biome (1 to {MAX_MIN_ROOMS})"));
-    ui.input_text(MIN_ROOMS_ID, "Minimum", &mut fields.min_rooms);
-    ui.label(None, "Max rooms per biome (0 = no limit)");
-    ui.input_text(MAX_ROOMS_ID, "Maximum", &mut fields.max_rooms);
+    ui.label(None, &text::min_rooms_label(MAX_MIN_ROOMS));
+    ui.input_text(MIN_ROOMS_ID, text::MINIMUM, &mut fields.min_rooms);
+    ui.label(None, text::MAX_ROOMS_LABEL);
+    ui.input_text(MAX_ROOMS_ID, text::MAXIMUM, &mut fields.max_rooms);
     ui.separator();
 
-    let label = format!("Room sizes (1 to {MAX_ROOM_SIDE})");
+    let label = text::room_sizes_label(MAX_ROOM_SIDE);
     widgets::TreeNode::new(ROOM_SIZES_NODE_ID, label.as_str()).ui(ui, |ui| {
         size_list(ui, &mut fields.sizes, ROOM_SIZES_ID, DEFAULT_ROOM_SIZES);
     });
-    let label = format!("Boss room sizes (1 to {MAX_ROOM_SIDE})");
+    let label = text::boss_sizes_label(MAX_ROOM_SIDE);
     widgets::TreeNode::new(BOSS_SIZES_NODE_ID, label.as_str()).ui(ui, |ui| {
         size_list(
             ui,
@@ -70,7 +71,7 @@ pub fn draw(
             DEFAULT_BOSS_SIZES,
         );
     });
-    let label = format!("Corridor room sizes (1 to {MAX_ROOM_SIDE})");
+    let label = text::corridor_sizes_label(MAX_ROOM_SIDE);
     widgets::TreeNode::new(CORRIDOR_SIZES_NODE_ID, label.as_str()).ui(ui, |ui| {
         size_list(
             ui,
@@ -83,17 +84,20 @@ pub fn draw(
     ui.canvas().request_space(vec2(0.0, BUTTONS_GAP));
 
     // Generating wins over a seed typed in the same frame.
-    if widgets::Button::new("Generate").size(HALF_BUTTON).ui(ui) {
+    if widgets::Button::new(text::GENERATE)
+        .size(HALF_BUTTON)
+        .ui(ui)
+    {
         action = Some(EditorAction::Regenerate);
     }
     ui.same_line(0.0);
-    if widgets::Button::new("Save settings")
+    if widgets::Button::new(text::SAVE_SETTINGS)
         .size(HALF_BUTTON)
         .ui(ui)
     {
         *status = match settings::save(&fields.settings()) {
-            Ok(path) => format!("Saved to {}", path.display()),
-            Err(e) => format!("Error: {e}"),
+            Ok(path) => status::saved_to(&path),
+            Err(e) => status::error(e),
         };
     }
     wrapped_label(ui, status);

@@ -265,6 +265,7 @@ src/editor/                Editor panel: state (mod.rs), validated fields (field
 src/biome.rs               Biomes and biomes.json
 src/settings.rs            Generation settings and settings.json
 src/storage.rs             App folder and JSON reading and writing
+src/text.rs                All app texts: labels, messages, file names, default names
 src/color.rs               #RRGGBB conversion
 src/icons.rs               SVG icon rasterization
 src/export/                Zip export (mod.rs) with map.png, map.svg and map.json

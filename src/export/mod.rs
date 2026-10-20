@@ -8,6 +8,7 @@ use crate::biome::Biome;
 use crate::icons::Icons;
 use crate::layout::Layout;
 use crate::settings::Settings;
+use crate::text::{files, status};
 use crate::world::World;
 use macroquad::prelude::*;
 use std::error::Error;
@@ -48,11 +49,11 @@ impl MapData<'_> {
 /// the main loop, since the image is rendered on the GPU.
 pub fn save_with_dialog(map: &MapData, icons: &mut Icons) -> Option<String> {
     let mut path = rfd::FileDialog::new()
-        .add_filter("Zip", &["zip"])
-        .set_file_name(format!("map-{}.zip", map.seed))
+        .add_filter(files::ZIP_FILTER, &[files::ZIP_EXT])
+        .set_file_name(files::zip_name(map.seed))
         .save_file()?;
     if path.extension().is_none() {
-        path.set_extension("zip");
+        path.set_extension(files::ZIP_EXT);
     }
     let name = path
         .file_name()
@@ -60,8 +61,8 @@ pub fn save_with_dialog(map: &MapData, icons: &mut Icons) -> Option<String> {
         .to_string_lossy()
         .into_owned();
     Some(match write_zip(&path, map, icons) {
-        Ok(()) => format!("Exported {name}"),
-        Err(e) => format!("Export failed: {e}"),
+        Ok(()) => status::exported(&name),
+        Err(e) => status::export_failed(e),
     })
 }
 
@@ -74,11 +75,11 @@ fn write_zip(path: &Path, map: &MapData, icons: &mut Icons) -> Result<(), Box<dy
     let mut zip = zip::ZipWriter::new(File::create(path)?);
     // PNG data is already compressed.
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    zip.start_file("map.png", stored)?;
+    zip.start_file(files::EXPORT_PNG, stored)?;
     zip.write_all(&png)?;
-    zip.start_file("map.svg", SimpleFileOptions::default())?;
+    zip.start_file(files::EXPORT_SVG, SimpleFileOptions::default())?;
     zip.write_all(svg.as_bytes())?;
-    zip.start_file("map.json", SimpleFileOptions::default())?;
+    zip.start_file(files::EXPORT_JSON, SimpleFileOptions::default())?;
     zip.write_all(json.as_bytes())?;
     zip.finish()?;
     Ok(())

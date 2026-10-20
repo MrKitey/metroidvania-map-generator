@@ -4,6 +4,7 @@ use super::EditorAction;
 use super::widgets::{THIRD_BUTTON, count_slider, wrapped_label};
 use crate::biome::{self, Biome, MIN_CORRIDORS};
 use crate::color::{parse_hex, to_hex};
+use crate::text::{biomes, editor as text, files, rooms, status};
 use macroquad::color::hsl_to_rgb;
 use macroquad::prelude::*;
 use macroquad::ui::{Ui, widgets};
@@ -96,8 +97,8 @@ impl BiomesTab {
             }
 
             let id = FIELD_ID + i as u64 * FIELD_STRIDE;
-            ui.input_text(id, "Name", &mut b.name);
-            ui.input_text(id + 1, "Color", &mut self.hex[i]);
+            ui.input_text(id, text::NAME, &mut b.name);
+            ui.input_text(id + 1, text::COLOR, &mut self.hex[i]);
             if let Some(color) = parse_hex(&self.hex[i]) {
                 b.fill = color;
             }
@@ -117,27 +118,33 @@ impl BiomesTab {
                 b.fill = picker_color((mouse - pos) / PICKER_SIZE);
                 self.hex[i] = to_hex(b.fill);
             }
-            count_slider(ui, id + 2, "Secret rooms", 0, &mut b.secrets);
-            count_slider(ui, id + 3, "Boss rooms", 0, &mut b.bosses);
-            count_slider(ui, id + 4, "Save rooms", 0, &mut b.saves);
-            count_slider(ui, id + 5, "Portal rooms", 0, &mut b.portals);
-            count_slider(ui, id + 6, "Corridors", MIN_CORRIDORS, &mut b.corridors);
-            if ui.button(None, "Delete") {
+            count_slider(ui, id + 2, rooms::SECRET_ROOMS, 0, &mut b.secrets);
+            count_slider(ui, id + 3, rooms::BOSS_ROOMS, 0, &mut b.bosses);
+            count_slider(ui, id + 4, rooms::SAVE_ROOMS, 0, &mut b.saves);
+            count_slider(ui, id + 5, rooms::PORTAL_ROOMS, 0, &mut b.portals);
+            count_slider(
+                ui,
+                id + 6,
+                rooms::CORRIDORS,
+                MIN_CORRIDORS,
+                &mut b.corridors,
+            );
+            if ui.button(None, text::DELETE) {
                 remove = Some(i);
             }
             token.end(ui);
         }
         ui.separator();
 
-        if widgets::Button::new("Add").size(THIRD_BUTTON).ui(ui) {
-            biomes.push(Biome::new("New", 128, 128, 128));
+        if widgets::Button::new(text::ADD).size(THIRD_BUTTON).ui(ui) {
+            biomes.push(Biome::new(biomes::NEW, 128, 128, 128));
             action = Some(EditorAction::Regenerate);
         }
         ui.same_line(0.0);
-        if widgets::Button::new("Import").size(THIRD_BUTTON).ui(ui) {
+        if widgets::Button::new(text::IMPORT).size(THIRD_BUTTON).ui(ui) {
             // Blocks the app until the dialog is closed.
             let picked = rfd::FileDialog::new()
-                .add_filter("JSON", &["json"])
+                .add_filter(files::JSON_FILTER, &[files::JSON_EXT])
                 .pick_file();
             if let Some(path) = picked {
                 match biome::read(&path) {
@@ -147,17 +154,17 @@ impl BiomesTab {
                         self.hex.clear();
                         self.fold_all();
                         action = Some(EditorAction::Regenerate);
-                        *status = format!("Imported {}", path.display());
+                        *status = status::imported(&path);
                     }
-                    Err(e) => *status = format!("Error: {e}"),
+                    Err(e) => *status = status::error(e),
                 }
             }
         }
         ui.same_line(0.0);
-        if widgets::Button::new("Save").size(THIRD_BUTTON).ui(ui) {
+        if widgets::Button::new(text::SAVE).size(THIRD_BUTTON).ui(ui) {
             *status = match biome::save(biomes) {
-                Ok(path) => format!("Saved to {}", path.display()),
-                Err(e) => format!("Error: {e}"),
+                Ok(path) => status::saved_to(&path),
+                Err(e) => status::error(e),
             };
         }
         wrapped_label(ui, status);
@@ -173,7 +180,7 @@ impl BiomesTab {
                 self.fold_all();
                 action = Some(EditorAction::Regenerate);
             } else {
-                *status = "At least one biome is required".to_owned();
+                *status = status::AT_LEAST_ONE_BIOME.to_owned();
             }
         }
         action

@@ -6,6 +6,7 @@ use super::theme::*;
 use crate::biome::Biome;
 use crate::icons::{IconId, Icons};
 use crate::layout::{Layout, MARGIN, TOP};
+use crate::text::hud::{self as t, SHORTCUTS};
 use crate::world::{Marker, Room, RoomKind, World};
 use macroquad::prelude::*;
 use std::sync::OnceLock;
@@ -14,23 +15,6 @@ const SEED_SIZE: u16 = 20;
 /// Seconds the "copied" feedback stays on the seed label.
 pub const COPIED_TIME: f64 = 1.5;
 
-/// Listed in the shortcuts popup, as (key, action).
-const SHORTCUTS: &[(&str, &str)] = &[
-    ("R", "New map"),
-    ("Arrows", "Map size"),
-    ("Wheel", "Zoom"),
-    ("Middle drag", "Pan"),
-    ("Right click", "Place a room"),
-    ("Left drag", "Move a room"),
-    ("C", "Recenter"),
-    ("G", "Grid"),
-    ("B", "Boss room"),
-    ("S", "Save room"),
-    ("H", "Secret room"),
-    ("P", "Portal room"),
-    ("Tab", "Editor"),
-    ("Esc", "Quit"),
-];
 const HELP_TEXT: u16 = 24;
 const HELP_H: f32 = 28.0;
 /// Radius of the "?" icon circle.
@@ -46,10 +30,10 @@ const TOOLTIP_TEXT: u16 = 18;
 
 /// Room types listed in the legend, as (name, fill, border, icon).
 const LEGEND_ROOMS: &[(&str, Color, Color, IconId)] = &[
-    ("Boss", BOSS_FILL, BOSS_BORDER, IconId::Boss),
-    ("Save", SAVE_FILL, SAVE_BORDER, IconId::Save),
-    ("Secret", SECRET_FILL, SECRET_BORDER, IconId::Secret),
-    ("Portal", PORTAL_FILL, PORTAL_BORDER, IconId::Portal),
+    (t::LEGEND_BOSS, BOSS_FILL, BOSS_BORDER, IconId::Boss),
+    (t::LEGEND_SAVE, SAVE_FILL, SAVE_BORDER, IconId::Save),
+    (t::LEGEND_SECRET, SECRET_FILL, SECRET_BORDER, IconId::Secret),
+    (t::LEGEND_PORTAL, PORTAL_FILL, PORTAL_BORDER, IconId::Portal),
 ];
 
 /// Widths of the key column and the action column of the shortcuts popup.
@@ -81,11 +65,7 @@ pub struct Hud {
 
 impl Hud {
     pub fn new(seed: u64, copied: bool, reserved: f32) -> Hud {
-        let seed_text = if copied {
-            format!("Seed {seed} (copied)")
-        } else {
-            format!("Seed {seed}")
-        };
+        let seed_text = t::seed(seed, copied);
         let dim = measure_text(&seed_text, None, SEED_SIZE, 1.0);
         let x = screen_width() - reserved - MARGIN - dim.width;
         let y = screen_height() - MARGIN - dim.height;
@@ -121,10 +101,7 @@ pub fn draw_header(
 ) {
     // Opaque so the map does not show through the text when panned under it.
     draw_rectangle(0.0, 0.0, screen_width(), TOP, BACKGROUND);
-    let mut info = format!("Rooms {}", world.rooms.len());
-    if let Some(notice) = notice {
-        info = format!("{info}    {notice}");
-    }
+    let info = t::header(world.rooms.len(), notice);
     draw_text(info, MARGIN, TOP / 2.0 + 7.0, 20.0, WHITE);
     let biomes_bottom = draw_legend(world, biomes);
     draw_room_legend(biomes_bottom + LEGEND_GAP, legend_icons);
@@ -257,9 +234,9 @@ pub fn draw_help(hud: &Hud, open: bool) {
 
     let c = button.center();
     draw_circle_lines(c.x, c.y, ICON_R, 1.5, WHITE);
-    let q = measure_text("?", None, HELP_TEXT, 1.0);
+    let q = measure_text(t::HELP_BUTTON, None, HELP_TEXT, 1.0);
     draw_text(
-        "?",
+        t::HELP_BUTTON,
         c.x - q.width / 2.0,
         c.y + q.height / 2.0,
         HELP_TEXT as f32,
@@ -297,35 +274,27 @@ pub fn draw_tooltip(r: &Room, biomes: &[Biome], layout: &Layout) {
     let biome = &biomes[r.biome].name;
     let mut name = match r.kind {
         RoomKind::Normal => biome.clone(),
-        RoomKind::Corridor => "Corridor".to_owned(),
-        RoomKind::Secret => format!("{biome} (secret)"),
-        RoomKind::Portal => format!("{biome} (portal)"),
+        RoomKind::Corridor => t::CORRIDOR.to_owned(),
+        RoomKind::Secret => t::secret_room(biome),
+        RoomKind::Portal => t::portal_room(biome),
     };
     match r.marker {
-        Some(Marker::Boss) => name.push_str(" (boss)"),
-        Some(Marker::Save) => name.push_str(" (save)"),
+        Some(Marker::Boss) => name.push_str(t::BOSS_SUFFIX),
+        Some(Marker::Save) => name.push_str(t::SAVE_SUFFIX),
         None => {}
     }
-    let text = format!(
-        "{}  {}x{} : {}x{} px",
-        name,
-        r.w,
-        r.h,
-        r.w * layout.viewport.0,
-        r.h * layout.viewport.1
-    );
-    draw_cursor_label(&text);
+    let px = (r.w * layout.viewport.0, r.h * layout.viewport.1);
+    draw_cursor_label(&t::tooltip(&name, (r.w, r.h), px));
 }
 
 /// Size and position in pixels of the room being placed, next to the cursor.
 pub fn draw_ghost_label(g: &Ghost, layout: &Layout) {
     let (vw, vh) = layout.viewport;
-    draw_cursor_label(&format!(
-        "{}x{} at {}, {} px",
+    draw_cursor_label(&t::ghost_label(
         g.choice.w,
         g.choice.h,
         g.x * vw as i32,
-        g.y * vh as i32
+        g.y * vh as i32,
     ));
 }
 

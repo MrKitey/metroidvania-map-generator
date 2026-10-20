@@ -1,18 +1,16 @@
 //! Location of the app files and JSON reading and writing.
 
+use crate::text::files;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Folder created in the user's Documents to hold the app files.
-const APP_DIR: &str = "Metroidvania Map Generator";
-
-/// `Documents/<APP_DIR>`, or the working directory when Documents is unknown.
+/// `Documents/<files::APP_DIR>`, or the working directory when Documents is unknown.
 pub fn app_dir() -> PathBuf {
     dirs::document_dir()
-        .map(|d| d.join(APP_DIR))
+        .map(|d| d.join(files::APP_DIR))
         .unwrap_or_else(|| PathBuf::from("."))
 }
 

@@ -7,6 +7,7 @@
 
 use super::fields::{SizeFields, size_fields};
 use crate::biome::MAX_COUNT;
+use crate::text::editor as text;
 use macroquad::prelude::*;
 use macroquad::ui::{Ui, widgets};
 
@@ -58,9 +59,9 @@ pub fn count_slider(ui: &mut Ui, id: u64, label: &str, min: u32, value: &mut u32
 /// Editable list of room sizes: width and height fields with a delete button per row,
 /// then "Add size" and "Reset". `id` is the base id of the fields.
 pub fn size_list(ui: &mut Ui, fields: &mut SizeFields, id: u64, defaults: &[(u32, u32)]) {
-    widgets::Label::new("Width").size(SIDE_FIELD).ui(ui);
+    widgets::Label::new(text::WIDTH).size(SIDE_FIELD).ui(ui);
     ui.same_line(0.0);
-    widgets::Label::new("Height").size(SIDE_FIELD).ui(ui);
+    widgets::Label::new(text::HEIGHT).size(SIDE_FIELD).ui(ui);
     let mut remove = None;
     for (i, (w, h)) in fields.iter_mut().enumerate() {
         let id = id + 2 * i as u64;
@@ -68,18 +69,18 @@ pub fn size_list(ui: &mut Ui, fields: &mut SizeFields, id: u64, defaults: &[(u32
         ui.same_line(0.0);
         widgets::InputText::new(id + 1).size(SIDE_FIELD).ui(ui, h);
         ui.same_line(0.0);
-        if ui.button(None, "Delete") {
+        if ui.button(None, text::DELETE) {
             remove = Some(i);
         }
     }
     if let Some(i) = remove {
         fields.remove(i);
     }
-    if ui.button(None, "Add size") {
+    if ui.button(None, text::ADD_SIZE) {
         fields.push(("1".to_owned(), "1".to_owned()));
     }
     ui.same_line(0.0);
-    if ui.button(None, "Reset") {
+    if ui.button(None, text::RESET) {
         *fields = size_fields(defaults);
     }
 }

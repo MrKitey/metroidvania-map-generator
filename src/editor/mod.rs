@@ -7,6 +7,7 @@ mod widgets;
 
 use crate::biome::Biome;
 use crate::settings::Settings;
+use crate::text;
 use crate::world::Sizes;
 use biomes_tab::BiomesTab;
 use fields::Fields;
@@ -18,7 +19,6 @@ pub use widgets::PANEL_W;
 /// Widget ids of the window and its tab bar. The other ids are in the tab modules.
 const WINDOW_ID: u64 = 1;
 const TABS_ID: u64 = 7;
-const TABS: &[&str] = &["Settings", "Biomes"];
 const TABS_SIZE: Vec2 = vec2(widgets::INNER_W, 24.0);
 /// Vertical space below the tabs, in pixels.
 const TABS_GAP: f32 = 8.0;
@@ -103,10 +103,10 @@ impl Editor {
 
         root_ui().push_skin(&self.skin);
         ui_widgets::Window::new(WINDOW_ID, pos, size)
-            .label("Editor")
+            .label(text::editor::WINDOW_TITLE)
             .movable(false)
             .ui(&mut root_ui(), |ui| {
-                let tab = ui.tabbar(TABS_ID, TABS_SIZE, TABS);
+                let tab = ui.tabbar(TABS_ID, TABS_SIZE, text::editor::TABS);
                 ui.canvas().request_space(vec2(0.0, TABS_GAP));
                 action = if tab == 0 {
                     settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status)

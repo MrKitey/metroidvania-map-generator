@@ -1,5 +1,6 @@
 //! Room icons, rasterized from embedded SVG files at the size they are drawn.
 
+use crate::text::icons as text;
 use crate::world::{Marker, RoomKind};
 use macroquad::prelude::*;
 use resvg::{tiny_skia, usvg};
@@ -39,10 +40,10 @@ impl IconId {
     /// Short name, used as the icon id in the SVG export.
     pub fn name(self) -> &'static str {
         match self {
-            IconId::Boss => "boss",
-            IconId::Save => "save",
-            IconId::Secret => "secret",
-            IconId::Portal => "portal",
+            IconId::Boss => text::BOSS,
+            IconId::Save => text::SAVE,
+            IconId::Secret => text::SECRET,
+            IconId::Portal => text::PORTAL,
         }
     }
 

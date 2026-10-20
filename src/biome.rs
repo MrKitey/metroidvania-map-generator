@@ -2,14 +2,13 @@
 
 use crate::color::{parse_hex, to_hex};
 use crate::storage;
+use crate::text::{biomes as text, files};
 use crate::world::Extras;
 use macroquad::color::Color;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-/// Read at startup and written by the editor, in the app folder.
-const BIOMES_FILE: &str = "biomes.json";
 /// Default and maximum number of secret, boss, save and portal rooms per biome.
 pub const DEFAULT_COUNT: u32 = 1;
 pub const MAX_COUNT: u32 = 5;
@@ -70,12 +69,12 @@ impl Biome {
 /// Used when the file is missing or has no valid line.
 pub fn default_biomes() -> Vec<Biome> {
     vec![
-        Biome::new("Castle", 70, 80, 120),
-        Biome::new("Caves", 100, 70, 45),
-        Biome::new("Forest", 40, 95, 50),
-        Biome::new("Ice", 60, 120, 140),
-        Biome::new("Lava", 130, 40, 25),
-        Biome::new("Abyss", 60, 30, 90),
+        Biome::new(text::CASTLE, 70, 80, 120),
+        Biome::new(text::CAVES, 100, 70, 45),
+        Biome::new(text::FOREST, 40, 95, 50),
+        Biome::new(text::ICE, 60, 120, 140),
+        Biome::new(text::LAVA, 130, 40, 25),
+        Biome::new(text::ABYSS, 60, 30, 90),
     ]
 }
 
@@ -135,18 +134,18 @@ pub fn read(path: &Path) -> Result<Vec<Biome>, Box<dyn Error>> {
         })
         .collect();
     if biomes.is_empty() {
-        return Err("no valid biome in file".into());
+        return Err(text::NO_VALID_BIOME.into());
     }
     Ok(biomes)
 }
 
 /// Biomes saved by the user, or the defaults if the file is missing or invalid.
 pub fn load() -> Vec<Biome> {
-    read(&storage::app_dir().join(BIOMES_FILE)).unwrap_or_else(|_| default_biomes())
+    read(&storage::app_dir().join(files::BIOMES)).unwrap_or_else(|_| default_biomes())
 }
 
 /// Writes the biomes in the format read by `read`. Returns the path written to.
 pub fn save(biomes: &[Biome]) -> Result<PathBuf, Box<dyn Error>> {
     let entries: Vec<Entry> = biomes.iter().map(Entry::from).collect();
-    storage::write_json(BIOMES_FILE, &entries)
+    storage::write_json(files::BIOMES, &entries)
 }

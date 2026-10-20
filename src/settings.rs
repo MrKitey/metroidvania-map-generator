@@ -1,12 +1,11 @@
 //! Generation settings and their storage in a JSON file.
 
 use crate::storage;
+use crate::text::files;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
 
-/// Read at startup and written by the editor, in the app folder.
-const SETTINGS_FILE: &str = "settings.json";
 pub const DEFAULT_VIEWPORT: (u32, u32) = (640, 360);
 pub const DEFAULT_MIN_ROOMS: usize = 5;
 pub const DEFAULT_MAX_ROOMS: usize = 50;
@@ -62,10 +61,10 @@ impl Default for Settings {
 
 /// Saved settings, or the defaults if the file is missing or invalid.
 pub fn load() -> Settings {
-    storage::read_json(&storage::app_dir().join(SETTINGS_FILE)).unwrap_or_default()
+    storage::read_json(&storage::app_dir().join(files::SETTINGS)).unwrap_or_default()
 }
 
 /// Returns the path written to.
 pub fn save(settings: &Settings) -> Result<PathBuf, Box<dyn Error>> {
-    storage::write_json(SETTINGS_FILE, settings)
+    storage::write_json(files::SETTINGS, settings)
 }

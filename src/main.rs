@@ -16,6 +16,7 @@ mod layout;
 mod render;
 mod settings;
 mod storage;
+mod text;
 mod view;
 mod world;
 
@@ -24,7 +25,7 @@ use macroquad::prelude::*;
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "Metroidvania Map Generator".to_owned(),
+        window_title: text::app::WINDOW_TITLE.to_owned(),
         window_width: 1280,
         window_height: 800,
         ..Default::default()
