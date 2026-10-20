@@ -5,7 +5,7 @@ mod map;
 mod picker;
 mod theme;
 
-pub use hud::{COPIED_TIME, Hud};
+pub use hud::{COPIED_TIME, Hud, RoomLegend};
 pub use map::{
     MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect,
 };
@@ -13,7 +13,7 @@ pub use picker::{Ghost, Picker, picker_layout};
 pub use theme::{door_color, room_border, room_fill};
 
 use crate::biome::Biome;
-use crate::icons::Icons;
+use crate::icons::{IconId, Icons};
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::World;
@@ -25,6 +25,7 @@ pub struct Frame<'a> {
     pub view: &'a View,
     pub camera: &'a Camera2D,
     pub hud: &'a Hud,
+    pub legend: &'a RoomLegend,
     pub hovered: Option<usize>,
     pub help_open: bool,
     pub grid: bool,
@@ -32,6 +33,8 @@ pub struct Frame<'a> {
     pub picker: Option<&'a Picker>,
     /// Room being placed, if any.
     pub ghost: Option<Ghost>,
+    /// Icon being dragged from the room type legend, if any.
+    pub dragged_icon: Option<IconId>,
     /// Short message shown in the header, such as the export result.
     pub notice: Option<&'a str>,
 }
@@ -76,13 +79,16 @@ pub fn draw_world(
     }
     set_default_camera();
 
-    hud::draw_header(world, biomes, f.notice, legend_icons);
+    hud::draw_header(world, biomes, f.notice, f.legend, legend_icons);
     hud::draw_seed(f.hud);
     if let Some(i) = f.hovered {
         hud::draw_tooltip(&world.rooms[i], biomes, f.layout);
     }
     if let Some(g) = &f.ghost {
         hud::draw_ghost_label(g, f.layout);
+    }
+    if let Some(icon) = f.dragged_icon {
+        hud::draw_dragged_icon(icon, legend_icons);
     }
     hud::draw_export_button(f.hud);
     hud::draw_help(f.hud, f.help_open);

@@ -10,7 +10,7 @@ const MIN_PX: u32 = 8;
 const MAX_PX: u32 = 512;
 
 /// One of the icons shown on rooms and in the legend.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum IconId {
     Boss,
     Save,

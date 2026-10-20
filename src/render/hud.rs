@@ -24,6 +24,8 @@ const SWATCH: f32 = 14.0;
 /// Side of the room type icon box in the legend, and of the icon inside it.
 const ICON_BOX: f32 = 20.0;
 const ICON_PX: u32 = 16;
+/// Side of the icon dragged from the legend, in pixels.
+const DRAG_ICON_PX: u32 = 32;
 /// Space between the biome legend and the room type legend.
 const LEGEND_GAP: f32 = 8.0;
 const TOOLTIP_TEXT: u16 = 18;
@@ -97,14 +99,15 @@ pub fn draw_header(
     world: &World,
     biomes: &[Biome],
     notice: Option<&str>,
+    legend: &RoomLegend,
     legend_icons: &mut Icons,
 ) {
     // Opaque so the map does not show through the text when panned under it.
     draw_rectangle(0.0, 0.0, screen_width(), TOP, BACKGROUND);
     let info = t::header(world.rooms.len(), notice);
     draw_text(info, MARGIN, TOP / 2.0 + 7.0, 20.0, WHITE);
-    let biomes_bottom = draw_legend(world, biomes);
-    draw_room_legend(biomes_bottom + LEGEND_GAP, legend_icons);
+    draw_legend(world, biomes);
+    draw_room_legend(legend, legend_icons);
 }
 
 /// Seed label over a backdrop, so it stays readable over the map.
@@ -129,10 +132,9 @@ pub fn draw_seed(hud: &Hud) {
     );
 }
 
-/// Biomes used in this map, one per row, in a column on the left, vertically centered
-/// below the header. Drawn over the map on a translucent backdrop.
-/// Returns the y of the bottom edge of the block.
-fn draw_legend(world: &World, biomes: &[Biome]) -> f32 {
+/// Area of the biome legend: one row per biome used in this map, in a column on the
+/// left, vertically centered below the header.
+fn biome_legend_rect(world: &World, biomes: &[Biome]) -> Rect {
     let names_w = world
         .biomes
         .iter()
@@ -140,8 +142,14 @@ fn draw_legend(world: &World, biomes: &[Biome]) -> f32 {
         .fold(0.0, f32::max);
     let w = PAD + SWATCH + PAD + names_w + PAD;
     let h = PAD + world.biomes.len() as f32 * ROW_H + PAD;
-    let (x, y) = (MARGIN, TOP + (screen_height() - TOP - h) / 2.0);
-    draw_rectangle(x, y, w, h, Color::new(0.0, 0.0, 0.0, 0.6));
+    Rect::new(MARGIN, TOP + (screen_height() - TOP - h) / 2.0, w, h)
+}
+
+/// Biomes used in this map, one per row. Drawn over the map on a translucent backdrop.
+fn draw_legend(world: &World, biomes: &[Biome]) {
+    let area = biome_legend_rect(world, biomes);
+    let (x, y) = (area.x, area.y);
+    draw_rectangle(x, y, area.w, area.h, Color::new(0.0, 0.0, 0.0, 0.6));
 
     for (i, &b) in world.biomes.iter().enumerate() {
         let biome = &biomes[b];
@@ -158,20 +166,54 @@ fn draw_legend(world: &World, biomes: &[Biome]) -> f32 {
             biome.border(),
         );
     }
-    y + h
 }
 
-/// Room types, one per row with its icon and name, in a block starting at `y`
-/// on the left, under the biome legend.
-fn draw_room_legend(y: f32, icons: &mut Icons) {
-    let names_w = LEGEND_ROOMS
-        .iter()
-        .map(|r| measure_text(r.0, None, LEGEND_TEXT, 1.0).width)
-        .fold(0.0, f32::max);
-    let w = PAD + ICON_BOX + PAD + names_w + PAD;
-    let h = PAD + LEGEND_ROOMS.len() as f32 * ROW_H + PAD;
-    let x = MARGIN;
-    draw_rectangle(x, y, w, h, Color::new(0.0, 0.0, 0.0, 0.6));
+/// Room type legend, in a block under the biome legend. Built once per frame, so
+/// hit tests and drawing agree.
+pub struct RoomLegend {
+    /// Whole block, backdrop included.
+    pub rect: Rect,
+    /// One row per entry of `LEGEND_ROOMS`, in the same order.
+    rows: Vec<(IconId, Rect)>,
+}
+
+impl RoomLegend {
+    pub fn new(world: &World, biomes: &[Biome]) -> RoomLegend {
+        let above = biome_legend_rect(world, biomes);
+        let names_w = LEGEND_ROOMS
+            .iter()
+            .map(|r| measure_text(r.0, None, LEGEND_TEXT, 1.0).width)
+            .fold(0.0, f32::max);
+        let w = PAD + ICON_BOX + PAD + names_w + PAD;
+        let h = PAD + LEGEND_ROOMS.len() as f32 * ROW_H + PAD;
+        let rect = Rect::new(MARGIN, above.bottom() + LEGEND_GAP, w, h);
+        let rows = LEGEND_ROOMS
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                let y = rect.y + PAD + i as f32 * ROW_H;
+                (r.3, Rect::new(rect.x, y, w, ROW_H))
+            })
+            .collect();
+        RoomLegend { rect, rows }
+    }
+
+    /// Icon of the row under `p`, if any.
+    pub fn icon_at(&self, p: Vec2) -> Option<IconId> {
+        self.rows.iter().find(|(_, r)| r.contains(p)).map(|r| r.0)
+    }
+}
+
+/// Room types, one per row with its icon and name.
+fn draw_room_legend(legend: &RoomLegend, icons: &mut Icons) {
+    let (x, y) = (legend.rect.x, legend.rect.y);
+    draw_rectangle(
+        x,
+        y,
+        legend.rect.w,
+        legend.rect.h,
+        Color::new(0.0, 0.0, 0.0, 0.6),
+    );
 
     for (i, (name, fill, border, icon)) in LEGEND_ROOMS.iter().enumerate() {
         let row_y = y + PAD + i as f32 * ROW_H;
@@ -200,6 +242,36 @@ fn draw_room_legend(y: f32, icons: &mut Icons) {
             *border,
         );
     }
+}
+
+/// Icon being dragged from the legend, centered on the cursor, in the same colored
+/// square as in the legend and at the same proportions.
+pub fn draw_dragged_icon(icon: IconId, icons: &mut Icons) {
+    let (mx, my) = mouse_position();
+    let side = DRAG_ICON_PX as f32;
+    let boxed = side * ICON_BOX / ICON_PX as f32;
+    if let Some((_, fill, border, _)) = LEGEND_ROOMS.iter().find(|r| r.3 == icon) {
+        draw_rectangle(mx - boxed / 2.0, my - boxed / 2.0, boxed, boxed, *fill);
+        draw_rectangle_lines(
+            mx - boxed / 2.0,
+            my - boxed / 2.0,
+            boxed,
+            boxed,
+            2.0,
+            *border,
+        );
+    }
+    let params = DrawTextureParams {
+        dest_size: Some(vec2(side, side)),
+        ..Default::default()
+    };
+    draw_texture_ex(
+        icons.get(icon, DRAG_ICON_PX),
+        mx - side / 2.0,
+        my - side / 2.0,
+        WHITE,
+        params,
+    );
 }
 
 /// Square button with a download arrow icon.

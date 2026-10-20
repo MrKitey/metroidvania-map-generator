@@ -24,6 +24,8 @@ Built with Rust and [macroquad](https://github.com/not-fl3/macroquad).
 - Same seed and settings always give the same map.
 - Boss, save, secret and portal rooms can also be set on any room with the keyboard.
   Each one replaces the previous type of the room.
+- The same types can be set by dragging an icon from the room type legend onto a room.
+  Dropping an icon on a room that already has it clears it, like the keys.
 - Rooms, boss rooms and corridors can be placed by hand from a right click popup. They
   snap to the cell grid and get a door to each room they touch. See
   [Placing rooms](#placing-rooms).
@@ -93,6 +95,7 @@ The same list is shown in the app with the `?` button in the top right corner.
 | Middle drag | Pan |
 | Right click | Open the room picker, see [Placing rooms](#placing-rooms) |
 | Left drag | Move a room, see [Moving rooms](#moving-rooms) |
+| Left drag on a legend icon | Drop a boss, save, secret or portal type on a room |
 | C | Recenter the map |
 | G | Show or hide the grid |
 | B | Boss room under the cursor, press again to clear |
@@ -100,7 +103,7 @@ The same list is shown in the app with the `?` button in the top right corner.
 | H | Secret room under the cursor, press again to clear |
 | P | Portal room under the cursor, press again to clear |
 | Tab | Open or close the editor |
-| Esc | Close the shortcuts popup or the room picker, cancel a placement or a move, or quit |
+| Esc | Close the shortcuts popup or the room picker, cancel a placement, a move or an icon drag, or quit |
 
 Keyboard shortcuts other than Tab are disabled while the editor is open, so typing in its
 fields is safe.

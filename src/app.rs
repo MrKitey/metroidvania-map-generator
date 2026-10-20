@@ -4,9 +4,9 @@
 use crate::biome::{self, Biome};
 use crate::editor::{self, Editor, EditorAction};
 use crate::export::{self, MapData};
-use crate::icons::Icons;
+use crate::icons::{IconId, Icons};
 use crate::layout::{Layout, TOP};
-use crate::render::{self, COPIED_TIME, Frame, Ghost, Hud, Picker, picker_layout};
+use crate::render::{self, COPIED_TIME, Frame, Ghost, Hud, Picker, RoomLegend, picker_layout};
 use crate::settings;
 use crate::view::View;
 use crate::world::{Choice, Marker, Params, Pick, RoomKind, World, time_seed};
@@ -44,6 +44,7 @@ struct Pointer {
     over_help_button: bool,
     over_help: bool,
     over_picker: bool,
+    over_legend: bool,
     /// Set when a popup used the click, so it must not reach the map.
     consumed: bool,
 }
@@ -55,6 +56,7 @@ impl Pointer {
             || self.over_seed
             || self.over_help
             || self.over_picker
+            || self.over_legend
             || self.pos.y < TOP)
     }
 }
@@ -87,6 +89,8 @@ pub struct App {
     placing: Option<Choice>,
     /// Placed room being dragged, if any.
     moving: Option<Moving>,
+    /// Icon of the room type legend being dragged onto a room, if any.
+    icon_drag: Option<IconId>,
     /// Last export result and when it happened, shown in the header for a while.
     notice: Option<(String, f64)>,
 }
@@ -113,6 +117,7 @@ impl App {
             picker: None,
             placing: None,
             moving: None,
+            icon_drag: None,
             notice: None,
         }
     }
@@ -142,6 +147,7 @@ impl App {
 
         let copied = get_time() - self.copied_at < COPIED_TIME;
         let hud = Hud::new(self.seed, copied, reserved);
+        let legend = RoomLegend::new(&self.world, &self.biomes);
         // The picker is drawn over the header buttons and the seed, so it gets the clicks first.
         let mouse = Vec2::from(mouse_position());
         let mut picker_ui = self
@@ -159,6 +165,7 @@ impl App {
             over_help: over_help_button
                 || (!over_picker && self.help_open && hud.popup.contains(mouse)),
             over_picker,
+            over_legend: !over_picker && legend.rect.contains(mouse),
             consumed: false,
         };
 
@@ -183,6 +190,7 @@ impl App {
             self.room_shortcuts(i);
         }
         let ghost = ghost.or(self.update_moving(&pointer, hovered, &layout, &camera));
+        self.update_icon_drag(&pointer, &legend, hovered);
 
         let notice = self
             .notice
@@ -194,11 +202,13 @@ impl App {
             view: &self.view,
             camera: &camera,
             hud: &hud,
+            legend: &legend,
             hovered,
             help_open: self.help_open,
             grid: self.grid,
             picker: picker_ui.as_ref(),
             ghost,
+            dragged_icon: self.icon_drag,
             notice,
         };
         render::draw_world(
@@ -225,10 +235,16 @@ impl App {
             self.help_open = false;
             escape = false;
         }
-        if escape && (self.picker.is_some() || self.placing.is_some() || self.moving.is_some()) {
+        if escape
+            && (self.picker.is_some()
+                || self.placing.is_some()
+                || self.moving.is_some()
+                || self.icon_drag.is_some())
+        {
             self.picker = None;
             self.placing = None;
             self.moving = None;
+            self.icon_drag = None;
             escape = false;
         }
 
@@ -393,6 +409,41 @@ impl App {
         None
     }
 
+    /// Drags an icon of the room type legend onto a room. Pressing on a legend row grabs
+    /// the icon, releasing over a room applies it. Escape or a right click cancels.
+    fn update_icon_drag(&mut self, p: &Pointer, legend: &RoomLegend, hovered: Option<usize>) {
+        let Some(icon) = self.icon_drag else {
+            if p.left
+                && !p.consumed
+                && self.picker.is_none()
+                && self.placing.is_none()
+                && self.moving.is_none()
+            {
+                self.icon_drag = legend.icon_at(p.pos);
+            }
+            return;
+        };
+        if p.right {
+            self.icon_drag = None;
+        } else if !is_mouse_button_down(MouseButton::Left) {
+            if let Some(room) = hovered {
+                self.tag_room(room, icon);
+            }
+            self.icon_drag = None;
+        }
+    }
+
+    /// Sets the marker or kind shown by `icon` on a room, or clears it if the room
+    /// already has it.
+    fn tag_room(&mut self, room: usize, icon: IconId) {
+        match icon {
+            IconId::Boss => self.world.toggle_marker(room, Marker::Boss),
+            IconId::Save => self.world.toggle_marker(room, Marker::Save),
+            IconId::Secret => self.world.toggle_kind(room, RoomKind::Secret),
+            IconId::Portal => self.world.toggle_kind(room, RoomKind::Portal),
+        }
+    }
+
     /// Picker clicks: a size starts the placement, a click elsewhere closes the popup.
     /// A right click on the map opens the picker at the cursor.
     fn update_picker(&mut self, p: &mut Pointer, picker_ui: &mut Option<Picker>, layout: &Layout) {
@@ -415,6 +466,7 @@ impl App {
                 && !p.consumed
                 && self.placing.is_none()
                 && self.moving.is_none()
+                && self.icon_drag.is_none()
             {
                 self.picker = Some(p.pos);
             }
@@ -431,16 +483,16 @@ impl App {
             return;
         }
         if is_key_pressed(KeyCode::B) {
-            self.world.toggle_marker(room, Marker::Boss);
+            self.tag_room(room, IconId::Boss);
         }
         if is_key_pressed(KeyCode::S) {
-            self.world.toggle_marker(room, Marker::Save);
+            self.tag_room(room, IconId::Save);
         }
         if is_key_pressed(KeyCode::H) {
-            self.world.toggle_kind(room, RoomKind::Secret);
+            self.tag_room(room, IconId::Secret);
         }
         if is_key_pressed(KeyCode::P) {
-            self.world.toggle_kind(room, RoomKind::Portal);
+            self.tag_room(room, IconId::Portal);
         }
     }
 }
