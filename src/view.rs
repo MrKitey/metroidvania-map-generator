@@ -1,22 +1,22 @@
 //! Camera control: pan, zoom and fit-to-map.
 
-use crate::layout::{Layout, MARGIN, TOP};
+use crate::layout::{Layout, MARGIN};
 use crate::world::World;
-use macroquad::prelude::*;
+use egui::{Pos2, Rect, Vec2, vec2};
 
-/// Zoom factor applied per wheel notch.
+/// Zoom factor applied per `POINTS_PER_STEP` of scroll.
 const ZOOM_STEP: f32 = 1.1;
-/// Zoom limits, in screen pixels per world unit.
+/// Scroll points that equal one 10% zoom step. Matches one mouse-wheel notch.
+const POINTS_PER_STEP: f32 = 40.0;
+/// Zoom limits, in screen points per world unit.
 const MIN_SCALE: f32 = 2.0;
 const MAX_SCALE: f32 = 200.0;
 
-/// Pan and zoom state. `scale` is screen pixels per world unit.
+/// Pan and zoom state. `scale` is screen points per world unit.
 pub struct View {
     /// World point shown at the center of the map area.
     center: Vec2,
     pub scale: f32,
-    /// Mouse position on the previous frame, used to compute the drag distance.
-    last_mouse: Vec2,
 }
 
 impl View {
@@ -24,12 +24,11 @@ impl View {
         View {
             center: Vec2::ZERO,
             scale: 20.0,
-            last_mouse: Vec2::ZERO,
         }
     }
 
     /// Centers the whole map and picks the largest zoom that shows it entirely.
-    pub fn fit(&mut self, world: &World, layout: &Layout, reserved: f32) {
+    pub fn fit(&mut self, world: &World, layout: &Layout, map: Rect) {
         let (x0, y0, x1, y1) = world.bounds();
         let w = (x1 - x0) as f32 * layout.cw;
         let h = (y1 - y0) as f32 * layout.ch;
@@ -37,41 +36,32 @@ impl View {
             x0 as f32 * layout.cw + w / 2.0,
             y0 as f32 * layout.ch + h / 2.0,
         );
-        let avail_w = screen_width() - reserved - 2.0 * MARGIN;
-        let avail_h = screen_height() - TOP - MARGIN;
-        self.scale = (avail_w / w).min(avail_h / h).clamp(MIN_SCALE, MAX_SCALE);
+        let avail = (map.size() - vec2(2.0 * MARGIN, 2.0 * MARGIN)).max(Vec2::splat(1.0));
+        self.scale = (avail.x / w).min(avail.y / h).clamp(MIN_SCALE, MAX_SCALE);
     }
 
-    /// Middle drag pans, wheel zooms around the cursor. Input is ignored when `active` is false.
-    pub fn update(&mut self, reserved: f32, active: bool) {
-        let mouse = Vec2::from(mouse_position());
-        if active && is_mouse_button_down(MouseButton::Middle) {
-            // Move the map by the same distance as the mouse, converted to world units.
-            self.center -= (mouse - self.last_mouse) / self.scale;
-        }
-        self.last_mouse = mouse;
-
-        let wheel = mouse_wheel().1;
-        if active && wheel != 0.0 {
-            // Only the sign is used: wheel magnitude differs between platforms.
-            // The center is then shifted so the world point under the cursor stays put.
-            let before = self.camera(reserved).screen_to_world(mouse);
-            self.scale = (self.scale * ZOOM_STEP.powf(wheel.signum())).clamp(MIN_SCALE, MAX_SCALE);
-            let after = self.camera(reserved).screen_to_world(mouse);
-            self.center += before - after;
-        }
+    /// Moves the map by a screen-space drag.
+    pub fn pan(&mut self, screen_delta: Vec2) {
+        self.center -= screen_delta / self.scale;
     }
 
-    /// Y points down. The view is centered in the area below the header and left of `reserved`.
-    pub fn camera(&self, reserved: f32) -> Camera2D {
-        let (sw, sh) = (screen_width(), screen_height());
-        // Camera2D works in normalized device coordinates, where the screen spans -1 to 1.
-        // `zoom` turns world units into that space, `offset` shifts the center there.
-        Camera2D {
-            target: self.center,
-            zoom: vec2(2.0 * self.scale / sw, 2.0 * self.scale / sh),
-            offset: vec2(-reserved / sw, -TOP / sh),
-            ..Default::default()
-        }
+    /// Zooms around `cursor`, keeping that world point under it.
+    /// `wheel` is the egui scroll delta in points. One mouse notch is about 40.
+    pub fn zoom_at(&mut self, wheel: f32, cursor: Pos2, map: Rect) {
+        let before = self.screen_to_world(cursor, map);
+        let factor = ZOOM_STEP.powf(wheel / POINTS_PER_STEP);
+        self.scale = (self.scale * factor).clamp(MIN_SCALE, MAX_SCALE);
+        let after = self.screen_to_world(cursor, map);
+        self.center += before - after;
+    }
+
+    /// Screen position of a world point, in the map area.
+    pub fn world_to_screen(&self, world: Vec2, map: Rect) -> Pos2 {
+        map.center() + (world - self.center) * self.scale
+    }
+
+    /// World point under a screen position, in the map area.
+    pub fn screen_to_world(&self, screen: Pos2, map: Rect) -> Vec2 {
+        self.center + (screen - map.center()) / self.scale
     }
 }

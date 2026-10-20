@@ -52,10 +52,10 @@ pub fn render(map: &MapData) -> String {
         let _ = writeln!(
             svg,
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" stroke=\"{}\" stroke-width=\"{}\"/>",
-            rect.x + half,
-            rect.y + half,
-            rect.w - thickness,
-            rect.h - thickness,
+            rect.min.x + half,
+            rect.min.y + half,
+            rect.width() - thickness,
+            rect.height() - thickness,
             to_hex(room_fill(r, biomes)),
             to_hex(border),
             thickness,
@@ -68,10 +68,10 @@ pub fn render(map: &MapData) -> String {
         let _ = writeln!(
             svg,
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\"/>",
-            rect.x,
-            rect.y,
-            rect.w,
-            rect.h,
+            rect.min.x,
+            rect.min.y,
+            rect.width(),
+            rect.height(),
             to_hex(door_color(world, biomes, d)),
         );
     }

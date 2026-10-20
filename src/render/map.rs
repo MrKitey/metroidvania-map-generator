@@ -1,22 +1,25 @@
-//! Drawing of rooms, doors and icons, in world units with the camera already set.
+//! Drawing of rooms, doors and icons, in world units converted to the map camera.
 
 use super::theme::{door_color, room_border, room_fill};
 use crate::biome::Biome;
 use crate::icons::{IconId, Icons};
 use crate::layout::Layout;
+use crate::view::View;
 use crate::world::{Door, Room, World};
-use macroquad::prelude::*;
+use egui::{Color32, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2, pos2, vec2};
 
 /// Share of a cell taken by an icon.
 const ICON_SHARE: f32 = 0.7;
-/// Smallest icon, in pixels.
+/// Smallest icon, in points.
 const MIN_ICON_PX: f32 = 12.0;
 /// Size of two icons side by side, as a share of one.
 const PAIR_SHARE: f32 = 0.6;
 
 /// How the map is drawn.
-pub struct MapView {
-    /// Pixels per world unit. Icons are rasterized at their drawn size, and a thick
+pub struct MapView<'a> {
+    pub view: &'a View,
+    pub map: Rect,
+    /// Points per world unit. Icons are rasterized at their drawn size, and a thick
     /// border is one pixel thicker than the others, at any zoom.
     pub scale: f32,
     /// World area on screen. Rooms and doors outside it are skipped. None draws all.
@@ -31,11 +34,9 @@ pub fn line_thickness(layout: &Layout) -> f32 {
 
 /// Room rectangle, in world units.
 pub fn room_rect(r: &Room, layout: &Layout) -> Rect {
-    Rect::new(
-        r.x as f32 * layout.cw,
-        r.y as f32 * layout.ch,
-        r.w as f32 * layout.cw,
-        r.h as f32 * layout.ch,
+    Rect::from_min_size(
+        pos2(r.x as f32 * layout.cw, r.y as f32 * layout.ch),
+        vec2(r.w as f32 * layout.cw, r.h as f32 * layout.ch),
     )
 }
 
@@ -45,13 +46,13 @@ pub fn door_rect(d: &Door, layout: &Layout) -> Rect {
     let t = line_thickness(layout);
     let (x, y) = (d.x as f32 * cw, d.y as f32 * ch);
     if d.vertical {
-        Rect::new(x - t, y + ch * 0.3, 2.0 * t, ch * 0.4)
+        Rect::from_min_size(pos2(x - t, y + ch * 0.3), vec2(2.0 * t, ch * 0.4))
     } else {
-        Rect::new(x + cw * 0.3, y - t, cw * 0.4, 2.0 * t)
+        Rect::from_min_size(pos2(x + cw * 0.3, y - t), vec2(cw * 0.4, 2.0 * t))
     }
 }
 
-/// Side of an icon in pixels, at `scale` pixels per world unit.
+/// Side of an icon in points, at `scale` points per world unit.
 pub fn icon_side_px(layout: &Layout, scale: f32) -> f32 {
     (layout.cw.min(layout.ch) * ICON_SHARE * scale).max(MIN_ICON_PX)
 }
@@ -80,59 +81,76 @@ pub fn room_icons(r: &Room, layout: &Layout, side: f32) -> Vec<(IconId, Vec2, f3
 }
 
 /// Grid line color, transparent white.
-const GRID_COLOR: Color = Color::new(1.0, 1.0, 1.0, 0.08);
-/// Smallest cell on screen, in pixels. Below it the grid is too dense and is skipped.
+const GRID_COLOR: Color32 = Color32::from_rgba_unmultiplied_const(255, 255, 255, 20);
+/// Smallest cell on screen, in points. Below it the grid is too dense and is skipped.
 const MIN_GRID_CELL_PX: f32 = 6.0;
+
+fn to_screen(view: &View, map: Rect, world: Rect) -> Rect {
+    Rect::from_min_max(
+        view.world_to_screen(world.min.to_vec2(), map),
+        view.world_to_screen(world.max.to_vec2(), map),
+    )
+}
 
 /// Draws one line per cell edge over `area`, one pixel thick. Meant to be drawn
 /// before the map so the rooms cover it.
-pub fn draw_grid(layout: &Layout, scale: f32, area: Rect) {
-    if layout.cw.min(layout.ch) * scale < MIN_GRID_CELL_PX {
+pub fn draw_grid(painter: &Painter, layout: &Layout, view: &View, map: Rect, area: Rect) {
+    if layout.cw.min(layout.ch) * view.scale < MIN_GRID_CELL_PX {
         return;
     }
-    let thickness = 1.0 / scale;
-    let first_x = (area.x / layout.cw).floor() as i32;
-    let last_x = (area.right() / layout.cw).ceil() as i32;
+    let stroke = Stroke::new(1.0, GRID_COLOR);
+    let first_x = (area.min.x / layout.cw).floor() as i32;
+    let last_x = (area.max.x / layout.cw).ceil() as i32;
     for i in first_x..=last_x {
         let x = i as f32 * layout.cw;
-        draw_line(x, area.y, x, area.bottom(), thickness, GRID_COLOR);
+        let a = view.world_to_screen(vec2(x, area.min.y), map);
+        let b = view.world_to_screen(vec2(x, area.max.y), map);
+        painter.line_segment([a, b], stroke);
     }
-    let first_y = (area.y / layout.ch).floor() as i32;
-    let last_y = (area.bottom() / layout.ch).ceil() as i32;
+    let first_y = (area.min.y / layout.ch).floor() as i32;
+    let last_y = (area.max.y / layout.ch).ceil() as i32;
     for j in first_y..=last_y {
         let y = j as f32 * layout.ch;
-        draw_line(area.x, y, area.right(), y, thickness, GRID_COLOR);
+        let a = view.world_to_screen(vec2(area.min.x, y), map);
+        let b = view.world_to_screen(vec2(area.max.x, y), map);
+        painter.line_segment([a, b], stroke);
     }
 }
 
 /// Draws rooms, doors and icons.
 pub fn draw_map(
+    painter: &Painter,
     world: &World,
     biomes: &[Biome],
     layout: &Layout,
-    view: &MapView,
+    map_view: &MapView,
     icons: &mut Icons,
 ) {
-    let scale = view.scale;
-    let t = line_thickness(layout);
-    let shown = |rect: &Rect| view.visible.is_none_or(|v| v.overlaps(rect));
+    let (view, map, scale) = (map_view.view, map_view.map, map_view.scale);
+    let t = line_thickness(layout) * scale;
+    let shown = |rect: Rect| map_view.visible.is_none_or(|v| v.intersects(rect));
+    let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
 
     for (i, r) in world.rooms.iter().enumerate() {
-        let rect = room_rect(r, layout);
-        if !shown(&rect) {
+        let world_rect = room_rect(r, layout);
+        if !shown(world_rect) {
             continue;
         }
+        let rect = to_screen(view, map, world_rect);
         let (border, thick) = room_border(r, biomes);
-        let thickness = if thick { t + 1.0 / scale } else { t };
-        draw_rectangle(rect.x, rect.y, rect.w, rect.h, room_fill(r, biomes));
-        draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, thickness, border);
-        if view.hovered == Some(i) {
-            draw_rectangle(
-                rect.x,
-                rect.y,
-                rect.w,
-                rect.h,
-                Color::new(1.0, 1.0, 1.0, 0.15),
+        let thickness = if thick { t + 1.0 } else { t };
+        painter.rect_filled(rect, 0.0, room_fill(r, biomes));
+        painter.rect_stroke(
+            rect,
+            0.0,
+            Stroke::new(thickness, border),
+            StrokeKind::Middle,
+        );
+        if map_view.hovered == Some(i) {
+            painter.rect_filled(
+                rect,
+                0.0,
+                Color32::from_rgba_unmultiplied(255, 255, 255, 38),
             );
         }
     }
@@ -140,28 +158,28 @@ pub fn draw_map(
     // Doors are drawn over the borders to open a gap in them. A door inside a biome
     // takes the room color so it blends in, a door between biomes stands out.
     for d in &world.doors {
-        let rect = door_rect(d, layout);
-        if shown(&rect) {
-            let color = door_color(world, biomes, d);
-            draw_rectangle(rect.x, rect.y, rect.w, rect.h, color);
+        let world_rect = door_rect(d, layout);
+        if shown(world_rect) {
+            painter.rect_filled(
+                to_screen(view, map, world_rect),
+                0.0,
+                door_color(world, biomes, d),
+            );
         }
     }
 
     // Icons are rasterized at their size in pixels, so they stay sharp at any zoom.
-    // One raster size for all icons, otherwise the cache would rasterize every frame.
     let side_px = icon_side_px(layout, scale);
-    let px = side_px.ceil() as u32;
+    let px = (side_px * painter.ctx().pixels_per_point()).ceil() as u32;
     let side = side_px / scale;
     for r in &world.rooms {
-        if !shown(&room_rect(r, layout)) {
+        if !shown(room_rect(r, layout)) {
             continue;
         }
         for (id, corner, s) in room_icons(r, layout, side) {
-            let params = DrawTextureParams {
-                dest_size: Some(vec2(s, s)),
-                ..Default::default()
-            };
-            draw_texture_ex(icons.get(id, px), corner.x, corner.y, WHITE, params);
+            let dest = Rect::from_min_size(view.world_to_screen(corner, map), vec2(s, s) * scale);
+            let tex = icons.get(painter.ctx(), id, px);
+            painter.image(tex.id(), dest, uv, Color32::WHITE);
         }
     }
 }

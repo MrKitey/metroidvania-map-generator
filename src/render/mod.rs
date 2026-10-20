@@ -5,29 +5,28 @@ mod map;
 mod picker;
 mod theme;
 
-pub use hud::{COPIED_TIME, Hud, RoomLegend};
+pub use hud::{COPIED_TIME, Hud, RoomLegend, draw_help};
 pub use map::{
     MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect,
 };
 pub use picker::{Ghost, Picker, picker_layout};
-pub use theme::{door_color, room_border, room_fill};
+pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, door_color, room_border, room_fill};
 
 use crate::biome::Biome;
 use crate::icons::{IconId, Icons};
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::World;
-use macroquad::prelude::*;
+use egui::{Rect, Ui, vec2};
 
 /// Everything about the current frame that the renderer needs besides the world.
 pub struct Frame<'a> {
     pub layout: &'a Layout,
     pub view: &'a View,
-    pub camera: &'a Camera2D,
+    pub map_rect: Rect,
     pub hud: &'a Hud,
     pub legend: &'a RoomLegend,
     pub hovered: Option<usize>,
-    pub help_open: bool,
     pub grid: bool,
     /// Open room picker, if any.
     pub picker: Option<&'a Picker>,
@@ -35,64 +34,71 @@ pub struct Frame<'a> {
     pub ghost: Option<Ghost>,
     /// Icon being dragged from the room type legend, if any.
     pub dragged_icon: Option<IconId>,
-    /// Short message shown in the header, such as the export result.
-    pub notice: Option<&'a str>,
 }
 
 /// World area shown by the camera, with one unit of margin so nothing pops at the edges.
-fn visible_area(camera: &Camera2D) -> Rect {
-    let a = camera.screen_to_world(Vec2::ZERO);
-    let b = camera.screen_to_world(vec2(screen_width(), screen_height()));
-    let (min, max) = (a.min(b), a.max(b));
-    Rect::new(
-        min.x - 1.0,
-        min.y - 1.0,
-        max.x - min.x + 2.0,
-        max.y - min.y + 2.0,
-    )
+fn visible_area(view: &View, map: Rect) -> Rect {
+    let a = view.screen_to_world(map.min, map);
+    let b = view.screen_to_world(map.max, map);
+    Rect::from_min_max(a.to_pos2(), b.to_pos2()).expand(1.0)
 }
 
-/// Draws one frame. The map uses the map camera, the rest uses screen pixels.
+/// Draws one frame. The map is clipped to `map_rect`, the overlays sit on top.
 /// `legend_icons` is a second set used at a fixed size, so the map zoom does not
 /// make the legend icons rasterize again every frame.
 pub fn draw_world(
+    ui: &mut Ui,
     world: &World,
     biomes: &[Biome],
     f: &Frame,
     icons: &mut Icons,
     legend_icons: &mut Icons,
 ) {
-    clear_background(theme::BACKGROUND);
-    set_camera(f.camera);
-    let area = visible_area(f.camera);
+    let painter = ui.painter().with_clip_rect(f.map_rect);
+    painter.rect_filled(f.map_rect, 0.0, theme::BACKGROUND);
+    let area = visible_area(f.view, f.map_rect);
     if f.grid {
-        draw_grid(f.layout, f.view.scale, area);
+        draw_grid(&painter, f.layout, f.view, f.map_rect, area);
     }
     let view = MapView {
+        view: f.view,
+        map: f.map_rect,
         scale: f.view.scale,
         visible: Some(area),
         hovered: f.hovered,
     };
-    draw_map(world, biomes, f.layout, &view, icons);
+    draw_map(&painter, world, biomes, f.layout, &view, icons);
     if let Some(g) = &f.ghost {
-        picker::draw_ghost(g, f.layout);
+        picker::draw_ghost(&painter, g, f.layout, f.view, f.map_rect);
     }
-    set_default_camera();
 
-    hud::draw_header(world, biomes, f.notice, f.legend, legend_icons);
-    hud::draw_seed(f.hud);
+    hud::draw_legends(ui, world, biomes, f.legend, legend_icons);
+    hud::draw_seed(ui, f.hud);
     if let Some(i) = f.hovered {
-        hud::draw_tooltip(&world.rooms[i], biomes, f.layout);
+        hud::draw_tooltip(ui, &world.rooms[i], biomes, f.layout);
     }
     if let Some(g) = &f.ghost {
-        hud::draw_ghost_label(g, f.layout);
+        hud::draw_ghost_label(ui, g, f.layout);
     }
     if let Some(icon) = f.dragged_icon {
-        hud::draw_dragged_icon(icon, legend_icons);
+        hud::draw_dragged_icon(ui, icon, legend_icons);
     }
-    hud::draw_export_button(f.hud);
-    hud::draw_help(f.hud, f.help_open);
     if let Some(p) = f.picker {
-        picker::draw_picker(p);
+        picker::draw_picker(ui, p);
     }
+}
+
+/// Dark theme matching the map background.
+pub fn apply_theme(ctx: &egui::Context) {
+    let mut visuals = egui::Visuals::dark();
+    visuals.panel_fill = BACKGROUND;
+    visuals.window_fill = egui::Color32::from_rgb(20, 20, 28);
+    visuals.extreme_bg_color = BACKGROUND;
+    visuals.widgets.inactive.bg_fill = BUTTON_BG;
+    visuals.widgets.hovered.bg_fill = BUTTON_HOVER;
+    visuals.widgets.active.bg_fill = BUTTON_HOVER;
+    ctx.set_visuals(visuals);
+    ctx.all_styles_mut(|style| {
+        style.spacing.item_spacing = vec2(8.0, 6.0);
+    });
 }

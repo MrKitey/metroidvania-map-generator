@@ -1,10 +1,8 @@
 //! Size of a cell in world units and the screen areas around the map.
 
-use macroquad::prelude::*;
+use egui::Vec2;
 
-/// Height of the header bar, in screen pixels.
-pub const TOP: f32 = 40.0;
-/// Free space kept around the map when fitting it, in screen pixels.
+/// Free space kept around the map when fitting it, in screen points.
 pub const MARGIN: f32 = 20.0;
 
 /// Cell size in world units. Cells keep the viewport aspect ratio.

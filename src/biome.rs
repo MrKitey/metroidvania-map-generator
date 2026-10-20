@@ -4,7 +4,7 @@ use crate::color::{parse_hex, to_hex};
 use crate::storage;
 use crate::text::{biomes as text, files};
 use crate::world::Extras;
-use macroquad::color::Color;
+use egui::Color32;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -18,7 +18,7 @@ pub const MIN_CORRIDORS: u32 = 0;
 
 pub struct Biome {
     pub name: String,
-    pub fill: Color,
+    pub fill: Color32,
     /// Number of corridors, from `MIN_CORRIDORS` to `MAX_COUNT`.
     pub corridors: u32,
     /// Number of secret rooms added to the biome, up to `MAX_COUNT`.
@@ -35,7 +35,7 @@ impl Biome {
     pub fn new(name: &str, r: u8, g: u8, b: u8) -> Biome {
         Biome {
             name: name.to_owned(),
-            fill: Color::from_rgba(r, g, b, 255),
+            fill: Color32::from_rgb(r, g, b),
             corridors: DEFAULT_COUNT,
             secrets: DEFAULT_COUNT,
             portals: DEFAULT_COUNT,
@@ -55,13 +55,12 @@ impl Biome {
     }
 
     /// Fill color blended 55% toward white.
-    pub fn border(&self) -> Color {
-        let lighten = |c: f32| c + (1.0 - c) * 0.55;
-        Color::new(
-            lighten(self.fill.r),
-            lighten(self.fill.g),
-            lighten(self.fill.b),
-            1.0,
+    pub fn border(&self) -> Color32 {
+        let lighten = |c: u8| (c as f32 + (255.0 - c as f32) * 0.55).round() as u8;
+        Color32::from_rgb(
+            lighten(self.fill.r()),
+            lighten(self.fill.g()),
+            lighten(self.fill.b()),
         )
     }
 }

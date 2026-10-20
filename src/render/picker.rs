@@ -4,19 +4,22 @@ use super::map::line_thickness;
 use super::theme::{LEGEND_TEXT, PAD, ROW_H};
 use crate::layout::Layout;
 use crate::text::rooms;
+use crate::view::View;
 use crate::world::{Choice, Pick, Sizes};
-use macroquad::prelude::*;
+use egui::{
+    Align2, Color32, Context, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, pos2, vec2,
+};
 
-/// Height in pixels of one cell in the room picker. The width follows the cell aspect.
+/// Height in points of one cell in the room picker. The width follows the cell aspect.
 const PICKER_CELL: f32 = 20.0;
-const PICKER_TEXT: u16 = 16;
-/// Widest the picker can grow, as a share of the screen width.
+const PICKER_TEXT: f32 = 14.0;
+/// Widest the picker can grow, as a share of the map width.
 const PICKER_MAX_W: f32 = 0.6;
 
 /// Room picker popup, with screen positions already computed.
 pub struct Picker {
     pub rect: Rect,
-    titles: Vec<(&'static str, Vec2)>,
+    titles: Vec<(&'static str, Pos2)>,
     pub items: Vec<(Choice, Rect)>,
 }
 
@@ -28,22 +31,36 @@ pub struct Ghost {
     pub free: bool,
 }
 
-/// Lays out the picker with its top-left corner at `anchor`, moved to stay on screen.
+fn text_width(ctx: &Context, text: &str, size: f32) -> f32 {
+    ctx.fonts_mut(|f| {
+        f.layout_no_wrap(text.to_owned(), FontId::proportional(size), Color32::WHITE)
+            .size()
+            .x
+    })
+}
+
+/// Lays out the picker with its top-left corner at `anchor`, moved to stay in `map`.
 /// Rooms are drawn at the same aspect as on the map, and wrap to the next row when the
 /// popup is wide enough.
-pub fn picker_layout(sizes: &Sizes, layout: &Layout, anchor: Vec2) -> Picker {
+pub fn picker_layout(
+    ctx: &Context,
+    sizes: &Sizes,
+    layout: &Layout,
+    anchor: Pos2,
+    map: Rect,
+) -> Picker {
     let sections = [
         (rooms::ROOMS, Pick::Room, &sizes.rooms),
         (rooms::BOSS_ROOMS, Pick::Boss, &sizes.boss),
         (rooms::CORRIDORS, Pick::Corridor, &sizes.corridor),
     ];
-    let max_w = screen_width() * PICKER_MAX_W;
+    let max_w = map.width() * PICKER_MAX_W;
     let mut titles = Vec::new();
     let mut items = Vec::new();
     let (mut y, mut width) = (PAD, 0.0f32);
     for (title, pick, list) in sections {
-        titles.push((title, vec2(PAD, y)));
-        width = width.max(PAD + measure_text(title, None, LEGEND_TEXT, 1.0).width + PAD);
+        titles.push((title, pos2(PAD, y)));
+        width = width.max(PAD + text_width(ctx, title, LEGEND_TEXT) + PAD);
         y += ROW_H;
         let (mut x, mut row_h) = (PAD, 0.0f32);
         for &(w, h) in list {
@@ -56,7 +73,7 @@ pub fn picker_layout(sizes: &Sizes, layout: &Layout, anchor: Vec2) -> Picker {
                 y += row_h + PAD;
                 row_h = 0.0;
             }
-            items.push((Choice { pick, w, h }, Rect::new(x, y, size.x, size.y)));
+            items.push((Choice { pick, w, h }, Rect::from_min_size(pos2(x, y), size)));
             x += size.x + PAD;
             row_h = row_h.max(size.y);
             width = width.max(x);
@@ -64,18 +81,18 @@ pub fn picker_layout(sizes: &Sizes, layout: &Layout, anchor: Vec2) -> Picker {
         y += row_h + PAD;
     }
 
-    let origin = vec2(
-        anchor.x.min(screen_width() - width).max(0.0),
-        anchor.y.min(screen_height() - y).max(0.0),
+    let origin = pos2(
+        anchor.x.min(map.max.x - width).max(map.min.x),
+        anchor.y.min(map.max.y - y).max(map.min.y),
     );
     for (_, p) in &mut titles {
-        *p += origin;
+        *p += origin.to_vec2();
     }
     for (_, r) in &mut items {
-        r.move_to(r.point() + origin);
+        *r = r.translate(origin.to_vec2());
     }
     Picker {
-        rect: Rect::new(origin.x, origin.y, width, y),
+        rect: Rect::from_min_size(origin, vec2(width, y)),
         titles,
         items,
     }
@@ -83,51 +100,60 @@ pub fn picker_layout(sizes: &Sizes, layout: &Layout, anchor: Vec2) -> Picker {
 
 /// Black translucent popup listing every size, drawn as a white outline with its size in
 /// the middle.
-pub fn draw_picker(p: &Picker) {
-    let mouse = Vec2::from(mouse_position());
-    draw_rectangle(
-        p.rect.x,
-        p.rect.y,
-        p.rect.w,
-        p.rect.h,
-        Color::new(0.0, 0.0, 0.0, 0.8),
-    );
+pub fn draw_picker(ui: &Ui, p: &Picker) {
+    let painter = ui.painter();
+    let mouse = ui.input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO);
+    painter.rect_filled(p.rect, 4.0, Color32::from_rgba_unmultiplied(0, 0, 0, 204));
     for (title, pos) in &p.titles {
-        draw_text(
-            title,
-            pos.x,
-            pos.y + ROW_H * 0.7,
-            LEGEND_TEXT as f32,
-            LIGHTGRAY,
+        painter.text(
+            *pos + vec2(0.0, ROW_H * 0.7),
+            Align2::LEFT_BOTTOM,
+            *title,
+            FontId::proportional(LEGEND_TEXT),
+            Color32::LIGHT_GRAY,
         );
     }
     for (choice, r) in &p.items {
         if r.contains(mouse) {
-            draw_rectangle(r.x, r.y, r.w, r.h, Color::new(1.0, 1.0, 1.0, 0.15));
+            painter.rect_filled(*r, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 38));
         }
-        draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, WHITE);
+        painter.rect_stroke(
+            *r,
+            0.0,
+            Stroke::new(2.0, Color32::WHITE),
+            StrokeKind::Inside,
+        );
         let text = format!("{}x{}", choice.w, choice.h);
-        let dim = measure_text(&text, None, PICKER_TEXT, 1.0);
-        let c = r.center();
-        draw_text(
-            &text,
-            c.x - dim.width / 2.0,
-            c.y + dim.height / 2.0,
-            PICKER_TEXT as f32,
-            WHITE,
+        painter.text(
+            r.center(),
+            Align2::CENTER_CENTER,
+            text,
+            FontId::proportional(PICKER_TEXT),
+            Color32::WHITE,
         );
     }
 }
 
-/// Room being placed, in world units with the map camera set. Green if free, red if not.
-pub fn draw_ghost(g: &Ghost, layout: &Layout) {
-    let (x, y) = (g.x as f32 * layout.cw, g.y as f32 * layout.ch);
-    let (w, h) = (g.choice.w as f32 * layout.cw, g.choice.h as f32 * layout.ch);
+/// Room being placed, in the map camera. Green if free, red if not.
+pub fn draw_ghost(painter: &Painter, g: &Ghost, layout: &Layout, view: &View, map: Rect) {
+    let world = Rect::from_min_size(
+        pos2(g.x as f32 * layout.cw, g.y as f32 * layout.ch),
+        vec2(g.choice.w as f32 * layout.cw, g.choice.h as f32 * layout.ch),
+    );
+    let rect = Rect::from_min_max(
+        view.world_to_screen(world.min.to_vec2(), map),
+        view.world_to_screen(world.max.to_vec2(), map),
+    );
     let fill = if g.free {
-        Color::new(0.0, 1.0, 0.0, 0.35)
+        Color32::from_rgba_unmultiplied(0, 255, 0, 89)
     } else {
-        Color::new(1.0, 0.0, 0.0, 0.35)
+        Color32::from_rgba_unmultiplied(255, 0, 0, 89)
     };
-    draw_rectangle(x, y, w, h, fill);
-    draw_rectangle_lines(x, y, w, h, line_thickness(layout), WHITE);
+    painter.rect_filled(rect, 0.0, fill);
+    painter.rect_stroke(
+        rect,
+        0.0,
+        Stroke::new(line_thickness(layout) * view.scale, Color32::WHITE),
+        StrokeKind::Middle,
+    );
 }

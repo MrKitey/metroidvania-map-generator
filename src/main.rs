@@ -21,22 +21,18 @@ mod view;
 mod world;
 
 use app::App;
-use macroquad::prelude::*;
+use eframe::egui;
 
-fn window_conf() -> Conf {
-    Conf {
-        window_title: text::app::WINDOW_TITLE.to_owned(),
-        window_width: 1280,
-        window_height: 800,
+fn main() -> eframe::Result {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1280.0, 800.0])
+            .with_title(text::app::WINDOW_TITLE),
         ..Default::default()
-    }
-}
-
-#[macroquad::main(window_conf)]
-async fn main() {
-    let mut app = App::new();
-    // One iteration per frame.
-    while app.frame() {
-        next_frame().await;
-    }
+    };
+    eframe::run_native(
+        text::app::WINDOW_TITLE,
+        options,
+        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+    )
 }

@@ -11,17 +11,7 @@ use crate::text;
 use crate::world::Sizes;
 use biomes_tab::BiomesTab;
 use fields::Fields;
-use macroquad::prelude::*;
-use macroquad::ui::{Skin, root_ui, widgets as ui_widgets};
-use widgets::PANEL_MARGIN;
 pub use widgets::PANEL_W;
-
-/// Widget ids of the window and its tab bar. The other ids are in the tab modules.
-const WINDOW_ID: u64 = 1;
-const TABS_ID: u64 = 7;
-const TABS_SIZE: Vec2 = vec2(widgets::INNER_W, 24.0);
-/// Vertical space below the tabs, in pixels.
-const TABS_GAP: f32 = 8.0;
 
 /// What the panel asks the app to do.
 pub enum EditorAction {
@@ -33,12 +23,11 @@ pub enum EditorAction {
 
 pub struct Editor {
     pub open: bool,
+    tab: usize,
     fields: Fields,
     /// Shows the current seed, can be edited and applied with "Use seed".
     seed: String,
     biomes_tab: BiomesTab,
-    /// Default skin with `PANEL_MARGIN`, applied to the panel only.
-    skin: Skin,
     /// Feedback message shown at the bottom of the panel.
     status: String,
 }
@@ -47,13 +36,10 @@ impl Editor {
     pub fn new(seed: u64, settings: &Settings) -> Editor {
         Editor {
             open: false,
+            tab: 0,
             fields: Fields::new(settings),
             seed: seed.to_string(),
             biomes_tab: BiomesTab::new(),
-            skin: Skin {
-                margin: PANEL_MARGIN,
-                ..root_ui().default_skin()
-            },
             status: String::new(),
         }
     }
@@ -88,33 +74,25 @@ impl Editor {
         self.seed = seed.to_string();
     }
 
-    /// True when the cursor is over the open panel, so map clicks must be ignored.
-    pub fn is_mouse_over(&self) -> bool {
-        let (x, y) = mouse_position();
-        self.open && root_ui().is_mouse_over(vec2(x, y))
-    }
-
     /// Draws the panel and returns what the user asked for, if anything.
-    pub fn draw(&mut self, biomes: &mut Vec<Biome>) -> Option<EditorAction> {
-        let mut action = None;
-        let pos = vec2(screen_width() - PANEL_W, 0.0);
-        let size = vec2(PANEL_W, screen_height());
-        self.biomes_tab.sync(biomes);
+    pub fn draw(&mut self, ui: &mut egui::Ui, biomes: &mut Vec<Biome>) -> Option<EditorAction> {
+        ui.heading(text::editor::WINDOW_TITLE);
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.tab, 0, text::editor::TABS[0]);
+            ui.selectable_value(&mut self.tab, 1, text::editor::TABS[1]);
+        });
+        ui.separator();
 
-        root_ui().push_skin(&self.skin);
-        ui_widgets::Window::new(WINDOW_ID, pos, size)
-            .label(text::editor::WINDOW_TITLE)
-            .movable(false)
-            .ui(&mut root_ui(), |ui| {
-                let tab = ui.tabbar(TABS_ID, TABS_SIZE, text::editor::TABS);
-                ui.canvas().request_space(vec2(0.0, TABS_GAP));
-                action = if tab == 0 {
+        let mut action = None;
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                action = if self.tab == 0 {
                     settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status)
                 } else {
                     self.biomes_tab.draw(ui, biomes, &mut self.status)
                 };
             });
-        root_ui().pop_skin();
         action
     }
 }
