@@ -7,9 +7,20 @@ export the result.
 
 Built with Rust and [egui](https://github.com/emilk/egui).
 
-[![Screenshot 1](docs/screenshot-miniature.png)](docs/screenshot.png)
-[![Screenshot 2](docs/screenshot-2-miniature.png)](docs/screenshot-2.png)
-[![Screenshot 3](docs/screenshot-3-miniature.png)](docs/screenshot-3.png)
+## Screenshots
+
+| | | |
+|---|---|---|
+| [![Map](docs/screenshot-map-miniature.png)](docs/screenshot-map.png) | [![Tooltip](docs/screenshot-tooltip-miniature.png)](docs/screenshot-tooltip.png) | [![Shortcuts](docs/screenshot-help-miniature.png)](docs/screenshot-help.png) |
+| Generated map, grid, legends and project header | Room tooltip, in cells and in pixels | Shortcuts popup |
+| [![Picker](docs/screenshot-picker-miniature.png)](docs/screenshot-picker.png) | [![Place](docs/screenshot-place-miniature.png)](docs/screenshot-place.png) | [![Blocked](docs/screenshot-place-blocked-miniature.png)](docs/screenshot-place-blocked.png) |
+| Room picker | Placing a free room | Placing a room that overlaps |
+| [![Move](docs/screenshot-move-miniature.png)](docs/screenshot-move.png) | [![Select](docs/screenshot-select-miniature.png)](docs/screenshot-select.png) | [![Biome](docs/screenshot-biome-miniature.png)](docs/screenshot-biome.png) |
+| Moving a room | Selection rectangle | Rooms of one biome selected |
+| [![Icon](docs/screenshot-icon-miniature.png)](docs/screenshot-icon.png) | [![Settings](docs/screenshot-editor-miniature.png)](docs/screenshot-editor.png) | [![Biomes](docs/screenshot-biomes-miniature.png)](docs/screenshot-biomes.png) |
+| Dragging a room type onto a room | Editor, settings tab | Editor, biomes tab |
+| [![Rename](docs/screenshot-rename-miniature.png)](docs/screenshot-rename.png) | | |
+| Renaming the project | | |
 
 ## Features
 
@@ -258,10 +269,11 @@ packaging/linux/           Desktop entry for the AppImage
 .github/workflows/         Release workflow
 build.rs                   Embeds the icon into the Windows executable
 src/main.rs                Window and egui loop
-src/app.rs                 App state, input, room placement and per frame work
+src/app/                  Frame loop (mod.rs), project session, header, map panel, gestures
 src/world/                 Map data (mod.rs), generation (generate.rs), manual edits (edit.rs)
 src/render/                Frame drawing (mod.rs), map (map.rs), overlays (hud.rs),
-                           room picker (picker.rs), colors (theme.rs)
+                           legends (legend.rs), room picker (picker.rs), size packing (pack.rs),
+                           colors (theme.rs)
 src/layout.rs              Cell size and header height
 src/view.rs                Camera pan, zoom and fit
 src/editor/                Editor panel: state (mod.rs), validated fields (fields.rs),
@@ -269,10 +281,12 @@ src/editor/                Editor panel: state (mod.rs), validated fields (field
 src/biome.rs               Biomes and biomes.json
 src/settings.rs            Generation settings and settings.json
 src/storage.rs             App folder and JSON reading and writing
-src/text.rs                All app texts: labels, messages, file names, default names
+src/text/                  All app texts, one file per area
 src/color.rs               #RRGGBB conversion
 src/icons.rs               SVG icon rasterization
 src/export/                Zip export (mod.rs) with map.png, map.svg and map.json
+src/project/               Project file, dialogs, recent list and Linux mime type
+src/platform/              Wayland file drop
 ```
 
 ## License
