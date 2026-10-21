@@ -21,6 +21,13 @@ pub mod files {
     pub const JSON_EXT: &str = "json";
     pub const ZIP_FILTER: &str = "Zip";
     pub const ZIP_EXT: &str = "zip";
+    pub const MMG_FILTER: &str = "MMG";
+    pub const MMG_EXT: &str = "mmg";
+    pub const RECENT: &str = "recent.json";
+    pub const MIME_STAMP: &str = "mime.stamp";
+    pub const MIME_XML: &str = "metroidvania-mmg.xml";
+    /// Old package name. xdg-mime rejects it because it has no vendor prefix.
+    pub const MIME_XML_OLD: &str = "mmg.xml";
     /// Files inside the export zip.
     pub const EXPORT_PNG: &str = "map.png";
     pub const EXPORT_SVG: &str = "map.svg";
@@ -69,8 +76,10 @@ pub mod hud {
 
     /// Listed in the shortcuts popup, as (key, action).
     pub const SHORTCUTS: &[(&str, &str)] = &[
+        ("Ctrl+N", "New project"),
+        ("Ctrl+O", "Load project"),
+        ("Ctrl+S", "Save project"),
         ("R", "New map"),
-        ("Arrows", "Map size"),
         ("Wheel", "Zoom"),
         ("Middle drag", "Pan"),
         ("Right click", "Place a room"),
@@ -92,6 +101,12 @@ pub mod hud {
     pub const HELP_BUTTON: &str = "?";
     /// Label of the export button.
     pub const EXPORT: &str = "Export";
+    pub const NEW: &str = "New";
+    pub const LOAD: &str = "Load";
+    pub const RECENT: &str = "Recent";
+    pub const SAVE: &str = "Save";
+    /// Shown when the recent list has no path.
+    pub const NO_RECENT: &str = "None";
 
     /// Room type legend.
     pub const LEGEND_BOSS: &str = "Boss";
@@ -112,12 +127,9 @@ pub mod hud {
         }
     }
 
-    /// Room count, followed by the notice when there is one.
-    pub fn header(rooms: usize, notice: Option<&str>) -> String {
-        match notice {
-            Some(notice) => format!("Rooms {rooms}    {notice}"),
-            None => format!("Rooms {rooms}"),
-        }
+    /// Room count in the header.
+    pub fn rooms(rooms: usize) -> String {
+        format!("Rooms {rooms}")
     }
 
     pub fn secret_room(biome: &str) -> String {
@@ -165,6 +177,8 @@ pub mod editor {
 
     pub const SCREEN_SIZE: &str = "Screen size (px)";
     pub const MAX_ROOMS_LABEL: &str = "Max rooms per biome (0 = no limit)";
+    pub const AUTOSAVE: &str = "Autosave";
+    pub const AUTOSAVE_DELAY: &str = "Autosave delay (s)";
 
     pub fn min_rooms_label(max: impl Display) -> String {
         format!("Min rooms per biome (1 to {max})")
@@ -189,9 +203,22 @@ pub mod status {
 
     pub const INVALID_SEED: &str = "Invalid seed";
     pub const AT_LEAST_ONE_BIOME: &str = "At least one biome is required";
+    pub const BAD_VERSION: &str = "Unsupported project version";
+    pub const EMPTY_MAP: &str = "Empty map";
+    pub const EMPTY_ROOM: &str = "Empty room";
+    pub const OVERLAP: &str = "Rooms overlap";
+    pub const BAD_INDEX: &str = "Invalid project index";
+    pub const NOT_MMG: &str = "Not a project file";
+    pub const MISSING: &str = "Missing project file";
+    pub const DISCARD_TITLE: &str = "Unsaved changes";
+    pub const DISCARD: &str = "Discard unsaved changes?";
 
     pub fn saved_to(path: &Path) -> String {
         format!("Saved to {}", path.display())
+    }
+
+    pub fn loaded_from(path: &Path) -> String {
+        format!("Loaded {}", path.display())
     }
 
     pub fn imported(path: &Path) -> String {

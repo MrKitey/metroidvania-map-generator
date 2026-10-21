@@ -53,6 +53,10 @@ jobs:
           cp "target/release/$APP" AppDir/usr/bin/
           cp "packaging/linux/$APP.desktop" AppDir/
           cp assets/icon.png "AppDir/$APP.png"
+          mkdir -p AppDir/usr/share/mime/packages
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          cp packaging/linux/metroidvania-mmg.xml AppDir/usr/share/mime/packages/
+          cp assets/icon.png "AppDir/usr/share/icons/hicolor/256x256/apps/$APP.png"
           ln -s "usr/bin/$APP" AppDir/AppRun
           curl -fsSL -o appimagetool "$APPIMAGETOOL_URL"
           echo "$APPIMAGETOOL_SHA256  appimagetool" | sha256sum -c -

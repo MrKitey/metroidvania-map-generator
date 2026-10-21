@@ -1,8 +1,9 @@
 //! Settings fields kept as raw text, and their validation.
 
 use crate::settings::{
-    DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS,
-    DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, Settings,
+    DEFAULT_AUTOSAVE_SECS, DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_MAX_ROOMS,
+    DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, MAX_AUTOSAVE_SECS, MIN_AUTOSAVE_SECS,
+    Settings,
 };
 use crate::world::Sizes;
 
@@ -27,6 +28,9 @@ pub struct Fields {
     pub boss_sizes: SizeFields,
     /// Allowed corridor sizes.
     pub corridor_sizes: SizeFields,
+    pub autosave: bool,
+    /// Delay in seconds, kept as typed.
+    pub autosave_secs: String,
 }
 
 /// Width and height field texts for each size.
@@ -68,6 +72,8 @@ impl Fields {
             sizes: size_fields(&settings.room_sizes),
             boss_sizes: size_fields(&settings.boss_sizes),
             corridor_sizes: size_fields(&settings.corridor_sizes),
+            autosave: settings.autosave,
+            autosave_secs: settings.autosave_secs.to_string(),
         }
     }
 
@@ -94,6 +100,15 @@ impl Fields {
             0 => usize::MAX,
             n => n,
         }
+    }
+
+    /// Seconds before an autosave. Invalid text uses the default, then the value is clamped.
+    pub fn autosave_secs(&self) -> u64 {
+        self.autosave_secs
+            .trim()
+            .parse()
+            .unwrap_or(DEFAULT_AUTOSAVE_SECS)
+            .clamp(MIN_AUTOSAVE_SECS, MAX_AUTOSAVE_SECS)
     }
 
     /// Size of one in-game screen in pixels. Zero or invalid values use the default.
@@ -126,6 +141,8 @@ impl Fields {
             room_sizes: sizes.rooms,
             boss_sizes: sizes.boss,
             corridor_sizes: sizes.corridor,
+            autosave: self.autosave,
+            autosave_secs: self.autosave_secs(),
         }
     }
 }
@@ -146,6 +163,19 @@ mod tests {
         assert_eq!(settings.min_rooms, defaults.min_rooms);
         assert_eq!(settings.max_rooms, defaults.max_rooms);
         assert_eq!(settings.room_sizes, defaults.room_sizes);
+        assert_eq!(settings.autosave, defaults.autosave);
+        assert_eq!(settings.autosave_secs, defaults.autosave_secs);
+    }
+
+    #[test]
+    fn autosave_delay_is_clamped() {
+        let mut f = fields();
+        f.autosave_secs = "1".to_owned();
+        assert_eq!(f.autosave_secs(), MIN_AUTOSAVE_SECS);
+        f.autosave_secs = "99999".to_owned();
+        assert_eq!(f.autosave_secs(), MAX_AUTOSAVE_SECS);
+        f.autosave_secs = "abc".to_owned();
+        assert_eq!(f.autosave_secs(), DEFAULT_AUTOSAVE_SECS);
     }
 
     #[test]

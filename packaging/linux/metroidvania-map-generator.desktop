@@ -2,7 +2,8 @@
 Type=Application
 Name=Metroidvania Map Generator
 Comment=Generate random Metroidvania style maps
-Exec=metroidvania-map-generator
+Exec=metroidvania-map-generator %f
 Icon=metroidvania-map-generator
+MimeType=application/x-mmg;
 Categories=Development;
 Terminal=false

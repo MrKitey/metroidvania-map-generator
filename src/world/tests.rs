@@ -329,3 +329,74 @@ fn removing_a_room_frees_its_cells_and_keeps_the_last_one() {
     assert_eq!(world.rooms.len(), 1);
     assert!(world.doors.is_empty());
 }
+
+#[test]
+fn from_parts_rebuilds_the_grid() {
+    let world = generate(256, 1);
+    let restored = World::from_parts(
+        world.rooms.clone(),
+        world.doors.clone(),
+        world.biomes.clone(),
+        6,
+    )
+    .unwrap();
+    assert_eq!(restored.rooms, world.rooms);
+    assert_eq!(restored.doors, world.doors);
+    for (idx, room) in restored.rooms.iter().enumerate() {
+        assert_eq!(restored.room_at(room.x, room.y), Some(idx));
+    }
+}
+
+#[test]
+fn from_parts_rejects_a_bad_map() {
+    let room = Room {
+        x: 0,
+        y: 0,
+        w: 2,
+        h: 2,
+        biome: 0,
+        kind: RoomKind::Normal,
+        marker: None,
+    };
+    let overlap = World::from_parts(
+        vec![
+            room.clone(),
+            Room {
+                x: 1,
+                y: 1,
+                ..room.clone()
+            },
+        ],
+        vec![],
+        vec![0],
+        1,
+    );
+    assert!(matches!(overlap, Err(MapError::Overlap)));
+    let empty = World::from_parts(
+        vec![Room {
+            w: 0,
+            ..room.clone()
+        }],
+        vec![],
+        vec![0],
+        1,
+    );
+    assert!(matches!(empty, Err(MapError::EmptyRoom)));
+    let index = World::from_parts(
+        vec![room],
+        vec![Door {
+            a: 0,
+            b: 4,
+            x: 0,
+            y: 0,
+            vertical: false,
+        }],
+        vec![0],
+        1,
+    );
+    assert!(matches!(index, Err(MapError::Index)));
+    assert!(matches!(
+        World::from_parts(vec![], vec![], vec![], 0),
+        Err(MapError::Empty)
+    ));
+}

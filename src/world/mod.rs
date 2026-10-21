@@ -11,7 +11,7 @@ mod tests;
 pub use edit::{Choice, Pick};
 pub use generate::{Params, time_seed};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Allowed sizes of each kind of room, as (width, height) in cells. None may be empty.
@@ -38,7 +38,7 @@ pub struct Extras {
     pub portals: u32,
 }
 
-#[derive(Clone, Copy, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RoomKind {
     Normal,
@@ -51,7 +51,7 @@ pub enum RoomKind {
 }
 
 /// Icon on a room. Placed by the generator, and toggled by the user.
-#[derive(Clone, Copy, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Marker {
     Boss,
@@ -59,7 +59,7 @@ pub enum Marker {
 }
 
 /// Rectangle of cells. (x, y) is the top-left cell, w and h are sizes in cells.
-#[derive(Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Room {
     pub x: i32,
     pub y: i32,
@@ -71,10 +71,23 @@ pub struct Room {
     pub marker: Option<Marker>,
 }
 
+/// Why `World::from_parts` rejected a saved map.
+#[derive(Debug, PartialEq)]
+pub enum MapError {
+    /// No room, or no biome list to index into.
+    Empty,
+    /// A room has a side of zero cells.
+    EmptyRoom,
+    /// Two rooms cover the same cell.
+    Overlap,
+    /// A door or a biome index does not point at anything.
+    Index,
+}
+
 /// Opening between rooms `a` and `b`, which are indices into `World::rooms`.
 /// `vertical` means the door sits on the left edge of cell (x, y).
 /// Otherwise it sits on the top edge of cell (x, y).
-#[derive(Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Door {
     pub a: usize,
     pub b: usize,
@@ -151,6 +164,52 @@ impl World {
             self.set_cells(r.x, r.y, r.w, r.h, None);
         }
         self.doors.truncate(doors_len);
+    }
+
+    /// Rebuilds the cell grid from a saved map. `biome_count` is the length of the biome list
+    /// the room and `biomes` indices point into.
+    pub fn from_parts(
+        rooms: Vec<Room>,
+        doors: Vec<Door>,
+        biomes: Vec<usize>,
+        biome_count: usize,
+    ) -> Result<World, MapError> {
+        if rooms.is_empty() || biome_count == 0 {
+            return Err(MapError::Empty);
+        }
+        if biomes.is_empty() || biomes.iter().any(|biome| *biome >= biome_count) {
+            return Err(MapError::Index);
+        }
+        for room in &rooms {
+            if room.w == 0 || room.h == 0 {
+                return Err(MapError::EmptyRoom);
+            }
+            if room.biome >= biome_count {
+                return Err(MapError::Index);
+            }
+        }
+        for door in &doors {
+            if door.a >= rooms.len() || door.b >= rooms.len() {
+                return Err(MapError::Index);
+            }
+        }
+        let mut world = World {
+            grid: HashMap::new(),
+            rooms,
+            doors,
+            biomes,
+        };
+        for idx in 0..world.rooms.len() {
+            let (x, y, w, h) = {
+                let room = &world.rooms[idx];
+                (room.x, room.y, room.w, room.h)
+            };
+            if !world.is_free(x, y, w as i32, h as i32) {
+                return Err(MapError::Overlap);
+            }
+            world.set_cells(x, y, w, h, Some(idx));
+        }
+        Ok(world)
     }
 
     /// Marks the rectangle cells as owned by room `value`, or frees them with None.

@@ -6,19 +6,21 @@ use crate::editor::{self, Editor, EditorAction};
 use crate::export::{self, MapData};
 use crate::icons::{IconId, Icons};
 use crate::layout::Layout;
+use crate::project::{self, Loaded, ProjectFile};
 use crate::render::{self, COPIED_TIME, Frame, Ghost, Hud, Picker, RoomLegend, picker_layout};
 use crate::settings;
+use crate::storage;
 use crate::text;
 use crate::view::View;
+use crate::wayland_drop::WaylandDrop;
 use crate::world::{Choice, Marker, Params, Pick, RoomKind, World, time_seed};
 use egui::{Color32, CursorIcon, Event, Key, PointerButton, Pos2, Rect, Sense, ViewportCommand};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Map size limits, as a number of room cells.
 const MIN_CELLS: u32 = 96;
 const MAX_CELLS: u32 = 5120;
-/// Cells added or removed per arrow key press.
-const STEP: u32 = 64;
 const START_CELLS: u32 = 768;
 /// Pointer travel below this, in points, is a click and clears the selection.
 const SELECT_CLICK: f32 = 4.0;
@@ -99,6 +101,34 @@ pub struct App {
     icon_drag: Option<IconId>,
     /// Last export result and when it happened, shown in the header for a while.
     notice: Option<(String, f64)>,
+    /// Shown on the first frame, once the clock is known.
+    pending_notice: Option<String>,
+    project_name: String,
+    path: Option<PathBuf>,
+    dirty: bool,
+    /// Time of the last change. The autosave delay is counted from here.
+    dirty_at: f64,
+    renaming: bool,
+    rename_focus: bool,
+    name_before: String,
+    /// File last written or loaded. None until the first save or load.
+    saved: Option<ProjectFile>,
+    /// Snapshot from the previous check, so a quiet frame does not reset the delay.
+    last: Option<ProjectFile>,
+    /// File drops on Wayland, where winit does not report them.
+    wayland_drop: Option<WaylandDrop>,
+}
+
+/// Most recent project that is still on disk. Missing entries are dropped.
+fn latest_project() -> Option<PathBuf> {
+    let dir = storage::app_dir();
+    for path in project::read_recent(&dir) {
+        if path.is_file() {
+            return Some(path);
+        }
+        let _ = project::forget(&dir, &path);
+    }
+    None
 }
 
 impl App {
@@ -108,7 +138,7 @@ impl App {
         let biomes = biome::load();
         let editor = Editor::new(seed, &settings::load());
         let world = build_world(START_CELLS, seed, &biomes, &editor);
-        App {
+        let mut app = App {
             cells: START_CELLS,
             seed,
             biomes,
@@ -129,26 +159,46 @@ impl App {
             selecting: None,
             icon_drag: None,
             notice: None,
+            pending_notice: None,
+            project_name: seed.to_string(),
+            path: None,
+            dirty: true,
+            dirty_at: 0.0,
+            renaming: false,
+            rename_focus: false,
+            name_before: String::new(),
+            saved: None,
+            last: None,
+            wayland_drop: WaylandDrop::start(&cc.egui_ctx, cc),
+        };
+        project::register_mime();
+        app.open_startup();
+        app
+    }
+
+    /// Keeps a project name that is still the previous seed in step with the new one.
+    fn change_seed(&mut self, seed: u64) {
+        if self.project_name == self.seed.to_string() {
+            self.project_name = seed.to_string();
         }
+        self.seed = seed;
     }
 
     fn regen(&mut self) {
         self.editor.set_seed(self.seed);
         self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
-        self.moving = None;
-        self.selected.clear();
-        self.selecting = None;
+        self.clear_edit_state();
         self.fit = true;
     }
 
     fn apply_action(&mut self, action: EditorAction) {
         match action {
             EditorAction::UseSeed(seed) => {
-                self.seed = seed;
+                self.change_seed(seed);
                 self.regen();
             }
             EditorAction::Regenerate => {
-                self.seed = time_seed();
+                self.change_seed(time_seed());
                 self.regen();
             }
         }
@@ -159,7 +209,10 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
-        self.handle_keys(&ctx);
+        if let Some(text) = self.pending_notice.take() {
+            self.notice = Some((text, now));
+        }
+        self.handle_keys(&ctx, now);
 
         if self.editor.open {
             let mut action = None;
@@ -192,6 +245,16 @@ impl eframe::App for App {
                 self.draw_map_panel(ui, now);
             });
 
+        self.handle_dropped(&ctx, now);
+        let wayland_paths = self
+            .wayland_drop
+            .as_mut()
+            .map(|drop| drop.poll())
+            .unwrap_or_default();
+        self.open_dropped(wayland_paths, now);
+        self.sync_dirty(now);
+        self.autosave(&ctx, now);
+
         if now - self.copied_at < COPIED_TIME
             || self
                 .notice
@@ -209,13 +272,24 @@ impl eframe::App for App {
 
 impl App {
     fn draw_header(&mut self, ui: &mut egui::Ui, now: f64) {
+        let header = ui.max_rect();
+        let notice = self
+            .notice
+            .as_ref()
+            .filter(|(_, at)| now - at < NOTICE_TIME)
+            .map(|(text, _)| text.clone());
         ui.horizontal_centered(|ui| {
-            let notice = self
-                .notice
-                .as_ref()
-                .filter(|(_, at)| now - at < NOTICE_TIME)
-                .map(|(text, _)| text.as_str());
-            ui.label(text::hud::header(self.world.rooms.len(), notice));
+            self.recent_menu(ui, now);
+            if ui.button(text::hud::NEW).clicked() {
+                self.new_project(now);
+            }
+            if ui.button(text::hud::LOAD).clicked() {
+                self.load_project(now);
+            }
+            if ui.button(text::hud::SAVE).clicked() {
+                self.save_project(now);
+            }
+            ui.label(text::hud::rooms(self.world.rooms.len()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button(text::hud::HELP_BUTTON).clicked() {
                     self.help_open = !self.help_open;
@@ -223,8 +297,12 @@ impl App {
                 if ui.button(text::hud::EXPORT).clicked() {
                     self.export(now);
                 }
+                if let Some(notice) = &notice {
+                    ui.label(notice);
+                }
             });
         });
+        self.draw_project_name(ui, header);
     }
 
     fn draw_map_panel(&mut self, ui: &mut egui::Ui, now: f64) {
@@ -361,12 +439,30 @@ impl App {
     }
 
     /// Keyboard shortcuts. Returns after closing overlays, or quits the window.
-    fn handle_keys(&mut self, ctx: &egui::Context) {
+    /// While the project name is being typed, only Escape is handled. It cancels the edit.
+    fn handle_keys(&mut self, ctx: &egui::Context, now: f64) {
+        if self.renaming {
+            if ctx.input(|i| i.key_pressed(Key::Escape)) {
+                self.project_name = self.name_before.clone();
+                self.renaming = false;
+            }
+            return;
+        }
+
         if ctx.input(|i| i.key_pressed(Key::Tab)) {
             self.editor.open = !self.editor.open;
         }
 
         let mut escape = ctx.input(|i| i.key_pressed(Key::Escape));
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::N)) {
+            self.new_project(now);
+        }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::O)) {
+            self.load_project(now);
+        }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::S)) {
+            self.save_project(now);
+        }
         if escape && self.help_open {
             self.help_open = false;
             escape = false;
@@ -398,7 +494,7 @@ impl App {
 
         let mut regen = false;
         if ctx.input(|i| i.key_pressed(Key::R)) {
-            self.seed = time_seed();
+            self.change_seed(time_seed());
             regen = true;
         }
         if ctx.input(|i| i.key_pressed(Key::C)) {
@@ -407,20 +503,300 @@ impl App {
         if ctx.input(|i| i.key_pressed(Key::G)) {
             self.grid = !self.grid;
         }
-        if ctx.input(|i| i.key_pressed(Key::ArrowRight) || i.key_pressed(Key::ArrowUp))
-            && self.cells < MAX_CELLS
-        {
-            self.cells += STEP;
-            regen = true;
-        }
-        if ctx.input(|i| i.key_pressed(Key::ArrowLeft) || i.key_pressed(Key::ArrowDown))
-            && self.cells > MIN_CELLS
-        {
-            self.cells -= STEP;
-            regen = true;
-        }
         if regen {
             self.regen();
+        }
+    }
+
+    fn draw_project_name(&mut self, ui: &mut egui::Ui, header: Rect) {
+        let extra = if self.dirty { 28.0 } else { 12.0 };
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let text_width = ui.ctx().fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(self.project_name.clone(), font, Color32::WHITE)
+                .size()
+                .x
+        });
+        // The closed name stays as wide as its text. The field stays wide while typing.
+        let edit_width = (header.width() * 0.45).clamp(280.0, 480.0);
+        let width = if self.renaming {
+            edit_width
+        } else {
+            (text_width + extra).clamp(80.0, edit_width)
+        };
+        let name_rect = Rect::from_center_size(header.center(), egui::vec2(width, header.height()));
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("project-name")
+                .max_rect(name_rect),
+        );
+        child.horizontal_centered(|ui| {
+            if self.renaming {
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.project_name)
+                        .desired_width(width - 16.0)
+                        .align(egui::Align2::CENTER_CENTER),
+                );
+                if self.rename_focus {
+                    response.request_focus();
+                    self.rename_focus = false;
+                } else if response.lost_focus() {
+                    self.finish_rename();
+                }
+            } else {
+                let response = ui.add(
+                    egui::Label::new(egui::RichText::new(&self.project_name).strong())
+                        .sense(Sense::click()),
+                );
+                if response.clicked() {
+                    self.name_before = self.project_name.clone();
+                    self.renaming = true;
+                    self.rename_focus = true;
+                }
+                if self.dirty {
+                    ui.label(egui::RichText::new("*").strong());
+                }
+            }
+        });
+    }
+
+    fn finish_rename(&mut self) {
+        self.renaming = false;
+        let trimmed = self.project_name.trim().to_owned();
+        self.project_name = if trimmed.is_empty() {
+            self.seed.to_string()
+        } else {
+            trimmed
+        };
+    }
+
+    fn recent_menu(&mut self, ui: &mut egui::Ui, now: f64) {
+        ui.menu_button(text::hud::RECENT, |ui| {
+            let paths = project::read_recent(&storage::app_dir());
+            if paths.is_empty() {
+                ui.label(text::hud::NO_RECENT);
+                return;
+            }
+            for path in paths {
+                let label = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                let full = path.display().to_string();
+                if ui.button(label).on_hover_text(full).clicked() {
+                    ui.close();
+                    self.load_path(path, now, true);
+                }
+            }
+        });
+    }
+
+    fn open_startup(&mut self) {
+        let path = project::startup_path().or_else(|| latest_project());
+        let Some(path) = path else {
+            return;
+        };
+        match project::read(&path) {
+            Ok(loaded) => {
+                self.pending_notice = Some(text::status::loaded_from(&path));
+                self.apply_loaded(loaded, Some(path));
+            }
+            Err(err) => self.pending_notice = Some(text::status::error(err)),
+        }
+    }
+
+    fn new_project(&mut self, now: f64) {
+        if !self.confirm_discard() {
+            return;
+        }
+        self.seed = time_seed();
+        self.project_name = self.seed.to_string();
+        self.cells = START_CELLS;
+        self.path = None;
+        self.editor.set_seed(self.seed);
+        self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
+        self.clear_edit_state();
+        self.fit = true;
+        self.renaming = false;
+        self.saved = None;
+        self.last = None;
+        self.dirty = true;
+        self.dirty_at = now;
+    }
+
+    fn load_project(&mut self, now: f64) {
+        if !self.confirm_discard() {
+            return;
+        }
+        let Some(path) = project::load_dialog() else {
+            return;
+        };
+        self.load_path(path, now, false);
+    }
+
+    fn save_project(&mut self, now: f64) {
+        if let Some(path) = self.path.clone() {
+            self.write_path(&path, now, true);
+            return;
+        }
+        let Some(path) = project::save_dialog(&self.project_name, self.seed) else {
+            return;
+        };
+        self.write_path(&path, now, true);
+    }
+
+    /// `confirm` asks before replacing a dirty project. The load dialog confirms first.
+    fn load_path(&mut self, path: PathBuf, now: f64, confirm: bool) {
+        if confirm && !self.confirm_discard() {
+            return;
+        }
+        if !path.is_file() {
+            let _ = project::forget(&storage::app_dir(), &path);
+            self.notice = Some((text::status::MISSING.to_owned(), now));
+            return;
+        }
+        match project::read(&path) {
+            Ok(loaded) => {
+                self.notice = Some((text::status::loaded_from(&path), now));
+                self.apply_loaded(loaded, Some(path));
+            }
+            Err(err) => self.notice = Some((text::status::error(err), now)),
+        }
+    }
+
+    fn apply_loaded(&mut self, loaded: Loaded, path: Option<PathBuf>) {
+        let current = self.editor.settings();
+        let mut settings = loaded.settings;
+        settings.autosave = current.autosave;
+        settings.autosave_secs = current.autosave_secs;
+        self.editor.apply_loaded(loaded.seed, &settings);
+        self.seed = loaded.seed;
+        self.cells = loaded.cells.clamp(MIN_CELLS, MAX_CELLS);
+        self.grid = loaded.grid;
+        self.biomes = loaded.biomes;
+        self.world = loaded.world;
+        self.project_name = loaded.name;
+        self.path = path;
+        self.clear_edit_state();
+        self.fit = true;
+        self.renaming = false;
+        self.saved = Some(self.project_file());
+        self.last = self.saved.clone();
+        self.dirty = false;
+        if let Some(path) = &self.path {
+            let _ = project::remember(&storage::app_dir(), path);
+        }
+    }
+
+    /// `announce` shows the path in the header. Autosave stays quiet unless it fails.
+    fn write_path(&mut self, path: &Path, now: f64, announce: bool) -> bool {
+        let file = self.project_file();
+        match project::write(path, &file) {
+            Ok(()) => {
+                self.path = Some(path.to_owned());
+                self.saved = Some(file);
+                self.last = self.saved.clone();
+                self.dirty = false;
+                let _ = project::remember(&storage::app_dir(), path);
+                if announce {
+                    self.notice = Some((text::status::saved_to(path), now));
+                }
+                true
+            }
+            Err(err) => {
+                self.notice = Some((text::status::error(err), now));
+                false
+            }
+        }
+    }
+
+    fn confirm_discard(&self) -> bool {
+        if !self.dirty {
+            return true;
+        }
+        rfd::MessageDialog::new()
+            .set_title(text::status::DISCARD_TITLE)
+            .set_description(text::status::DISCARD)
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .show()
+            == rfd::MessageDialogResult::Yes
+    }
+
+    fn project_file(&self) -> ProjectFile {
+        ProjectFile::capture(
+            &self.project_name,
+            self.seed,
+            self.cells,
+            self.grid,
+            &self.editor.settings(),
+            &self.biomes,
+            &self.world,
+        )
+    }
+
+    fn clear_edit_state(&mut self) {
+        self.moving = None;
+        self.selected.clear();
+        self.selecting = None;
+        self.picker = None;
+        self.placing = None;
+        self.icon_drag = None;
+        self.panning = false;
+    }
+
+    fn handle_dropped(&mut self, ctx: &egui::Context, now: f64) {
+        let dropped: Vec<PathBuf> = ctx.input(|input| {
+            input
+                .raw
+                .dropped_files
+                .iter()
+                .map(|file| file.path().to_owned())
+                .collect()
+        });
+        self.open_dropped(dropped, now);
+    }
+
+    /// Opens the first `.mmg` in the list. Another extension shows an error.
+    fn open_dropped(&mut self, dropped: Vec<PathBuf>, now: f64) {
+        if dropped.is_empty() {
+            return;
+        }
+        let Some(path) = dropped.into_iter().find(|path| project::is_mmg(path)) else {
+            self.notice = Some((text::status::NOT_MMG.to_owned(), now));
+            return;
+        };
+        self.load_path(path, now, true);
+    }
+
+    fn sync_dirty(&mut self, now: f64) {
+        let current = self.project_file();
+        if self.saved.as_ref() != Some(&current) {
+            if self.last.as_ref() != Some(&current) {
+                self.dirty_at = now;
+            }
+            self.dirty = true;
+        } else {
+            self.dirty = false;
+        }
+        self.last = Some(current);
+    }
+
+    fn autosave(&mut self, ctx: &egui::Context, now: f64) {
+        let settings = self.editor.settings();
+        if !settings.autosave || !self.dirty || self.path.is_none() {
+            return;
+        }
+        let delay = settings.autosave_secs as f64;
+        let elapsed = now - self.dirty_at;
+        if elapsed >= delay {
+            let path = self.path.clone().unwrap();
+            if !self.write_path(&path, now, false) {
+                self.dirty_at = now;
+                ctx.request_repaint_after(Duration::from_secs_f64(delay));
+            }
+        } else {
+            let wait = (delay - elapsed).max(0.05);
+            ctx.request_repaint_after(Duration::from_secs_f64(wait));
         }
     }
 
@@ -710,7 +1086,7 @@ impl App {
     /// One press removes one room. The last room stays.
     /// Returns the removed index.
     fn delete_shortcut(&mut self, ctx: &egui::Context, hovered: Option<usize>) -> Option<usize> {
-        if self.editor.open {
+        if self.editor.open || self.renaming {
             return None;
         }
         let pressed = ctx.input(|input| {
@@ -749,13 +1125,13 @@ impl App {
     }
 
     fn room_shortcuts(&mut self, ctx: &egui::Context, room: usize) {
-        if self.editor.open {
+        if self.editor.open || self.renaming {
             return;
         }
         if ctx.input(|i| i.key_pressed(Key::B)) {
             self.tag_room(room, IconId::Boss);
         }
-        if ctx.input(|i| i.key_pressed(Key::S)) {
+        if ctx.input(|i| i.key_pressed(Key::S) && !i.modifiers.command) {
             self.tag_room(room, IconId::Save);
         }
         if ctx.input(|i| i.key_pressed(Key::H)) {

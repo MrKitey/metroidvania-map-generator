@@ -1838,17 +1838,20 @@ dependencies = [
 
 [[package]]
 name = "metroidvania-map-generator"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "dirs",
  "eframe",
  "egui",
  "fastrand",
+ "libc",
  "png",
+ "raw-window-handle",
  "resvg",
  "rfd",
  "serde",
  "serde_json",
+ "wayland-client",
  "winresource",
  "zip",
 ]

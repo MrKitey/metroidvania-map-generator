@@ -27,6 +27,11 @@ pub const DEFAULT_ROOM_SIZES: &[(u32, u32)] = &[
 pub const DEFAULT_BOSS_SIZES: &[(u32, u32)] = &[(2, 2), (2, 3), (3, 3)];
 /// Allowed corridor sizes. Long and thin, 3 to 5 cells.
 pub const DEFAULT_CORRIDOR_SIZES: &[(u32, u32)] = &[(3, 1), (4, 1), (5, 1), (1, 3), (1, 4), (1, 5)];
+/// Autosave starts on. The delay is in seconds.
+pub const DEFAULT_AUTOSAVE: bool = true;
+pub const DEFAULT_AUTOSAVE_SECS: u64 = 30;
+pub const MIN_AUTOSAVE_SECS: u64 = 5;
+pub const MAX_AUTOSAVE_SECS: u64 = 3600;
 
 /// Values are stored as read. The editor validates them when parsing its fields.
 /// Fields missing from the file take their default value.
@@ -44,6 +49,11 @@ pub struct Settings {
     pub boss_sizes: Vec<(u32, u32)>,
     /// (width, height) in cells.
     pub corridor_sizes: Vec<(u32, u32)>,
+    /// Writes the open project again after `autosave_secs` without edits.
+    /// Kept in settings.json only. A project file does not store it.
+    pub autosave: bool,
+    /// Seconds between the last edit and the next autosave.
+    pub autosave_secs: u64,
 }
 
 impl Default for Settings {
@@ -55,6 +65,8 @@ impl Default for Settings {
             room_sizes: DEFAULT_ROOM_SIZES.to_vec(),
             boss_sizes: DEFAULT_BOSS_SIZES.to_vec(),
             corridor_sizes: DEFAULT_CORRIDOR_SIZES.to_vec(),
+            autosave: DEFAULT_AUTOSAVE,
+            autosave_secs: DEFAULT_AUTOSAVE_SECS,
         }
     }
 }

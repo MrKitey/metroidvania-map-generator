@@ -80,7 +80,7 @@ pub fn default_biomes() -> Vec<Biome> {
 /// One biome as stored in JSON:
 /// `{"name": "Castle", "color": "#464E78", "corridors": 1, "secrets": 1, "bosses": 1,
 /// "saves": 1, "portals": 1}`. The counts may be missing in older files.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Entry {
     name: String,
     color: String,
@@ -114,23 +114,29 @@ fn default_count() -> u32 {
     DEFAULT_COUNT
 }
 
+/// One stored biome. A bad color fails. Counts are clamped to the editor limits.
+pub fn from_entry(entry: Entry) -> Result<Biome, &'static str> {
+    let Some(fill) = parse_hex(&entry.color) else {
+        return Err(text::NO_VALID_BIOME);
+    };
+    Ok(Biome {
+        name: entry.name,
+        fill,
+        corridors: entry.corridors.clamp(MIN_CORRIDORS, MAX_COUNT),
+        secrets: entry.secrets.min(MAX_COUNT),
+        bosses: entry.bosses.min(MAX_COUNT),
+        saves: entry.saves.min(MAX_COUNT),
+        portals: entry.portals.min(MAX_COUNT),
+    })
+}
+
 /// Reads a JSON list of biomes. Entries with an invalid color are skipped.
 /// Fails if the file cannot be read or parsed, or holds no valid biome.
 pub fn read(path: &Path) -> Result<Vec<Biome>, Box<dyn Error>> {
     let entries: Vec<Entry> = storage::read_json(path)?;
     let biomes: Vec<Biome> = entries
         .into_iter()
-        .filter_map(|e| {
-            Some(Biome {
-                fill: parse_hex(&e.color)?,
-                name: e.name,
-                corridors: e.corridors.clamp(MIN_CORRIDORS, MAX_COUNT),
-                secrets: e.secrets.min(MAX_COUNT),
-                bosses: e.bosses.min(MAX_COUNT),
-                saves: e.saves.min(MAX_COUNT),
-                portals: e.portals.min(MAX_COUNT),
-            })
-        })
+        .filter_map(|entry| from_entry(entry).ok())
         .collect();
     if biomes.is_empty() {
         return Err(text::NO_VALID_BIOME.into());
