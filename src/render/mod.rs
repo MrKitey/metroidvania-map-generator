@@ -17,7 +17,7 @@ use crate::icons::{IconId, Icons};
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::World;
-use egui::{Rect, Ui, vec2};
+use egui::{Color32, Rect, Stroke, StrokeKind, Ui, vec2};
 
 /// Everything about the current frame that the renderer needs besides the world.
 pub struct Frame<'a> {
@@ -32,6 +32,12 @@ pub struct Frame<'a> {
     pub picker: Option<&'a Picker>,
     /// Room being placed, if any.
     pub ghost: Option<Ghost>,
+    /// Rooms being dragged, drawn together in green or red.
+    pub move_ghosts: Vec<Ghost>,
+    /// Rooms highlighted by the selection rectangle.
+    pub selected: &'a [usize],
+    /// Selection rectangle, in screen points, while the button is held.
+    pub select_rect: Option<Rect>,
     /// Icon being dragged from the room type legend, if any.
     pub dragged_icon: Option<IconId>,
 }
@@ -66,10 +72,27 @@ pub fn draw_world(
         scale: f.view.scale,
         visible: Some(area),
         hovered: f.hovered,
+        selected: f.selected,
     };
     draw_map(&painter, world, biomes, f.layout, &view, icons);
     if let Some(g) = &f.ghost {
         picker::draw_ghost(&painter, g, f.layout, f.view, f.map_rect);
+    }
+    for g in &f.move_ghosts {
+        picker::draw_ghost(&painter, g, f.layout, f.view, f.map_rect);
+    }
+    if let Some(rect) = f.select_rect {
+        painter.rect_filled(
+            rect,
+            0.0,
+            Color32::from_rgba_unmultiplied(255, 255, 255, 30),
+        );
+        painter.rect_stroke(
+            rect,
+            0.0,
+            Stroke::new(1.0, Color32::WHITE),
+            StrokeKind::Inside,
+        );
     }
 
     hud::draw_legends(ui, world, biomes, f.legend, legend_icons);
@@ -78,6 +101,8 @@ pub fn draw_world(
         hud::draw_tooltip(ui, &world.rooms[i], biomes, f.layout);
     }
     if let Some(g) = &f.ghost {
+        hud::draw_ghost_label(ui, g, f.layout);
+    } else if let [g] = f.move_ghosts.as_slice() {
         hud::draw_ghost_label(ui, g, f.layout);
     }
     if let Some(icon) = f.dragged_icon {

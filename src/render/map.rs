@@ -25,6 +25,8 @@ pub struct MapView<'a> {
     /// World area on screen. Rooms and doors outside it are skipped. None draws all.
     pub visible: Option<Rect>,
     pub hovered: Option<usize>,
+    /// Rooms kept highlighted after a selection rectangle.
+    pub selected: &'a [usize],
 }
 
 /// Border and door thickness, in world units.
@@ -146,6 +148,13 @@ pub fn draw_map(
             Stroke::new(thickness, border),
             StrokeKind::Middle,
         );
+        if map_view.selected.contains(&i) {
+            painter.rect_filled(
+                rect,
+                0.0,
+                Color32::from_rgba_unmultiplied(255, 255, 255, 70),
+            );
+        }
         if map_view.hovered == Some(i) {
             painter.rect_filled(
                 rect,

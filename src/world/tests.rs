@@ -208,6 +208,53 @@ fn moving_a_room_rebuilds_its_doors() {
 }
 
 #[test]
+fn moving_rooms_together_keeps_one_door() {
+    let mut world = generate(768, 1);
+    let (_, _, max_x, _) = world.bounds();
+    let a = world
+        .place_manual((max_x + 5, 0), (2, 2), RoomKind::Normal, None)
+        .unwrap();
+    let b = world
+        .place_manual((max_x + 7, 0), (2, 2), RoomKind::Normal, None)
+        .unwrap();
+    let (ax, ay) = (world.rooms[a].x, world.rooms[a].y);
+    let (bx, by) = (world.rooms[b].x, world.rooms[b].y);
+    let between = |world: &World| {
+        world
+            .doors
+            .iter()
+            .filter(|d| (d.a, d.b) == (a, b) || (d.a, d.b) == (b, a))
+            .count()
+    };
+    assert_eq!(between(&world), 1);
+
+    // An outside room blocks the group. Nothing moves.
+    let doors = world.doors.len();
+    let (ox, oy) = (world.rooms[0].x, world.rooms[0].y);
+    let dx = ox - ax;
+    let dy = oy - ay;
+    assert!(!world.move_rooms(&[(a, ax + dx, ay + dy), (b, bx + dx, by + dy)]));
+    assert_eq!(world.doors.len(), doors);
+    assert_eq!((world.rooms[a].x, world.rooms[a].y), (ax, ay));
+    assert_eq!((world.rooms[b].x, world.rooms[b].y), (bx, by));
+
+    // Slide by two cells. b lands on a's old cells, and they still share one door.
+    assert!(world.move_rooms(&[(a, ax - 2, ay), (b, bx - 2, by)]));
+    assert_eq!(between(&world), 1);
+    assert_eq!(
+        world.doors.iter().filter(|d| d.a == a || d.b == a).count(),
+        1
+    );
+    assert_eq!(
+        world.doors.iter().filter(|d| d.a == b || d.b == b).count(),
+        1
+    );
+    assert_eq!(world.room_at(ax - 2, ay), Some(a));
+    assert_eq!(world.room_at(ax, ay), Some(b));
+    assert_eq!(world.room_at(bx, by), None);
+}
+
+#[test]
 fn moved_room_takes_the_biome_of_its_neighbor() {
     let mut world = generate(768, 1);
     let idx = world.rooms.len() - 1;
