@@ -239,3 +239,46 @@ fn moved_room_takes_the_biome_of_its_neighbor() {
     assert!(world.move_room(idx, x, y));
     assert_eq!(world.rooms[idx].biome, biome);
 }
+
+#[test]
+fn removing_a_room_frees_its_cells_and_keeps_the_last_one() {
+    let mut world = generate(768, 1);
+    assert!(world.rooms.len() > 2);
+    let idx = 1;
+    let (x, y, w, h) = {
+        let r = &world.rooms[idx];
+        (r.x, r.y, r.w, r.h)
+    };
+    let before = world.rooms.len();
+    assert!(world.remove_room(idx));
+    assert_eq!(world.rooms.len(), before - 1);
+    for cy in y..y + h as i32 {
+        for cx in x..x + w as i32 {
+            assert_eq!(world.room_at(cx, cy), None);
+        }
+    }
+    for (i, r) in world.rooms.iter().enumerate() {
+        for cy in r.y..r.y + r.h as i32 {
+            for cx in r.x..r.x + r.w as i32 {
+                assert_eq!(world.room_at(cx, cy), Some(i));
+            }
+        }
+    }
+    for d in &world.doors {
+        assert!(d.a < world.rooms.len() && d.b < world.rooms.len());
+        let before = if d.vertical {
+            world.room_at(d.x - 1, d.y)
+        } else {
+            world.room_at(d.x, d.y - 1)
+        };
+        let after = world.room_at(d.x, d.y);
+        let pair = [before, after];
+        assert!(pair.contains(&Some(d.a)) && pair.contains(&Some(d.b)));
+    }
+    while world.rooms.len() > 1 {
+        assert!(world.remove_room(0));
+    }
+    assert!(!world.remove_room(0));
+    assert_eq!(world.rooms.len(), 1);
+    assert!(world.doors.is_empty());
+}

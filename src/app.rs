@@ -11,7 +11,7 @@ use crate::settings;
 use crate::text;
 use crate::view::View;
 use crate::world::{Choice, Marker, Params, Pick, RoomKind, World, time_seed};
-use egui::{Color32, CursorIcon, Key, PointerButton, Pos2, Rect, Sense, ViewportCommand};
+use egui::{Color32, CursorIcon, Event, Key, PointerButton, Pos2, Rect, Sense, ViewportCommand};
 use std::time::Duration;
 
 /// Map size limits, as a number of room cells.
@@ -272,7 +272,7 @@ impl App {
         let ghost = self.update_placing(&mut pointer, &layout, map_rect);
         self.update_picker(&mut pointer, &mut picker_ui);
 
-        let hovered = if pointer.on_map()
+        let mut hovered = if pointer.on_map()
             && !pointer.consumed
             && self.picker.is_none()
             && self.placing.is_none()
@@ -284,6 +284,13 @@ impl App {
         };
         if let Some(i) = hovered {
             self.room_shortcuts(&ctx, i);
+        }
+        if let Some(removed) = self.delete_shortcut(&ctx, hovered) {
+            hovered = match hovered {
+                Some(i) if i == removed => None,
+                Some(i) if i > removed => Some(i - 1),
+                other => other,
+            };
         }
         let ghost = ghost.or(self.update_moving(&pointer, hovered, &layout, map_rect));
         self.update_icon_drag(&pointer, &legend, hovered);
@@ -555,6 +562,37 @@ impl App {
                 self.picker = Some(p.pos);
             }
         }
+    }
+
+    /// Deletes the dragged room, or the hovered one if nothing is dragged.
+    /// One press removes one room. The last room stays.
+    /// Returns the removed index.
+    fn delete_shortcut(&mut self, ctx: &egui::Context, hovered: Option<usize>) -> Option<usize> {
+        if self.editor.open {
+            return None;
+        }
+        let pressed = ctx.input(|input| {
+            input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    Event::Key {
+                        key: Key::Delete | Key::Backspace,
+                        pressed: true,
+                        repeat: false,
+                        ..
+                    }
+                )
+            })
+        });
+        if !pressed {
+            return None;
+        }
+        let idx = self.moving.as_ref().map(|m| m.room).or(hovered)?;
+        if !self.world.remove_room(idx) {
+            return None;
+        }
+        self.moving = None;
+        Some(idx)
     }
 
     fn room_shortcuts(&mut self, ctx: &egui::Context, room: usize) {

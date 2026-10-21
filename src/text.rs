@@ -75,6 +75,7 @@ pub mod hud {
         ("Middle drag", "Pan"),
         ("Right click", "Place a room"),
         ("Left drag", "Move a room"),
+        ("Del / Backspace", "Delete a room"),
         ("Drag legend icon", "Set room type"),
         ("C", "Recenter"),
         ("G", "Grid"),

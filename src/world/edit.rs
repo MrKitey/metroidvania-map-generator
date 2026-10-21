@@ -116,6 +116,32 @@ impl World {
         true
     }
 
+    /// Removes room `idx` and the doors that touched it.
+    /// Rooms after it move down, and door indices follow.
+    /// Returns false, and changes nothing, if `idx` is out of range or it is the last room.
+    pub fn remove_room(&mut self, idx: usize) -> bool {
+        if self.rooms.len() <= 1 || idx >= self.rooms.len() {
+            return false;
+        }
+        let room = self.rooms.remove(idx);
+        self.set_cells(room.x, room.y, room.w, room.h, None);
+        self.doors.retain(|d| d.a != idx && d.b != idx);
+        for door in &mut self.doors {
+            if door.a > idx {
+                door.a -= 1;
+            }
+            if door.b > idx {
+                door.b -= 1;
+            }
+        }
+        for cell in self.grid.values_mut() {
+            if *cell > idx {
+                *cell -= 1;
+            }
+        }
+        true
+    }
+
     /// Per side (right, left, down, up): each room touching the rectangle, with the door
     /// cells it could use. The door cell is on the rectangle for left and up, on the
     /// neighbor for right and down, as `Door` expects.
