@@ -92,14 +92,21 @@ fn biome_legend_rect(ctx: &Context, world: &World, biomes: &[Biome], map: Rect) 
     )
 }
 
-fn draw_legend(ui: &Ui, world: &World, biomes: &[Biome], area: Rect) {
+fn draw_legend(ui: &Ui, biomes: &[Biome], legend: &RoomLegend) {
     let painter = ui.painter();
-    painter.rect_filled(area, 4.0, Color32::from_rgba_unmultiplied(0, 0, 0, 153));
-    for (i, &b) in world.biomes.iter().enumerate() {
-        let biome = &biomes[b];
-        let row_y = area.min.y + PAD + i as f32 * ROW_H;
-        let swatch_y = row_y + (ROW_H - SWATCH) / 2.0;
-        let swatch = Rect::from_min_size(pos2(area.min.x + PAD, swatch_y), vec2(SWATCH, SWATCH));
+    let hover = ui.input(|i| i.pointer.hover_pos());
+    painter.rect_filled(
+        legend.biome_rect,
+        4.0,
+        Color32::from_rgba_unmultiplied(0, 0, 0, 153),
+    );
+    for &(id, row) in &legend.biome_rows {
+        let biome = &biomes[id];
+        if hover.is_some_and(|p| row.contains(p)) {
+            painter.rect_filled(row, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 28));
+        }
+        let swatch_y = row.min.y + (ROW_H - SWATCH) / 2.0;
+        let swatch = Rect::from_min_size(pos2(row.min.x + PAD, swatch_y), vec2(SWATCH, SWATCH));
         painter.rect_filled(swatch, 2.0, biome.fill);
         painter.rect_stroke(
             swatch,
@@ -108,7 +115,7 @@ fn draw_legend(ui: &Ui, world: &World, biomes: &[Biome], area: Rect) {
             StrokeKind::Inside,
         );
         painter.text(
-            pos2(area.min.x + PAD + SWATCH + PAD, row_y + ROW_H * 0.5),
+            pos2(row.min.x + PAD + SWATCH + PAD, row.min.y + ROW_H * 0.5),
             Align2::LEFT_CENTER,
             &biome.name,
             FontId::proportional(LEGEND_TEXT),
@@ -120,9 +127,11 @@ fn draw_legend(ui: &Ui, world: &World, biomes: &[Biome], area: Rect) {
 /// Room type legend, in a block under the biome legend. Built once per frame, so
 /// hit tests and drawing agree.
 pub struct RoomLegend {
-    /// Whole block, backdrop included.
+    /// Whole room-type block, backdrop included.
     pub rect: Rect,
     biome_rect: Rect,
+    /// One row per used biome: its index in the biome list, and the clickable row.
+    biome_rows: Vec<(usize, Rect)>,
     /// One row per entry of `LEGEND_ROOMS`, in the same order.
     rows: Vec<(IconId, Rect)>,
 }
@@ -140,6 +149,19 @@ impl RoomLegend {
             pos2(biome_rect.min.x, biome_rect.max.y + LEGEND_GAP),
             vec2(w, h),
         );
+        let biome_w = biome_rect.width();
+        let biome_rows = world
+            .biomes
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                let y = biome_rect.min.y + PAD + i as f32 * ROW_H;
+                (
+                    b,
+                    Rect::from_min_size(pos2(biome_rect.min.x, y), vec2(biome_w, ROW_H)),
+                )
+            })
+            .collect();
         let rows = LEGEND_ROOMS
             .iter()
             .enumerate()
@@ -154,8 +176,22 @@ impl RoomLegend {
         RoomLegend {
             rect,
             biome_rect,
+            biome_rows,
             rows,
         }
+    }
+
+    /// True when `p` is over the biome list or the room-type list.
+    pub fn contains(&self, p: Pos2) -> bool {
+        self.biome_rect.contains(p) || self.rect.contains(p)
+    }
+
+    /// Biome index under `p`, if the cursor is on a biome row.
+    pub fn biome_at(&self, p: Pos2) -> Option<usize> {
+        self.biome_rows
+            .iter()
+            .find(|(_, row)| row.contains(p))
+            .map(|(id, _)| *id)
     }
 
     /// Icon of the row under `p`, if any.
@@ -201,14 +237,8 @@ fn draw_room_legend(ui: &Ui, legend: &RoomLegend, icons: &mut Icons) {
 }
 
 /// Biome legend and room type legend on the left of the map.
-pub fn draw_legends(
-    ui: &Ui,
-    world: &World,
-    biomes: &[Biome],
-    legend: &RoomLegend,
-    legend_icons: &mut Icons,
-) {
-    draw_legend(ui, world, biomes, legend.biome_rect);
+pub fn draw_legends(ui: &Ui, biomes: &[Biome], legend: &RoomLegend, legend_icons: &mut Icons) {
+    draw_legend(ui, biomes, legend);
     draw_room_legend(ui, legend, legend_icons);
 }
 

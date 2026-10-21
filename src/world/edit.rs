@@ -1,7 +1,7 @@
 //! Edits made by the user on a generated map.
 
 use super::{Door, Marker, Room, RoomKind, World};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 /// Kind of room offered by the room picker.
 #[derive(Clone, Copy)]
@@ -79,15 +79,43 @@ impl World {
 
         let idx = self.place(x, y, w, h, biome, kind);
         self.rooms[idx].marker = marker;
-        self.add_doors(idx, &sides);
+        self.add_doors(idx, &sides, None);
         Some(idx)
     }
 
     /// True if room `idx` can have its top-left cell at (x, y). Its own cells count as free.
     pub fn can_move(&self, idx: usize, x: i32, y: i32) -> bool {
-        let r = &self.rooms[idx];
-        (y..y + r.h as i32)
-            .all(|cy| (x..x + r.w as i32).all(|cx| self.room_at(cx, cy).is_none_or(|i| i == idx)))
+        self.can_move_rooms(&[(idx, x, y)])
+    }
+
+    /// True if these rooms can move together. Each entry is an index and its new top-left.
+    /// A cell is free when it is empty or held by one of these rooms.
+    /// Two rooms of the group cannot land on the same cell.
+    pub fn can_move_rooms(&self, moves: &[(usize, i32, i32)]) -> bool {
+        if moves.is_empty() {
+            return false;
+        }
+        let mut group = HashSet::new();
+        for &(idx, _, _) in moves {
+            if idx >= self.rooms.len() || !group.insert(idx) {
+                return false;
+            }
+        }
+        let mut taken = HashSet::new();
+        for &(idx, x, y) in moves {
+            let r = &self.rooms[idx];
+            for cy in y..y + r.h as i32 {
+                for cx in x..x + r.w as i32 {
+                    if !taken.insert((cx, cy)) {
+                        return false;
+                    }
+                    if self.room_at(cx, cy).is_some_and(|i| !group.contains(&i)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
     }
 
     /// Moves room `idx` so its top-left cell is at (x, y). Its doors are removed, then it
@@ -95,24 +123,49 @@ impl World {
     /// touching room. With no neighbor it keeps its biome. Its kind is kept.
     /// Returns false, and changes nothing, if the spot is taken.
     pub fn move_room(&mut self, idx: usize, x: i32, y: i32) -> bool {
-        if !self.can_move(idx, x, y) {
+        self.move_rooms(&[(idx, x, y)])
+    }
+
+    /// Moves several rooms at once. Each entry is a room index and its new top-left cell.
+    /// Doors of the group are rebuilt once, so two moved rooms share a single door.
+    /// A room takes the biome of the first neighbor outside the group, or keeps its own.
+    /// Returns false, and changes nothing, if a spot is taken or two rooms overlap.
+    pub fn move_rooms(&mut self, moves: &[(usize, i32, i32)]) -> bool {
+        if !self.can_move_rooms(moves) {
             return false;
         }
-        let Room {
-            x: ox, y: oy, w, h, ..
-        } = self.rooms[idx];
-        self.set_cells(ox, oy, w, h, None);
-        self.doors.retain(|d| d.a != idx && d.b != idx);
-        let sides = self.touching(x, y, w, h);
-        let biome = self.neighbor_biome(&sides);
-        let room = &mut self.rooms[idx];
-        room.x = x;
-        room.y = y;
-        if let Some(biome) = biome {
-            room.biome = biome;
+        let group: HashSet<usize> = moves.iter().map(|&(idx, _, _)| idx).collect();
+        for &(idx, _, _) in moves {
+            let Room { x, y, w, h, .. } = self.rooms[idx];
+            self.set_cells(x, y, w, h, None);
         }
-        self.set_cells(x, y, w, h, Some(idx));
-        self.add_doors(idx, &sides);
+        self.doors
+            .retain(|d| !group.contains(&d.a) && !group.contains(&d.b));
+        for &(idx, x, y) in moves {
+            let room = &mut self.rooms[idx];
+            let (w, h) = (room.w, room.h);
+            room.x = x;
+            room.y = y;
+            self.set_cells(x, y, w, h, Some(idx));
+        }
+        let planned: Vec<_> = moves
+            .iter()
+            .map(|&(idx, x, y)| {
+                let sides = self.touching(x, y, self.rooms[idx].w, self.rooms[idx].h);
+                let biome = sides
+                    .iter()
+                    .flat_map(|side| side.keys())
+                    .find(|n| !group.contains(*n))
+                    .map(|n| self.rooms[*n].biome);
+                (idx, biome, sides)
+            })
+            .collect();
+        for (idx, biome, sides) in planned {
+            if let Some(biome) = biome {
+                self.rooms[idx].biome = biome;
+            }
+            self.add_doors(idx, &sides, Some(&group));
+        }
         true
     }
 
@@ -174,10 +227,19 @@ impl World {
     }
 
     /// Adds one door between room `idx` and each touching room, in the middle of the
-    /// shared side.
-    fn add_doors(&mut self, idx: usize, sides: &[BTreeMap<usize, Vec<(i32, i32)>>; 4]) {
+    /// shared side. When `group` is set, a pair of moved rooms gets one door only:
+    /// the lower index creates it.
+    fn add_doors(
+        &mut self,
+        idx: usize,
+        sides: &[BTreeMap<usize, Vec<(i32, i32)>>; 4],
+        group: Option<&HashSet<usize>>,
+    ) {
         for (side, neighbors) in sides.iter().enumerate() {
             for (&n, cells) in neighbors {
+                if group.is_some_and(|g| g.contains(&n) && n < idx) {
+                    continue;
+                }
                 let (dx, dy) = cells[cells.len() / 2];
                 self.doors.push(Door {
                     a: n,

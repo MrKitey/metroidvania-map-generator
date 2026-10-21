@@ -20,6 +20,8 @@ const MAX_CELLS: u32 = 5120;
 /// Cells added or removed per arrow key press.
 const STEP: u32 = 64;
 const START_CELLS: u32 = 768;
+/// Pointer travel below this, in points, is a click and clears the selection.
+const SELECT_CLICK: f32 = 4.0;
 /// Seconds the export result stays in the header.
 const NOTICE_TIME: f64 = 4.0;
 const HEADER_H: f32 = 40.0;
@@ -58,11 +60,13 @@ impl Pointer {
     }
 }
 
-/// Room being dragged with the left button.
+/// Rooms being dragged with the left button. They all share one cell offset.
 struct Moving {
-    room: usize,
-    /// Cell grabbed, relative to the room top-left cell, so the room does not jump.
-    grab: (i32, i32),
+    rooms: Vec<usize>,
+    /// Top-left cell of each room when the drag started.
+    origins: Vec<(i32, i32)>,
+    /// Cell under the cursor when the drag started.
+    anchor: (i32, i32),
 }
 
 pub struct App {
@@ -85,8 +89,12 @@ pub struct App {
     picker: Option<Pos2>,
     /// Room chosen in the picker, being placed.
     placing: Option<Choice>,
-    /// Placed room being dragged, if any.
+    /// Placed rooms being dragged, if any.
     moving: Option<Moving>,
+    /// Rooms chosen by the selection rectangle.
+    selected: Vec<usize>,
+    /// Screen position where the selection rectangle started.
+    selecting: Option<Pos2>,
     /// Icon of the room type legend being dragged onto a room, if any.
     icon_drag: Option<IconId>,
     /// Last export result and when it happened, shown in the header for a while.
@@ -117,6 +125,8 @@ impl App {
             picker: None,
             placing: None,
             moving: None,
+            selected: Vec::new(),
+            selecting: None,
             icon_drag: None,
             notice: None,
         }
@@ -125,6 +135,9 @@ impl App {
     fn regen(&mut self) {
         self.editor.set_seed(self.seed);
         self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
+        self.moving = None;
+        self.selected.clear();
+        self.selecting = None;
         self.fit = true;
     }
 
@@ -259,7 +272,7 @@ impl App {
             right: ctx.input(|i| i.pointer.button_pressed(PointerButton::Secondary)),
             over_seed: !over_picker && hud.seed.contains(pointer_pos),
             over_picker,
-            over_legend: !over_picker && legend.rect.contains(pointer_pos),
+            over_legend: !over_picker && legend.contains(pointer_pos),
             on_map_rect: response.contains_pointer(),
             consumed: false,
         };
@@ -267,6 +280,21 @@ impl App {
         if pointer.over_seed && pointer.left {
             ctx.copy_text(self.seed.to_string());
             self.copied_at = now;
+        }
+        if pointer.left
+            && !pointer.consumed
+            && let Some(biome) = legend.biome_at(pointer.pos)
+        {
+            self.selected = self
+                .world
+                .rooms
+                .iter()
+                .enumerate()
+                .filter(|(_, room)| room.biome == biome)
+                .map(|(i, _)| i)
+                .collect();
+            self.moving = None;
+            self.selecting = None;
         }
 
         let ghost = self.update_placing(&mut pointer, &layout, map_rect);
@@ -292,9 +320,20 @@ impl App {
                 other => other,
             };
         }
-        let ghost = ghost.or(self.update_moving(&pointer, hovered, &layout, map_rect));
+        self.update_selection(&pointer, &layout, map_rect);
+        let move_ghosts = self.update_moving(&pointer, hovered, &layout, map_rect);
+        let select_rect = self
+            .selecting
+            .map(|start| Rect::from_two_pos(start, pointer.pos));
         self.update_icon_drag(&pointer, &legend, hovered);
-        self.update_cursor(&ctx, &pointer, picker_ui.as_ref(), ghost.as_ref(), hovered);
+        self.update_cursor(
+            &ctx,
+            &pointer,
+            picker_ui.as_ref(),
+            ghost.as_ref(),
+            &move_ghosts,
+            hovered,
+        );
 
         let frame = Frame {
             layout: &layout,
@@ -306,6 +345,9 @@ impl App {
             grid: self.grid,
             picker: picker_ui.as_ref(),
             ghost,
+            move_ghosts,
+            selected: &self.selected,
+            select_rect,
             dragged_icon: self.icon_drag,
         };
         render::draw_world(
@@ -333,11 +375,15 @@ impl App {
             && (self.picker.is_some()
                 || self.placing.is_some()
                 || self.moving.is_some()
+                || self.selecting.is_some()
+                || !self.selected.is_empty()
                 || self.icon_drag.is_some())
         {
             self.picker = None;
             self.placing = None;
             self.moving = None;
+            self.selecting = None;
+            self.selected.clear();
             self.icon_drag = None;
             escape = false;
         }
@@ -420,50 +466,137 @@ impl App {
         ghost
     }
 
-    /// Drags a placed room with the left button. Pressing on a room grabs it, releasing
-    /// on the map drops it. A taken spot, Escape or a right click leave it in place.
+    /// Drags the selection rectangle on an empty cell. Releasing selects every room
+    /// the rectangle cuts. A click without travel clears the selection.
+    fn update_selection(&mut self, p: &Pointer, layout: &Layout, map: Rect) {
+        if p.right {
+            self.selecting = None;
+            return;
+        }
+        let Some(start) = self.selecting else {
+            if p.left
+                && p.on_map()
+                && !p.consumed
+                && !self.panning
+                && self.picker.is_none()
+                && self.placing.is_none()
+                && self.moving.is_none()
+                && self.icon_drag.is_none()
+            {
+                let (x, y) = layout.cell_at(self.view.screen_to_world(p.pos, map));
+                if self.world.room_at(x, y).is_none() {
+                    self.selecting = Some(p.pos);
+                }
+            }
+            return;
+        };
+        if p.left_down {
+            return;
+        }
+        if start.distance(p.pos) < SELECT_CLICK {
+            self.selected.clear();
+        } else {
+            let zone = Rect::from_two_pos(start, p.pos);
+            self.selected = self
+                .world
+                .rooms
+                .iter()
+                .enumerate()
+                .filter_map(|(i, room)| {
+                    let world = render::room_rect(room, layout);
+                    let screen = Rect::from_min_max(
+                        self.view.world_to_screen(world.min.to_vec2(), map),
+                        self.view.world_to_screen(world.max.to_vec2(), map),
+                    );
+                    screen.intersects(zone).then_some(i)
+                })
+                .collect();
+        }
+        self.selecting = None;
+    }
+
+    /// Drags placed rooms with the left button. A selected room drags the whole
+    /// selection. Another room is dragged alone, and the selection is cleared.
+    /// Releasing on the map drops them. A taken spot, Escape or a right click
+    /// leaves them in place. A drag of no cells changes nothing.
     fn update_moving(
         &mut self,
         p: &Pointer,
         hovered: Option<usize>,
         layout: &Layout,
         map: Rect,
-    ) -> Option<Ghost> {
+    ) -> Vec<Ghost> {
         let cell = layout.cell_at(self.view.screen_to_world(p.pos, map));
         let Some(m) = &self.moving else {
-            if let (true, Some(room)) = (p.left, hovered) {
-                let r = &self.world.rooms[room];
+            if let (true, Some(room)) = (p.left, hovered)
+                && self.selecting.is_none()
+            {
+                let rooms = if self.selected.contains(&room) {
+                    self.selected.clone()
+                } else {
+                    self.selected.clear();
+                    vec![room]
+                };
+                let origins = rooms
+                    .iter()
+                    .map(|&i| {
+                        let r = &self.world.rooms[i];
+                        (r.x, r.y)
+                    })
+                    .collect();
                 self.moving = Some(Moving {
-                    room,
-                    grab: (cell.0 - r.x, cell.1 - r.y),
+                    rooms,
+                    origins,
+                    anchor: cell,
                 });
             }
-            return None;
+            return Vec::new();
         };
-        let r = &self.world.rooms[m.room];
-        let (x, y) = (cell.0 - m.grab.0, cell.1 - m.grab.1);
+        let delta = (cell.0 - m.anchor.0, cell.1 - m.anchor.1);
+        let moves: Vec<_> = m
+            .rooms
+            .iter()
+            .zip(&m.origins)
+            .map(|(&idx, &(x, y))| (idx, x + delta.0, y + delta.1))
+            .collect();
         if p.right {
             self.moving = None;
-            return None;
+            return Vec::new();
         }
         if p.left_down {
-            return Some(Ghost {
-                x,
-                y,
-                choice: Choice {
-                    pick: Pick::Room,
-                    w: r.w,
-                    h: r.h,
-                },
-                free: self.world.can_move(m.room, x, y),
-            });
+            let free = match moves.as_slice() {
+                [(idx, x, y)] => self.world.can_move(*idx, *x, *y),
+                _ => self.world.can_move_rooms(&moves),
+            };
+            return moves
+                .into_iter()
+                .map(|(idx, x, y)| {
+                    let r = &self.world.rooms[idx];
+                    Ghost {
+                        x,
+                        y,
+                        choice: Choice {
+                            pick: Pick::Room,
+                            w: r.w,
+                            h: r.h,
+                        },
+                        free,
+                    }
+                })
+                .collect();
         }
-        let room = m.room;
-        if p.on_map() && (x, y) != (r.x, r.y) {
-            self.world.move_room(room, x, y);
+        if p.on_map() && delta != (0, 0) {
+            match moves.as_slice() {
+                [(idx, x, y)] => {
+                    self.world.move_room(*idx, *x, *y);
+                }
+                _ => {
+                    self.world.move_rooms(&moves);
+                }
+            }
         }
         self.moving = None;
-        None
+        Vec::new()
     }
 
     /// Drags an icon of the room type legend onto a room.
@@ -495,22 +628,30 @@ impl App {
         p: &Pointer,
         picker: Option<&Picker>,
         ghost: Option<&Ghost>,
+        move_ghosts: &[Ghost],
         hovered: Option<usize>,
     ) {
         let moving = self.moving.is_some();
-        let icon = if self.icon_drag.is_some() {
+        let blocked = ghost.is_some_and(|g| !g.free) || move_ghosts.iter().any(|g| !g.free);
+        let icon = if self.selecting.is_some() {
+            CursorIcon::Crosshair
+        } else if self.icon_drag.is_some() {
             if hovered.is_some() {
                 CursorIcon::Move
             } else {
                 CursorIcon::NotAllowed
             }
         } else if moving || self.placing.is_some() {
-            match ghost {
-                Some(g) if !g.free => CursorIcon::NotAllowed,
-                Some(_) if moving => CursorIcon::Move,
-                Some(_) => CursorIcon::Crosshair,
-                None if moving => CursorIcon::NotAllowed,
-                None => CursorIcon::Default,
+            if blocked {
+                CursorIcon::NotAllowed
+            } else if moving && !move_ghosts.is_empty() {
+                CursorIcon::Move
+            } else if ghost.is_some() {
+                CursorIcon::Crosshair
+            } else if moving {
+                CursorIcon::NotAllowed
+            } else {
+                CursorIcon::Default
             }
         } else if self.panning {
             CursorIcon::Move
@@ -557,6 +698,7 @@ impl App {
                 && !p.consumed
                 && self.placing.is_none()
                 && self.moving.is_none()
+                && self.selecting.is_none()
                 && self.icon_drag.is_none()
             {
                 self.picker = Some(p.pos);
@@ -587,11 +729,22 @@ impl App {
         if !pressed {
             return None;
         }
-        let idx = self.moving.as_ref().map(|m| m.room).or(hovered)?;
+        let idx = self
+            .moving
+            .as_ref()
+            .filter(|m| m.rooms.len() == 1)
+            .map(|m| m.rooms[0])
+            .or(hovered)?;
         if !self.world.remove_room(idx) {
             return None;
         }
         self.moving = None;
+        self.selected.retain(|&i| i != idx);
+        for i in &mut self.selected {
+            if *i > idx {
+                *i -= 1;
+            }
+        }
         Some(idx)
     }
 
