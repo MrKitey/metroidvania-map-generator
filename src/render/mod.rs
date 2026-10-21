@@ -1,11 +1,14 @@
 //! Drawing of the whole frame: the map, then the screen overlays.
 
 mod hud;
+mod legend;
 mod map;
+mod pack;
 mod picker;
 mod theme;
 
-pub use hud::{COPIED_TIME, Hud, RoomLegend, draw_help};
+pub use hud::{COPIED_TIME, Hud, draw_help};
+pub use legend::RoomLegend;
 pub use map::{
     MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect,
 };
@@ -17,7 +20,15 @@ use crate::icons::{IconId, Icons};
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::World;
-use egui::{Color32, Rect, Stroke, StrokeKind, Ui, vec2};
+use egui::{Color32, FontId, Rect, Stroke, StrokeKind, Ui, vec2};
+
+pub(super) fn text_width(ctx: &egui::Context, text: &str, size: f32) -> f32 {
+    ctx.fonts_mut(|f| {
+        f.layout_no_wrap(text.to_owned(), FontId::proportional(size), Color32::WHITE)
+            .size()
+            .x
+    })
+}
 
 /// Everything about the current frame that the renderer needs besides the world.
 pub struct Frame<'a> {
@@ -95,7 +106,7 @@ pub fn draw_world(
         );
     }
 
-    hud::draw_legends(ui, biomes, f.legend, legend_icons);
+    legend::draw_legends(ui, biomes, f.legend, legend_icons);
     hud::draw_seed(ui, f.hud);
     if let Some(i) = f.hovered {
         hud::draw_tooltip(ui, &world.rooms[i], biomes, f.layout);
@@ -106,7 +117,7 @@ pub fn draw_world(
         hud::draw_ghost_label(ui, g, f.layout);
     }
     if let Some(icon) = f.dragged_icon {
-        hud::draw_dragged_icon(ui, icon, legend_icons);
+        legend::draw_dragged_icon(ui, icon, legend_icons);
     }
     if let Some(p) = f.picker {
         picker::draw_picker(ui, p);
