@@ -3,11 +3,11 @@
 use super::App;
 use super::interact::Pointer;
 use crate::layout::Layout;
-use crate::render::{self, Frame, Hud, RoomLegend, picker_layout};
+use crate::render::{self, Frame, Hud, Picker, RoomLegend};
 use egui::{PointerButton, Pos2, Sense};
 
 impl App {
-    pub(super) fn draw_map_panel(&mut self, ui: &mut egui::Ui, now: f64) {
+    pub(super) fn draw_map_panel(&mut self, ui: &mut egui::Ui, now: f64, rooms: Option<&Picker>) {
         let ctx = ui.ctx().clone();
         let (response, _) = ui.allocate_painter(ui.available_size(), Sense::hover());
         let map_rect = response.rect;
@@ -39,21 +39,13 @@ impl App {
         let copied = now - self.copied_at < render::COPIED_TIME;
         let hud = Hud::new(&ctx, self.seed, copied, map_rect);
         let legend = RoomLegend::new(&ctx, &self.world, &self.biomes, map_rect);
-        let mut picker_ui = self
-            .interact
-            .picker
-            .map(|a| picker_layout(&ctx, &self.editor.sizes(), &layout, a, map_rect));
-        let over_picker = picker_ui
-            .as_ref()
-            .is_some_and(|p| p.rect.contains(pointer_pos));
         let mut pointer = Pointer {
             pos: pointer_pos,
             left: ctx.input(|i| i.pointer.button_pressed(PointerButton::Primary)),
             left_down: ctx.input(|i| i.pointer.button_down(PointerButton::Primary)),
             right: ctx.input(|i| i.pointer.button_pressed(PointerButton::Secondary)),
-            over_seed: !over_picker && hud.seed.contains(pointer_pos),
-            over_picker,
-            over_legend: !over_picker && legend.contains(pointer_pos),
+            over_seed: hud.seed.contains(pointer_pos),
+            over_legend: legend.contains(pointer_pos),
             on_map_rect: response.contains_pointer(),
             consumed: false,
         };
@@ -76,18 +68,19 @@ impl App {
             &layout,
             map_rect,
         );
-        self.interact.update_picker(&mut pointer, &mut picker_ui);
+        if ghost.is_none() {
+            if let Some(choice) = self.interact.placing {
+                render::draw_drag_outline(&ctx, choice, self.interact.placing_size);
+            }
+        }
 
-        let mut hovered = if pointer.on_map()
-            && !pointer.consumed
-            && self.interact.picker.is_none()
-            && self.interact.placing.is_none()
-        {
-            let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
-            self.world.room_at(x, y)
-        } else {
-            None
-        };
+        let mut hovered =
+            if pointer.on_map() && !pointer.consumed && self.interact.placing.is_none() {
+                let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
+                self.world.room_at(x, y)
+            } else {
+                None
+            };
         let blocked = self.editor.open || self.session.renaming;
         if let Some(i) = hovered {
             self.interact
@@ -116,14 +109,8 @@ impl App {
         let select_rect = self.interact.select_rect(pointer.pos);
         self.interact
             .update_icon_drag(&pointer, &legend, &mut self.world, hovered);
-        self.interact.update_cursor(
-            &ctx,
-            &pointer,
-            picker_ui.as_ref(),
-            ghost.as_ref(),
-            &move_ghosts,
-            hovered,
-        );
+        self.interact
+            .update_cursor(&ctx, &pointer, rooms, ghost.as_ref(), &move_ghosts, hovered);
 
         let frame = Frame {
             layout: &layout,
@@ -133,7 +120,6 @@ impl App {
             legend: &legend,
             hovered,
             grid: self.grid,
-            picker: picker_ui.as_ref(),
             ghost,
             move_ghosts,
             selected: self.interact.selected(),

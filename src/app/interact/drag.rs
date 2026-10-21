@@ -123,14 +123,12 @@ impl Interaction {
             } else if moving {
                 CursorIcon::NotAllowed
             } else {
-                CursorIcon::Default
+                CursorIcon::Grab
             }
         } else if self.panning {
             CursorIcon::Move
         } else if picker.is_some_and(|ui| ui.items.iter().any(|(_, r)| r.contains(p.pos))) {
             CursorIcon::PointingHand
-        } else if p.over_picker {
-            CursorIcon::Default
         } else if p.over_seed || p.over_legend {
             CursorIcon::PointingHand
         } else if hovered.is_some() {

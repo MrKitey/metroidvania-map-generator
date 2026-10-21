@@ -10,7 +10,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("R", "New map"),
     ("Wheel", "Zoom"),
     ("Middle drag", "Pan"),
-    ("Right click", "Place a room"),
+    ("Drag from Rooms", "Place a room"),
     ("Left drag empty", "Select rooms"),
     ("Left drag", "Move room or group"),
     ("Click biome", "Select its rooms"),
@@ -22,11 +22,14 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("S", "Save room"),
     ("H", "Secret room"),
     ("P", "Portal room"),
+    ("L", "Rooms"),
     ("Tab", "Editor"),
     ("Esc", "Quit"),
 ];
 /// Glyph on the shortcuts button.
 pub const HELP_BUTTON: &str = "?";
+/// Label of the editor button.
+pub const EDITOR: &str = "Editor";
 /// Label of the export button.
 pub const EXPORT: &str = "Export";
 pub const NEW: &str = "New";

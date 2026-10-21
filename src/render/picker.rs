@@ -1,25 +1,22 @@
-//! Room picker popup and the preview of the room being placed.
+//! Room list of the side panel, and the preview of the room being dragged.
 
 use super::map::line_thickness;
 use super::pack::pack_rooms;
-use super::text_width;
-use super::theme::{LEGEND_TEXT, PAD, ROW_H};
 use crate::layout::Layout;
 use crate::text::rooms;
 use crate::view::View;
 use crate::world::{Choice, Pick, Sizes};
 use egui::{
-    Align2, Color32, Context, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, pos2, vec2,
+    Align2, Color32, Context, FontId, Id, LayerId, Order, Painter, PointerButton, Pos2, Rect,
+    Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
 };
 
 const PICKER_TEXT: f32 = 14.0;
-/// Widest the picker can grow, as a share of the map width.
-const PICKER_MAX_W: f32 = 0.6;
+/// Extra space between the foldable sections.
+const SECTION_GAP: f32 = 16.0;
 
-/// Room picker popup, with screen positions already computed.
+/// Room sizes currently shown, with screen positions already computed.
 pub struct Picker {
-    pub rect: Rect,
-    titles: Vec<(&'static str, Pos2)>,
     pub items: Vec<(Choice, Rect)>,
 }
 
@@ -31,89 +28,121 @@ pub struct Ghost {
     pub free: bool,
 }
 
-/// Lays out the picker with its top-left corner at `anchor`, moved to stay in `map`.
-/// Rooms keep the map cell aspect. The tallest go down first, and each later room
-/// fills the lowest free gap that can hold it.
-pub fn picker_layout(
-    ctx: &Context,
-    sizes: &Sizes,
+/// One open section: white outlines, each with its size in the middle.
+fn draw_section(
+    ui: &mut Ui,
+    pick: Pick,
+    list: &[(u32, u32)],
     layout: &Layout,
-    anchor: Pos2,
-    map: Rect,
-) -> Picker {
-    let sections = [
-        (rooms::ROOMS, Pick::Room, &sizes.rooms),
-        (rooms::BOSS_ROOMS, Pick::Boss, &sizes.boss),
-        (rooms::CORRIDORS, Pick::Corridor, &sizes.corridor),
-    ];
-    let max_w = map.width() * PICKER_MAX_W;
-    let mut titles = Vec::new();
-    let mut items = Vec::new();
-    let (mut y, mut width) = (PAD, 0.0f32);
-    for (title, pick, list) in sections {
-        titles.push((title, pos2(PAD, y)));
-        width = width.max(PAD + text_width(ctx, title, LEGEND_TEXT) + PAD);
-        y += ROW_H;
-        let (placed, bottom) = pack_rooms(list, pick, layout, max_w);
-        for (choice, r) in placed {
-            let r = r.translate(vec2(PAD, y));
-            width = width.max(r.max.x + PAD);
-            items.push((choice, r));
-        }
-        y += bottom + PAD;
-    }
-
-    let origin = pos2(
-        anchor.x.min(map.max.x - width).max(map.min.x),
-        anchor.y.min(map.max.y - y).max(map.min.y),
-    );
-    for (_, p) in &mut titles {
-        *p += origin.to_vec2();
-    }
-    for (_, r) in &mut items {
-        *r = r.translate(origin.to_vec2());
-    }
-    Picker {
-        rect: Rect::from_min_size(origin, vec2(width, y)),
-        titles,
-        items,
-    }
-}
-
-/// Black translucent popup listing every size, drawn as a white outline with its size in
-/// the middle.
-pub fn draw_picker(ui: &Ui, p: &Picker) {
-    let painter = ui.painter();
-    let mouse = ui.input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO);
-    painter.rect_filled(p.rect, 4.0, Color32::from_rgba_unmultiplied(0, 0, 0, 204));
-    for (title, pos) in &p.titles {
-        painter.text(
-            *pos + vec2(0.0, ROW_H * 0.7),
-            Align2::LEFT_BOTTOM,
-            *title,
-            FontId::proportional(LEGEND_TEXT),
-            Color32::LIGHT_GRAY,
+) -> Vec<(Choice, Rect)> {
+    let width = ui.available_width().max(1.0);
+    let origin = ui.cursor().min;
+    let (placed, bottom) = pack_rooms(list, pick, layout, width);
+    let items: Vec<_> = placed
+        .into_iter()
+        .map(|(choice, rect)| (choice, rect.translate(origin.to_vec2())))
+        .collect();
+    if bottom > 0.0 {
+        let right = items
+            .iter()
+            .fold(origin.x, |max, (_, rect)| max.max(rect.max.x));
+        ui.allocate_rect(
+            Rect::from_min_size(origin, vec2((right - origin.x).max(1.0), bottom)),
+            egui::Sense::hover(),
         );
     }
-    for (choice, r) in &p.items {
-        if r.contains(mouse) {
-            painter.rect_filled(*r, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 38));
+    let mouse = ui.input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO);
+    let painter = ui.painter();
+    for (choice, rect) in &items {
+        if rect.contains(mouse) {
+            painter.rect_filled(
+                *rect,
+                0.0,
+                Color32::from_rgba_unmultiplied(255, 255, 255, 38),
+            );
         }
         painter.rect_stroke(
-            *r,
+            *rect,
             0.0,
             Stroke::new(2.0, Color32::WHITE),
             StrokeKind::Inside,
         );
-        let text = format!("{}x{}", choice.w, choice.h);
         painter.text(
-            r.center(),
+            rect.center(),
             Align2::CENTER_CENTER,
-            text,
+            format!("{}x{}", choice.w, choice.h),
             FontId::proportional(PICKER_TEXT),
             Color32::WHITE,
         );
     }
+    items
+}
+
+/// Draws the room list in the side panel.
+/// Returns the sizes on screen, and the entry under the pointer when the drag starts.
+pub fn draw_room_list(
+    ui: &mut Ui,
+    sizes: &Sizes,
+    layout: &Layout,
+) -> (Picker, Option<(Choice, Vec2)>) {
+    egui::ScrollArea::both()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            let sections = [
+                (rooms::ROOMS, Pick::Room, sizes.rooms.as_slice()),
+                (rooms::BOSS_ROOMS, Pick::Boss, sizes.boss.as_slice()),
+                (rooms::CORRIDORS, Pick::Corridor, sizes.corridor.as_slice()),
+            ];
+            let pressed = ui.input(|i| i.pointer.button_pressed(PointerButton::Primary));
+            let pos = ui.input(|i| i.pointer.hover_pos());
+            let mut items = Vec::new();
+            let mut drag = None;
+            for (i, (title, pick, list)) in sections.into_iter().enumerate() {
+                if i > 0 {
+                    ui.add_space(SECTION_GAP);
+                }
+                egui::CollapsingHeader::new(title)
+                    .id_salt(("room-section", i))
+                    .default_open(i == 0)
+                    .show(ui, |ui| {
+                        let section = draw_section(ui, pick, list, layout);
+                        if drag.is_none() && pressed {
+                            drag = pos.and_then(|pos| {
+                                section
+                                    .iter()
+                                    .find(|(_, rect)| rect.contains(pos))
+                                    .map(|(choice, rect)| (*choice, rect.size()))
+                            });
+                        }
+                        items.extend(section);
+                    });
+            }
+            (Picker { items }, drag)
+        })
+        .inner
+}
+
+/// White outline of the dragged room, centered on the cursor, above the panels.
+/// `size` is the size of that entry in the list.
+pub fn draw_drag_outline(ctx: &Context, choice: Choice, size: Vec2) {
+    let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else {
+        return;
+    };
+    let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::unique("room-drag")));
+    let rect = Rect::from_center_size(pos, size);
+    painter.rect_stroke(
+        rect,
+        0.0,
+        Stroke::new(2.0, Color32::WHITE),
+        StrokeKind::Inside,
+    );
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        format!("{}x{}", choice.w, choice.h),
+        FontId::proportional(PICKER_TEXT),
+        Color32::WHITE,
+    );
 }
 
 /// Room being placed, in the map camera. Green if free, red if not.

@@ -30,14 +30,14 @@ Built with Rust and [egui](https://github.com/emilk/egui).
   Each one replaces the previous type of the room.
 - The same types can be set by dragging an icon from the room type legend onto a room.
   Dropping an icon on a room that already has it clears it, like the keys.
-- Rooms, boss rooms and corridors can be placed by hand from a right click popup. They
-  snap to the cell grid and get a door to each room they touch. See
-  [Placing rooms](#placing-rooms).
+- Rooms, boss rooms and corridors can be placed by hand by dragging a size from the
+  Rooms panel onto the map. They snap to the cell grid and get a door to each room
+  they touch. See [Placing rooms](#placing-rooms).
 - Placed rooms can be dragged with the left button to another spot. See
   [Moving rooms](#moving-rooms).
-- The cursor shows what a click does: a hand on buttons, the seed, picker entries and
-  legend icons, a cross when placing a room, arrows over a room that can be dragged, and
-  a forbidden sign where a drop is refused.
+- The cursor shows what a click does: a hand on buttons, the seed, room sizes and
+  legend icons, a cross when dragging a room over the map, arrows over a room that can
+  be dragged, and a forbidden sign where a drop is refused.
 - Faint white grid behind the map, one line per cell, toggled with G.
 - Legend of the biomes and of the room types on the left.
 - Room tooltip with its size in cells and in pixels.
@@ -98,7 +98,7 @@ The same list is shown in the app with the `?` button in the top right corner.
 | R | New map with a random seed |
 | Mouse wheel | Zoom |
 | Middle drag | Pan |
-| Right click | Open the room picker, see [Placing rooms](#placing-rooms) |
+| Drag from Rooms | Place a room, see [Placing rooms](#placing-rooms) |
 | Left drag | Move a room, see [Moving rooms](#moving-rooms) |
 | Left drag on a legend icon | Drop a boss, save, secret or portal type on a room |
 | C | Recenter the map |
@@ -107,28 +107,32 @@ The same list is shown in the app with the `?` button in the top right corner.
 | S | Save room under the cursor, press again to clear |
 | H | Secret room under the cursor, press again to clear |
 | P | Portal room under the cursor, press again to clear |
+| L | Open or close the room list |
 | Tab | Open or close the editor |
-| Esc | Close the shortcuts popup or the room picker, cancel a placement, a move or an icon drag, or quit |
+| Esc | Close the shortcuts popup, cancel a room drag, a move or an icon drag, or quit |
 
-Keyboard shortcuts other than Tab are disabled while the editor is open, so typing in its
-fields is safe.
+Keyboard shortcuts other than Tab and L are disabled while the editor is open, so typing
+in its fields is safe. L is ignored while a text field is focused.
 
-The header holds two buttons in the top right corner:
+The header holds four buttons in the top right corner:
 
+- Rooms opens or closes the room list on the left. L does the same.
+- Editor opens or closes the side panel. Tab does the same.
 - Export writes the map zip. See [Export](#export).
 - The `?` button opens the shortcuts popup.
 
 ## Placing rooms
 
-Right click on the map to open a popup listing every room size from the editor, in three
-sections: rooms, boss rooms and corridors. Each size is drawn as a white outline with its
-size in the middle.
+Press L, or the Rooms button in the header, to open the panel on the left. It lists every
+room size from the editor, in three sections: rooms, boss rooms and corridors. Each section
+folds. Each size is drawn as a white outline with its size in the middle.
 
-- Click a size to close the popup and start placing. The room follows the cursor and
-  snaps to the cell grid, centered on the cursor cell. Each cell is one screen, so the
-  position is always a multiple of the screen size in pixels, shown next to the cursor.
+- Drag a size onto the map. The outline follows the cursor. On the map the room snaps to
+  the cell grid, centered on the cursor cell. Each cell is one screen, so the position is
+  always a multiple of the screen size in pixels, shown next to the cursor.
 - The room is green where it fits and red where it overlaps another room.
-- Left click places it. Right click or Esc cancels.
+- Release on a free spot to place it. Release off the map, or on a blocked spot, cancels.
+  Right click or Esc cancels during the drag.
 - The room gets one door per room it touches, in the middle of the shared side, and the
   biome of the first room it touches. Without a neighbor it has no door.
 - Boss sizes place a room with the boss marker, corridor sizes place a corridor.
@@ -152,7 +156,7 @@ red where it overlaps another room.
 
 ## Editor
 
-Press Tab to open the panel on the right.
+Press Tab, or the Editor button in the header, to open the panel on the right.
 
 **Settings tab**
 

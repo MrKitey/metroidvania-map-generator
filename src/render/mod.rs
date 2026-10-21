@@ -12,7 +12,7 @@ pub use legend::RoomLegend;
 pub use map::{
     MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect,
 };
-pub use picker::{Ghost, Picker, picker_layout};
+pub use picker::{Ghost, Picker, draw_drag_outline, draw_room_list};
 pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, door_color, room_border, room_fill};
 
 use crate::biome::Biome;
@@ -39,8 +39,6 @@ pub struct Frame<'a> {
     pub legend: &'a RoomLegend,
     pub hovered: Option<usize>,
     pub grid: bool,
-    /// Open room picker, if any.
-    pub picker: Option<&'a Picker>,
     /// Room being placed, if any.
     pub ghost: Option<Ghost>,
     /// Rooms being dragged, drawn together in green or red.
@@ -118,9 +116,6 @@ pub fn draw_world(
     }
     if let Some(icon) = f.dragged_icon {
         legend::draw_dragged_icon(ui, icon, legend_icons);
-    }
-    if let Some(p) = f.picker {
-        picker::draw_picker(ui, p);
     }
 }
 

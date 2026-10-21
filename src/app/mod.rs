@@ -9,6 +9,7 @@ mod session;
 use crate::biome::{self, Biome};
 use crate::editor::{self, Editor, EditorAction};
 use crate::icons::Icons;
+use crate::layout::Layout;
 use crate::platform::WaylandDrop;
 use crate::render::{self, COPIED_TIME};
 use crate::settings;
@@ -52,6 +53,8 @@ pub struct App {
     /// Time of the last seed copy, used to show the "copied" feedback.
     copied_at: f64,
     help_open: bool,
+    /// Room list panel on the left.
+    rooms_open: bool,
     grid: bool,
     session: Session,
     interact: Interaction,
@@ -78,6 +81,7 @@ impl App {
             fit: true,
             copied_at: f64::NEG_INFINITY,
             help_open: false,
+            rooms_open: false,
             grid: true,
             session: Session::new(seed.to_string()),
             interact: Interaction::new(),
@@ -128,6 +132,9 @@ impl App {
 
         if ctx.input(|i| i.key_pressed(Key::Tab)) {
             self.editor.open = !self.editor.open;
+        }
+        if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::L)) {
+            self.rooms_open = !self.rooms_open;
         }
 
         let mut escape = ctx.input(|i| i.key_pressed(Key::Escape));
@@ -193,6 +200,25 @@ impl eframe::App for App {
             }
         }
 
+        let mut room_list = None;
+        if self.rooms_open {
+            let sizes = self.editor.sizes();
+            let layout = Layout::new(self.editor.viewport());
+            let mut started = None;
+            egui::Panel::left("rooms")
+                .default_size(editor::PANEL_W)
+                .min_size(280.0)
+                .show(ui, |ui| {
+                    let (picker, drag) = render::draw_room_list(ui, &sizes, &layout);
+                    started = drag;
+                    room_list = Some(picker);
+                });
+            if let Some((choice, size)) = started {
+                self.interact.placing = Some(choice);
+                self.interact.placing_size = size;
+            }
+        }
+
         egui::Panel::top("header")
             .exact_size(HEADER_H)
             .resizable(false)
@@ -208,7 +234,7 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(render::BACKGROUND))
             .show(ui, |ui| {
-                self.draw_map_panel(ui, now);
+                self.draw_map_panel(ui, now, room_list.as_ref());
             });
 
         self.handle_dropped(&ctx, now);

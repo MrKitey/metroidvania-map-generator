@@ -33,6 +33,12 @@ impl App {
                 if ui.button(text::hud::EXPORT).clicked() {
                     self.export(now);
                 }
+                if ui.button(text::hud::EDITOR).clicked() {
+                    self.editor.open = !self.editor.open;
+                }
+                if ui.button(text::rooms::ROOMS).clicked() {
+                    self.rooms_open = !self.rooms_open;
+                }
                 if let Some(notice) = &notice {
                     ui.label(notice);
                 }
