@@ -12,6 +12,8 @@ use egui::{
 
 /// Height in points of one cell in the room picker. The width follows the cell aspect.
 const PICKER_CELL: f32 = 20.0;
+/// Tallest a room is drawn in the picker, in cells. The real size is kept.
+const PICKER_MAX_H: u32 = 10;
 const PICKER_TEXT: f32 = 14.0;
 /// Widest the picker can grow, as a share of the map width.
 const PICKER_MAX_W: f32 = 0.6;
@@ -107,7 +109,7 @@ fn pack_rooms(
         .map(|&(w, h)| {
             vec2(
                 w as f32 * layout.cw * PICKER_CELL,
-                h as f32 * layout.ch * PICKER_CELL,
+                h.min(PICKER_MAX_H) as f32 * layout.ch * PICKER_CELL,
             )
         })
         .collect();
@@ -292,6 +294,16 @@ mod tests {
         assert!(rects.iter().all(|r| r.max.x <= 70.0 + EPS));
         let bottom = rects.iter().fold(0.0f32, |m, r| m.max(r.max.y));
         assert!(bottom <= 90.0 + EPS);
+    }
+
+    #[test]
+    fn tall_rooms_are_drawn_ten_cells_high() {
+        let layout = Layout::new((16, 9));
+        let cell = layout.ch * PICKER_CELL;
+        let (items, _) = pack_rooms(&[(4, 40), (2, 3)], Pick::Room, &layout, 1000.0);
+        assert_eq!((items[0].0.w, items[0].0.h), (4, 40));
+        assert!((items[0].1.height() - 10.0 * cell).abs() < EPS);
+        assert!((items[1].1.height() - 3.0 * cell).abs() < EPS);
     }
 
     #[test]

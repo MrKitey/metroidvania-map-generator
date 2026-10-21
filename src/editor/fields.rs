@@ -8,8 +8,8 @@ use crate::world::Sizes;
 
 /// Upper bound of the minimum, to keep generation fast.
 pub const MAX_MIN_ROOMS: usize = 50;
-/// Largest room side, in cells, to keep generation fast.
-pub const MAX_ROOM_SIDE: u32 = 10;
+/// Largest room side, in cells.
+pub const MAX_ROOM_SIDE: u32 = 100;
 
 /// One width and one height field per allowed room size.
 pub type SizeFields = Vec<(String, String)>;
@@ -185,7 +185,7 @@ mod tests {
         f.sizes = vec![
             ("2".to_owned(), "3".to_owned()),
             ("0".to_owned(), "1".to_owned()),
-            ("11".to_owned(), "1".to_owned()),
+            ("101".to_owned(), "1".to_owned()),
             ("x".to_owned(), "1".to_owned()),
         ];
         assert_eq!(f.room_sizes().rooms, vec![(2, 3)]);
