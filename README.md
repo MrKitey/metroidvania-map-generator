@@ -9,18 +9,11 @@ Built with Rust and [egui](https://github.com/emilk/egui).
 
 ## Screenshots
 
-| | | |
-|---|---|---|
-| [![Map](docs/screenshot-map-miniature.png)](docs/screenshot-map.png) | [![Tooltip](docs/screenshot-tooltip-miniature.png)](docs/screenshot-tooltip.png) | [![Shortcuts](docs/screenshot-help-miniature.png)](docs/screenshot-help.png) |
-| Generated map, grid, legends and project header | Room tooltip, in cells and in pixels | Shortcuts popup |
-| [![Picker](docs/screenshot-picker-miniature.png)](docs/screenshot-picker.png) | [![Place](docs/screenshot-place-miniature.png)](docs/screenshot-place.png) | [![Blocked](docs/screenshot-place-blocked-miniature.png)](docs/screenshot-place-blocked.png) |
-| Room picker | Placing a free room | Placing a room that overlaps |
-| [![Move](docs/screenshot-move-miniature.png)](docs/screenshot-move.png) | [![Select](docs/screenshot-select-miniature.png)](docs/screenshot-select.png) | [![Biome](docs/screenshot-biome-miniature.png)](docs/screenshot-biome.png) |
-| Moving a room | Selection rectangle | Rooms of one biome selected |
-| [![Icon](docs/screenshot-icon-miniature.png)](docs/screenshot-icon.png) | [![Settings](docs/screenshot-editor-miniature.png)](docs/screenshot-editor.png) | [![Biomes](docs/screenshot-biomes-miniature.png)](docs/screenshot-biomes.png) |
-| Dragging a room type onto a room | Editor, settings tab | Editor, biomes tab |
-| [![Rename](docs/screenshot-rename-miniature.png)](docs/screenshot-rename.png) | | |
-| Renaming the project | | |
+[![Map](docs/screenshot-map-miniature.png)](docs/screenshot-map.png) [![Tooltip](docs/screenshot-tooltip-miniature.png)](docs/screenshot-tooltip.png) [![Shortcuts](docs/screenshot-help-miniature.png)](docs/screenshot-help.png)
+[![Picker](docs/screenshot-picker-miniature.png)](docs/screenshot-picker.png) [![Place](docs/screenshot-place-miniature.png)](docs/screenshot-place.png) [![Blocked](docs/screenshot-place-blocked-miniature.png)](docs/screenshot-place-blocked.png)
+[![Move](docs/screenshot-move-miniature.png)](docs/screenshot-move.png) [![Select](docs/screenshot-select-miniature.png)](docs/screenshot-select.png) [![Biome](docs/screenshot-biome-miniature.png)](docs/screenshot-biome.png)
+[![Icon](docs/screenshot-icon-miniature.png)](docs/screenshot-icon.png) [![Settings](docs/screenshot-editor-miniature.png)](docs/screenshot-editor.png) [![Biomes](docs/screenshot-biomes-miniature.png)](docs/screenshot-biomes.png)
+[![Rename](docs/screenshot-rename-miniature.png)](docs/screenshot-rename.png)
 
 ## Features
 
