@@ -95,7 +95,7 @@ pub fn draw_world(
         );
     }
 
-    hud::draw_legends(ui, world, biomes, f.legend, legend_icons);
+    hud::draw_legends(ui, biomes, f.legend, legend_icons);
     hud::draw_seed(ui, f.hud);
     if let Some(i) = f.hovered {
         hud::draw_tooltip(ui, &world.rooms[i], biomes, f.layout);

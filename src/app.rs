@@ -272,7 +272,7 @@ impl App {
             right: ctx.input(|i| i.pointer.button_pressed(PointerButton::Secondary)),
             over_seed: !over_picker && hud.seed.contains(pointer_pos),
             over_picker,
-            over_legend: !over_picker && legend.rect.contains(pointer_pos),
+            over_legend: !over_picker && legend.contains(pointer_pos),
             on_map_rect: response.contains_pointer(),
             consumed: false,
         };
@@ -280,6 +280,21 @@ impl App {
         if pointer.over_seed && pointer.left {
             ctx.copy_text(self.seed.to_string());
             self.copied_at = now;
+        }
+        if pointer.left
+            && !pointer.consumed
+            && let Some(biome) = legend.biome_at(pointer.pos)
+        {
+            self.selected = self
+                .world
+                .rooms
+                .iter()
+                .enumerate()
+                .filter(|(_, room)| room.biome == biome)
+                .map(|(i, _)| i)
+                .collect();
+            self.moving = None;
+            self.selecting = None;
         }
 
         let ghost = self.update_placing(&mut pointer, &layout, map_rect);

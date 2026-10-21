@@ -76,6 +76,7 @@ pub mod hud {
         ("Right click", "Place a room"),
         ("Left drag empty", "Select rooms"),
         ("Left drag", "Move room or group"),
+        ("Click biome", "Select its rooms"),
         ("Del / Backspace", "Delete a room"),
         ("Drag legend icon", "Set room type"),
         ("C", "Recenter"),
