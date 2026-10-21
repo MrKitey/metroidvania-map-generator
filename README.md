@@ -92,8 +92,6 @@ The same list is shown in the app with the `?` button in the top right corner.
 | Input | Action |
 |---|---|
 | R | New map with a random seed |
-| Right / Up arrows | Bigger map |
-| Left / Down arrows | Smaller map |
 | Mouse wheel | Zoom |
 | Middle drag | Pan |
 | Right click | Open the room picker, see [Placing rooms](#placing-rooms) |

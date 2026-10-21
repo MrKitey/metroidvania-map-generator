@@ -74,6 +74,12 @@ impl Editor {
         self.seed = seed.to_string();
     }
 
+    /// Replaces the generation fields after a project load. The panel stays as it was.
+    pub fn apply_loaded(&mut self, seed: u64, settings: &Settings) {
+        self.fields = Fields::new(settings);
+        self.set_seed(seed);
+    }
+
     /// Draws the panel and returns what the user asked for, if anything.
     pub fn draw(&mut self, ui: &mut egui::Ui, biomes: &mut Vec<Biome>) -> Option<EditorAction> {
         ui.heading(text::editor::WINDOW_TITLE);

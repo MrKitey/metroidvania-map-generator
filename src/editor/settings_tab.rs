@@ -57,6 +57,13 @@ pub fn draw(
     });
     ui.separator();
 
+    ui.checkbox(&mut fields.autosave, text::AUTOSAVE);
+    ui.horizontal(|ui| {
+        ui.label(text::AUTOSAVE_DELAY);
+        ui.add(egui::TextEdit::singleline(&mut fields.autosave_secs).desired_width(80.0));
+    });
+    ui.separator();
+
     ui.horizontal(|ui| {
         // Generating wins over a seed typed in the same frame.
         if ui.button(text::GENERATE).clicked() {

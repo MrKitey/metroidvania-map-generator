@@ -13,11 +13,13 @@ mod editor;
 mod export;
 mod icons;
 mod layout;
+mod project;
 mod render;
 mod settings;
 mod storage;
 mod text;
 mod view;
+mod wayland_drop;
 mod world;
 
 use app::App;
