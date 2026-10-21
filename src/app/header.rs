@@ -1,6 +1,7 @@
 //! Header bar: project actions, the name, and the recent-files menu.
 
 use super::App;
+use crate::common::EditorAction;
 use crate::export::{self, MapData};
 use crate::layout::Layout;
 use crate::project;
@@ -32,6 +33,9 @@ impl App {
                 }
                 if ui.button(text::hud::EXPORT).clicked() {
                     self.export(now);
+                }
+                if ui.button(text::hud::REGENERATE).clicked() {
+                    self.apply_action(EditorAction::Regenerate);
                 }
                 if ui.button(text::hud::EDITOR).clicked() {
                     self.editor.open = !self.editor.open;

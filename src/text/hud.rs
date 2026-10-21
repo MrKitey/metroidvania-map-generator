@@ -7,7 +7,6 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+N", "New project"),
     ("Ctrl+O", "Load project"),
     ("Ctrl+S", "Save project"),
-    ("R", "New map"),
     ("Wheel", "Zoom"),
     ("Middle drag", "Pan"),
     ("Drag from Rooms", "Place a room"),
@@ -31,6 +30,8 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
 pub const HELP_BUTTON: &str = "?";
 /// Label of the editor button.
 pub const EDITOR: &str = "Editor";
+/// Label of the regenerate-map button.
+pub const REGENERATE: &str = "Regenerate Map";
 /// Label of the export button.
 pub const EXPORT: &str = "Export";
 pub const NEW: &str = "New";

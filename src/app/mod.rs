@@ -174,19 +174,11 @@ impl App {
             return;
         }
 
-        let mut regen = false;
-        if ctx.input(|i| i.key_pressed(Key::R)) {
-            self.change_seed(time_seed());
-            regen = true;
-        }
         if ctx.input(|i| i.key_pressed(Key::C)) {
             self.fit = true;
         }
         if ctx.input(|i| i.key_pressed(Key::G)) {
             self.grid = !self.grid;
-        }
-        if regen {
-            self.regen();
         }
     }
 }
