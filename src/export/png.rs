@@ -7,14 +7,25 @@ use std::error::Error;
 
 /// Largest image side, kept below common size limits. Big maps are scaled down.
 const MAX_SIDE: f32 = 8192.0;
+/// Largest side for a project thumbnail stored inside `.mmg`.
+const THUMB_SIDE: f32 = 256.0;
 
 /// Renders the whole map into a PNG, on a transparent background.
 pub fn render(map: &MapData) -> Result<Vec<u8>, Box<dyn Error>> {
+    render_scaled(map, MAX_SIDE)
+}
+
+/// Renders a small PNG preview of the map for project files.
+pub fn thumbnail(map: &MapData) -> Result<Vec<u8>, Box<dyn Error>> {
+    render_scaled(map, THUMB_SIDE)
+}
+
+fn render_scaled(map: &MapData, max_side: f32) -> Result<Vec<u8>, Box<dyn Error>> {
     let svg = super::svg::render(map);
     let tree = usvg::Tree::from_str(&svg, &usvg::Options::default())?;
     let size = tree.size();
-    let scale = (MAX_SIDE / size.width())
-        .min(MAX_SIDE / size.height())
+    let scale = (max_side / size.width())
+        .min(max_side / size.height())
         .min(1.0);
     let (w, h) = (
         (size.width() * scale).round().max(1.0) as u32,
@@ -57,6 +68,22 @@ mod tests {
     };
     use crate::world::{Params, Sizes, World};
 
+    fn sample_map<'a>(
+        biomes: &'a [biome::Biome],
+        world: &'a World,
+        settings: &'a Settings,
+        layout: &'a Layout,
+    ) -> MapData<'a> {
+        MapData {
+            seed: 7,
+            cells: 96,
+            settings,
+            world,
+            biomes,
+            layout,
+        }
+    }
+
     #[test]
     fn svg_rasterizes_to_png() {
         let biomes = biome::default_biomes();
@@ -76,16 +103,34 @@ mod tests {
         });
         let layout = Layout::new((640, 360));
         let settings = Settings::default();
-        let map = MapData {
-            seed: 7,
-            cells: 96,
-            settings: &settings,
-            world: &world,
-            biomes: &biomes,
-            layout: &layout,
-        };
+        let map = sample_map(&biomes, &world, &settings, &layout);
         let png = render(&map).expect("svg rasterizes");
         assert_eq!(&png[..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
         assert!(png.len() > 100);
+    }
+
+    #[test]
+    fn thumbnail_is_png() {
+        let biomes = biome::default_biomes();
+        let extras: Vec<_> = biomes.iter().map(biome::Biome::extras).collect();
+        let sizes = Sizes {
+            rooms: DEFAULT_ROOM_SIZES.to_vec(),
+            boss: DEFAULT_BOSS_SIZES.to_vec(),
+            corridor: DEFAULT_CORRIDOR_SIZES.to_vec(),
+        };
+        let world = World::generate(&Params {
+            cells: 96,
+            seed: 7,
+            extras: &extras,
+            min_rooms: 5,
+            max_rooms: 50,
+            sizes: &sizes,
+        });
+        let layout = Layout::new((640, 360));
+        let settings = Settings::default();
+        let map = sample_map(&biomes, &world, &settings, &layout);
+        let png = thumbnail(&map).expect("thumbnail rasterizes");
+        assert_eq!(&png[..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
+        assert!(png.len() > 50);
     }
 }

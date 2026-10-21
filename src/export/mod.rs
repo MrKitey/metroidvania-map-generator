@@ -64,6 +64,11 @@ pub fn save_with_dialog(map: &MapData) -> Option<String> {
     })
 }
 
+/// Small PNG preview of the map for a project archive.
+pub fn thumbnail(map: &MapData) -> Result<Vec<u8>, Box<dyn Error>> {
+    png::thumbnail(map)
+}
+
 /// Writes the zip to `path`.
 fn write_zip(path: &Path, map: &MapData) -> Result<(), Box<dyn Error>> {
     let png = png::render(map)?;

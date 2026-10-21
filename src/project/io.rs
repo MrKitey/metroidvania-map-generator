@@ -8,6 +8,47 @@ use std::path::{Path, PathBuf};
 
 pub(super) const RECENT_LIMIT: usize = 10;
 
+/// One row in the recent-project list.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RecentEntry {
+    pub path: PathBuf,
+    pub name: String,
+    pub modified_at: String,
+}
+
+impl RecentEntry {
+    fn from_path(path: PathBuf) -> RecentEntry {
+        let name = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        RecentEntry {
+            path,
+            name,
+            modified_at: String::new(),
+        }
+    }
+
+    /// Menu label: `Name - YYYY-MM-DD HH:MM`.
+    pub fn label(&self) -> String {
+        let date = display_modified(&self.modified_at);
+        if date.is_empty() {
+            self.name.clone()
+        } else {
+            format!("{} - {}", self.name, date)
+        }
+    }
+}
+
+/// Turns `2026-03-21T20:57:00Z` into `2026-03-21 20:57`.
+fn display_modified(iso: &str) -> String {
+    if iso.len() >= 16 && iso.as_bytes().get(10) == Some(&b'T') {
+        format!("{} {}", &iso[..10], &iso[11..16])
+    } else {
+        String::new()
+    }
+}
+
 /// True when the path ends with `.mmg`, in any letter case.
 pub fn is_mmg(path: &Path) -> bool {
     path.extension()
@@ -65,32 +106,80 @@ pub fn load_dialog() -> Option<PathBuf> {
         .pick_file()
 }
 
-/// Recent paths, newest first. A missing or broken file is an empty list.
-pub fn read_recent(dir: &Path) -> Vec<PathBuf> {
-    storage::read_json(&dir.join(files::RECENT)).unwrap_or_default()
+/// Recent entries, newest first. A missing or broken file is an empty list.
+pub fn read_recent(dir: &Path) -> Vec<RecentEntry> {
+    let path = dir.join(files::RECENT);
+    let Ok(text) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    if let Ok(entries) = serde_json::from_str::<Vec<RecentEntry>>(&text) {
+        return entries;
+    }
+    // Older builds stored a bare path list.
+    if let Ok(paths) = serde_json::from_str::<Vec<PathBuf>>(&text) {
+        return paths.into_iter().map(RecentEntry::from_path).collect();
+    }
+    Vec::new()
 }
 
-/// Puts `path` first and keeps at most ten entries.
-pub fn remember(dir: &Path, path: &Path) -> Result<(), Box<dyn Error>> {
-    let mut paths = read_recent(dir);
-    paths.retain(|saved| saved != path);
-    paths.insert(0, path.to_owned());
-    paths.truncate(RECENT_LIMIT);
-    write_recent(dir, &paths)
+/// Puts the project first and keeps at most ten entries.
+pub fn remember(
+    dir: &Path,
+    path: &Path,
+    name: &str,
+    modified_at: &str,
+) -> Result<(), Box<dyn Error>> {
+    let mut entries = read_recent(dir);
+    entries.retain(|saved| saved.path != path);
+    entries.insert(
+        0,
+        RecentEntry {
+            path: path.to_owned(),
+            name: name.to_owned(),
+            modified_at: modified_at.to_owned(),
+        },
+    );
+    entries.truncate(RECENT_LIMIT);
+    write_recent(dir, &entries)
 }
 
 /// Drops one path from the recent list.
 pub fn forget(dir: &Path, path: &Path) -> Result<(), Box<dyn Error>> {
-    let mut paths = read_recent(dir);
-    paths.retain(|saved| saved != path);
-    write_recent(dir, &paths)
+    let mut entries = read_recent(dir);
+    entries.retain(|saved| saved.path != path);
+    write_recent(dir, &entries)
 }
 
-fn write_recent(dir: &Path, paths: &[PathBuf]) -> Result<(), Box<dyn Error>> {
+fn write_recent(dir: &Path, entries: &[RecentEntry]) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(dir)?;
     fs::write(
         dir.join(files::RECENT),
-        serde_json::to_string_pretty(paths)?,
+        serde_json::to_string_pretty(entries)?,
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod label_tests {
+    use super::*;
+
+    #[test]
+    fn label_uses_name_and_date() {
+        let entry = RecentEntry {
+            path: PathBuf::from("/tmp/castle.mmg"),
+            name: "Castle".into(),
+            modified_at: "2026-03-21T20:57:00Z".into(),
+        };
+        assert_eq!(entry.label(), "Castle - 2026-03-21 20:57");
+    }
+
+    #[test]
+    fn label_without_date_is_name_only() {
+        let entry = RecentEntry {
+            path: PathBuf::from("/tmp/castle.mmg"),
+            name: "Castle".into(),
+            modified_at: String::new(),
+        };
+        assert_eq!(entry.label(), "Castle");
+    }
 }

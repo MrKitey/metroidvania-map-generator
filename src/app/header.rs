@@ -106,20 +106,17 @@ impl App {
 
     fn recent_menu(&mut self, ui: &mut egui::Ui, now: f64) {
         ui.menu_button(text::hud::RECENT, |ui| {
-            let paths = project::read_recent(&storage::app_dir());
-            if paths.is_empty() {
+            let entries = project::read_recent(&storage::app_dir());
+            if entries.is_empty() {
                 ui.label(text::hud::NO_RECENT);
                 return;
             }
-            for path in paths {
-                let label = path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.display().to_string());
-                let full = path.display().to_string();
+            for entry in entries {
+                let label = entry.label();
+                let full = entry.path.display().to_string();
                 if ui.button(label).on_hover_text(full).clicked() {
                     ui.close();
-                    self.load_path(path, now, true);
+                    self.load_path(entry.path, now, true);
                 }
             }
         });

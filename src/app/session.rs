@@ -1,6 +1,8 @@
 //! Project name, path, dirty flag and the notices shown in the header.
 
 use super::{MAX_CELLS, MIN_CELLS, START_CELLS, build_world};
+use crate::export::{self, MapData};
+use crate::layout::Layout;
 use crate::project::{self, Loaded, ProjectFile};
 use crate::storage;
 use crate::text::status;
@@ -13,6 +15,7 @@ const NOTICE_TIME: f64 = 4.0;
 pub(super) struct Session {
     pub(super) name: String,
     path: Option<PathBuf>,
+    created_at: String,
     pub(super) dirty: bool,
     dirty_at: f64,
     pub(super) renaming: bool,
@@ -29,6 +32,7 @@ impl Session {
         Session {
             name,
             path: None,
+            created_at: project::utc_now(),
             dirty: true,
             dirty_at: 0.0,
             renaming: false,
@@ -92,6 +96,7 @@ impl Session {
     fn reset_new(&mut self, name: String, now: f64) {
         self.name = name;
         self.path = None;
+        self.created_at = project::utc_now();
         self.renaming = false;
         self.saved = None;
         self.last = None;
@@ -102,6 +107,7 @@ impl Session {
     fn install(&mut self, name: String, path: Option<PathBuf>, file: ProjectFile) {
         self.name = name;
         self.path = path;
+        self.created_at = file.created_at().to_owned();
         self.renaming = false;
         self.saved = Some(file.clone());
         self.last = Some(file);
@@ -167,11 +173,11 @@ enum Autosave {
 /// Most recent project that is still on disk. Missing entries are dropped.
 fn latest_project() -> Option<PathBuf> {
     let dir = storage::app_dir();
-    for path in project::read_recent(&dir) {
-        if path.is_file() {
-            return Some(path);
+    for entry in project::read_recent(&dir) {
+        if entry.path.is_file() {
+            return Some(entry.path);
         }
-        let _ = project::forget(&dir, &path);
+        let _ = project::forget(&dir, &entry.path);
     }
     None
 }
@@ -258,20 +264,49 @@ impl super::App {
         self.world = loaded.world;
         self.interact.clear();
         self.fit = true;
+        self.session.created_at = loaded.created_at;
+        let modified_at = loaded.modified_at;
         let file = self.project_file_named(&loaded.name);
         self.session.install(loaded.name, path, file);
         if let Some(path) = &self.session.path {
-            let _ = project::remember(&storage::app_dir(), path);
+            let _ = project::remember(
+                &storage::app_dir(),
+                path,
+                &self.session.name,
+                &modified_at,
+            );
         }
     }
 
     /// `announce` shows the path in the header. Autosave stays quiet unless it fails.
     fn write_path(&mut self, path: &Path, now: f64, announce: bool) -> bool {
         let file = self.project_file();
-        match project::write(path, &file) {
-            Ok(()) => {
+        let settings = self.editor.settings();
+        let layout = Layout::new(self.editor.viewport());
+        let map = MapData {
+            seed: self.seed,
+            cells: self.cells,
+            settings: &settings,
+            world: &self.world,
+            biomes: &self.biomes,
+            layout: &layout,
+        };
+        let thumbnail = match export::thumbnail(&map) {
+            Ok(png) => png,
+            Err(err) => {
+                self.session.set_notice(status::error(err), now);
+                return false;
+            }
+        };
+        match project::write(path, &file, &thumbnail) {
+            Ok(modified_at) => {
                 self.session.mark_saved(path, file);
-                let _ = project::remember(&storage::app_dir(), path);
+                let _ = project::remember(
+                    &storage::app_dir(),
+                    path,
+                    &self.session.name,
+                    &modified_at,
+                );
                 if announce {
                     self.session.set_notice(status::saved_to(path), now);
                 }
@@ -294,6 +329,7 @@ impl super::App {
             self.seed,
             self.cells,
             self.grid,
+            &self.session.created_at,
             &self.editor.settings(),
             &self.biomes,
             &self.world,

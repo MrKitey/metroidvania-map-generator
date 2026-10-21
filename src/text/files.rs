@@ -19,6 +19,11 @@ pub const MIME_XML_OLD: &str = "mmg.xml";
 pub const EXPORT_PNG: &str = "map.png";
 pub const EXPORT_SVG: &str = "map.svg";
 pub const EXPORT_JSON: &str = "map.json";
+/// Files inside a project `.mmg` zip.
+pub const PROJECT_JSON: &str = "project.json";
+pub const PROJECT_THUMB: &str = "thumbnail.png";
+pub const PROJECT_BIOMES: &str = "biomes.json";
+pub const PROJECT_ROOMS: &str = "rooms.json";
 
 /// Default name of the export zip.
 pub fn zip_name(seed: u64) -> String {
