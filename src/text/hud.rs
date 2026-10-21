@@ -23,6 +23,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("H", "Secret room"),
     ("P", "Portal room"),
     ("L", "Rooms"),
+    ("M", "Biomes"),
     ("Tab", "Editor"),
     ("Esc", "Quit"),
 ];
@@ -36,6 +37,7 @@ pub const NEW: &str = "New";
 pub const LOAD: &str = "Load";
 pub const RECENT: &str = "Recent";
 pub const SAVE: &str = "Save";
+pub const BIOMES: &str = "Biomes";
 /// Shown when the recent list has no path.
 pub const NO_RECENT: &str = "None";
 

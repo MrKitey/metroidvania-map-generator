@@ -8,7 +8,9 @@
 
 mod app;
 mod biome;
+mod biomes;
 mod color;
+mod common;
 mod editor;
 mod export;
 mod icons;

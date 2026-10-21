@@ -1,45 +1,30 @@
-//! Side panel to edit generation settings and biomes.
+//! Side panel to edit generation settings.
 
-mod biomes_tab;
 mod fields;
 mod settings_tab;
 mod widgets;
 
-use crate::biome::Biome;
+use crate::common::EditorAction;
 use crate::settings::Settings;
 use crate::text;
 use crate::world::Sizes;
-use biomes_tab::BiomesTab;
 use fields::Fields;
 pub use widgets::PANEL_W;
-
-/// What the panel asks the app to do.
-pub enum EditorAction {
-    /// Generate a new map with a fresh seed.
-    Regenerate,
-    /// Generate a map with this seed.
-    UseSeed(u64),
-}
-
 pub struct Editor {
     pub open: bool,
-    tab: usize,
     fields: Fields,
     /// Shows the current seed, can be edited and applied with "Use seed".
     seed: String,
-    biomes_tab: BiomesTab,
     /// Feedback message shown at the bottom of the panel.
-    status: String,
+    pub status: String,
 }
 
 impl Editor {
     pub fn new(seed: u64, settings: &Settings) -> Editor {
         Editor {
             open: false,
-            tab: 0,
             fields: Fields::new(settings),
             seed: seed.to_string(),
-            biomes_tab: BiomesTab::new(),
             status: String::new(),
         }
     }
@@ -81,23 +66,15 @@ impl Editor {
     }
 
     /// Draws the panel and returns what the user asked for, if anything.
-    pub fn draw(&mut self, ui: &mut egui::Ui, biomes: &mut Vec<Biome>) -> Option<EditorAction> {
+    pub fn draw(&mut self, ui: &mut egui::Ui) -> Option<EditorAction> {
         ui.heading(text::editor::WINDOW_TITLE);
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.tab, 0, text::editor::TABS[0]);
-            ui.selectable_value(&mut self.tab, 1, text::editor::TABS[1]);
-        });
         ui.separator();
 
         let mut action = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                action = if self.tab == 0 {
-                    settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status)
-                } else {
-                    self.biomes_tab.draw(ui, biomes, &mut self.status)
-                };
+                action = settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status);
             });
         action
     }

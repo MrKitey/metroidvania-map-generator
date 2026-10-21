@@ -13,12 +13,21 @@ pub fn draw(
     status: &mut String,
 ) -> Option<EditorAction> {
     let mut action = None;
+    let mut changed = false;
 
     ui.horizontal(|ui| {
-        ui.add(egui::TextEdit::singleline(seed).desired_width(160.0));
+        if ui
+            .add(egui::TextEdit::singleline(seed).desired_width(160.0))
+            .changed()
+        {
+            changed = true;
+        }
         if ui.button(text::USE_SEED).clicked() {
             match seed.trim().parse() {
-                Ok(seed) => action = Some(EditorAction::UseSeed(seed)),
+                Ok(s) => {
+                    action = Some(EditorAction::UseSeed(s));
+                    changed = true;
+                }
                 Err(_) => *status = status::INVALID_SEED.to_owned(),
             }
         }
@@ -28,39 +37,72 @@ pub fn draw(
     ui.label(text::SCREEN_SIZE);
     ui.horizontal(|ui| {
         ui.label(text::WIDTH);
-        ui.add(egui::TextEdit::singleline(&mut fields.viewport_w).desired_width(80.0));
+        if ui
+            .add(egui::TextEdit::singleline(&mut fields.viewport_w).desired_width(80.0))
+            .changed()
+        {
+            changed = true;
+        }
         ui.label(text::HEIGHT);
-        ui.add(egui::TextEdit::singleline(&mut fields.viewport_h).desired_width(80.0));
+        if ui
+            .add(egui::TextEdit::singleline(&mut fields.viewport_h).desired_width(80.0))
+            .changed()
+        {
+            changed = true;
+        }
     });
     ui.separator();
 
     ui.label(text::min_rooms_label(MAX_MIN_ROOMS));
     ui.horizontal(|ui| {
         ui.label(text::MINIMUM);
-        ui.add(egui::TextEdit::singleline(&mut fields.min_rooms).desired_width(80.0));
+        if ui
+            .add(egui::TextEdit::singleline(&mut fields.min_rooms).desired_width(80.0))
+            .changed()
+        {
+            changed = true;
+        }
     });
     ui.label(text::MAX_ROOMS_LABEL);
     ui.horizontal(|ui| {
         ui.label(text::MAXIMUM);
-        ui.add(egui::TextEdit::singleline(&mut fields.max_rooms).desired_width(80.0));
+        if ui
+            .add(egui::TextEdit::singleline(&mut fields.max_rooms).desired_width(80.0))
+            .changed()
+        {
+            changed = true;
+        }
     });
     ui.separator();
 
     ui.collapsing(text::room_sizes_label(MAX_ROOM_SIDE), |ui| {
-        size_list(ui, &mut fields.sizes, DEFAULT_ROOM_SIZES);
+        if size_list(ui, &mut fields.sizes, DEFAULT_ROOM_SIZES) {
+            changed = true;
+        }
     });
     ui.collapsing(text::boss_sizes_label(MAX_ROOM_SIDE), |ui| {
-        size_list(ui, &mut fields.boss_sizes, DEFAULT_BOSS_SIZES);
+        if size_list(ui, &mut fields.boss_sizes, DEFAULT_BOSS_SIZES) {
+            changed = true;
+        }
     });
     ui.collapsing(text::corridor_sizes_label(MAX_ROOM_SIDE), |ui| {
-        size_list(ui, &mut fields.corridor_sizes, DEFAULT_CORRIDOR_SIZES);
+        if size_list(ui, &mut fields.corridor_sizes, DEFAULT_CORRIDOR_SIZES) {
+            changed = true;
+        }
     });
     ui.separator();
 
-    ui.checkbox(&mut fields.autosave, text::AUTOSAVE);
+    if ui.checkbox(&mut fields.autosave, text::AUTOSAVE).changed() {
+        changed = true;
+    }
     ui.horizontal(|ui| {
         ui.label(text::AUTOSAVE_DELAY);
-        ui.add(egui::TextEdit::singleline(&mut fields.autosave_secs).desired_width(80.0));
+        if ui
+            .add(egui::TextEdit::singleline(&mut fields.autosave_secs).desired_width(80.0))
+            .changed()
+        {
+            changed = true;
+        }
     });
     ui.separator();
 
@@ -69,15 +111,15 @@ pub fn draw(
         if ui.button(text::GENERATE).clicked() {
             action = Some(EditorAction::Regenerate);
         }
-        if ui.button(text::SAVE_SETTINGS).clicked() {
-            *status = match settings::save(&fields.settings()) {
-                Ok(path) => status::saved_to(&path),
-                Err(e) => status::error(e),
-            };
-        }
     });
     if !status.is_empty() {
         ui.label(status.as_str());
+    }
+    if changed {
+        *status = match settings::save(&fields.settings()) {
+            Ok(path) => status::saved_to(&path),
+            Err(e) => status::error(e),
+        };
     }
     action
 }

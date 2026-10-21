@@ -7,12 +7,15 @@ mod map;
 mod session;
 
 use crate::biome::{self, Biome};
-use crate::editor::{self, Editor, EditorAction};
+use crate::biomes::BiomesTab;
+use crate::common::EditorAction;
+use crate::editor::{self, Editor};
 use crate::icons::Icons;
 use crate::layout::Layout;
 use crate::platform::WaylandDrop;
 use crate::render::{self, COPIED_TIME};
 use crate::settings;
+use crate::text;
 use crate::view::View;
 use crate::world::{Params, World, time_seed};
 use egui::{Color32, Key, ViewportCommand};
@@ -55,6 +58,9 @@ pub struct App {
     help_open: bool,
     /// Room list panel on the left.
     rooms_open: bool,
+    /// Biomes panel.
+    biomes_open: bool,
+    biomes_tab: BiomesTab,
     grid: bool,
     session: Session,
     interact: Interaction,
@@ -82,6 +88,8 @@ impl App {
             copied_at: f64::NEG_INFINITY,
             help_open: false,
             rooms_open: false,
+            biomes_open: false,
+            biomes_tab: BiomesTab::new(),
             grid: true,
             session: Session::new(seed.to_string()),
             interact: Interaction::new(),
@@ -135,6 +143,9 @@ impl App {
         }
         if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::L)) {
             self.rooms_open = !self.rooms_open;
+        }
+        if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::M)) {
+            self.biomes_open = !self.biomes_open;
         }
 
         let mut escape = ctx.input(|i| i.key_pressed(Key::Escape));
@@ -193,7 +204,7 @@ impl eframe::App for App {
                 .default_size(editor::PANEL_W)
                 .min_size(280.0)
                 .show(ui, |ui| {
-                    action = self.editor.draw(ui, &mut self.biomes);
+                    action = self.editor.draw(ui);
                 });
             if let Some(action) = action {
                 self.apply_action(action);
@@ -209,6 +220,8 @@ impl eframe::App for App {
                 .default_size(editor::PANEL_W)
                 .min_size(280.0)
                 .show(ui, |ui| {
+                    ui.heading(text::rooms::ROOMS);
+                    ui.separator();
                     let (picker, drag) = render::draw_room_list(ui, &sizes, &layout);
                     started = drag;
                     room_list = Some(picker);
@@ -216,6 +229,21 @@ impl eframe::App for App {
             if let Some((choice, size)) = started {
                 self.interact.placing = Some(choice);
                 self.interact.placing_size = size;
+            }
+        }
+
+        if self.biomes_open {
+            let mut action = None;
+            egui::Panel::right("biomes")
+                .default_size(editor::PANEL_W)
+                .min_size(280.0)
+                .show(ui, |ui| {
+                    ui.heading(text::hud::BIOMES);
+                    ui.separator();
+                    action = self.biomes_tab.draw(ui, &mut self.biomes);
+                });
+            if let Some(action) = action {
+                self.apply_action(action);
             }
         }
 

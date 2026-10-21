@@ -36,6 +36,9 @@ impl App {
                 if ui.button(text::hud::EDITOR).clicked() {
                     self.editor.open = !self.editor.open;
                 }
+                if ui.button(text::hud::BIOMES).clicked() {
+                    self.biomes_open = !self.biomes_open;
+                }
                 if ui.button(text::rooms::ROOMS).clicked() {
                     self.rooms_open = !self.rooms_open;
                 }

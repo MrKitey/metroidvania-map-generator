@@ -3,14 +3,11 @@
 use std::fmt::Display;
 
 pub const WINDOW_TITLE: &str = "Editor";
-pub const TABS: &[&str] = &["Settings", "Biomes"];
 
 pub const USE_SEED: &str = "Use seed";
 pub const GENERATE: &str = "Generate";
-pub const SAVE_SETTINGS: &str = "Save settings";
 pub const ADD: &str = "Add";
 pub const IMPORT: &str = "Import";
-pub const SAVE: &str = "Save";
 pub const DELETE: &str = "Delete";
 pub const ADD_SIZE: &str = "Add size";
 pub const RESET: &str = "Reset";
