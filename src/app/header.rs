@@ -131,6 +131,7 @@ impl App {
             settings: &settings,
             world: &self.world,
             biomes: &self.biomes,
+            special: &self.special,
             layout: &layout,
         };
         if let Some(text) = export::save_with_dialog(&map) {

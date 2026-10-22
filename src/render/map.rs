@@ -2,7 +2,8 @@
 
 use super::theme::{door_color, room_border, room_fill};
 use crate::biome::Biome;
-use crate::icons::{IconId, Icons};
+use crate::icon_lib::IconDef;
+use crate::icons::{self, Icons};
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::{Door, Room, World};
@@ -59,21 +60,19 @@ pub fn icon_side_px(layout: &Layout, scale: f32) -> f32 {
     (layout.cw.min(layout.ch) * ICON_SHARE * scale).max(MIN_ICON_PX)
 }
 
-/// Icons of a room, left to right, as (icon, top-left corner, side) in world units.
+/// Icons of a room, left to right, as (id, top-left corner, side) in world units.
 /// A room with a kind icon and a marker shows both, side by side, smaller.
 /// `side` is the side of a single icon.
-pub fn room_icons(r: &Room, layout: &Layout, side: f32) -> Vec<(IconId, Vec2, f32)> {
-    let kind = IconId::of_kind(r.kind);
-    let marker = r.marker.map(IconId::of_marker);
-    let both = kind.is_some() && marker.is_some();
+pub fn room_icons(r: &Room, layout: &Layout, side: f32) -> Vec<(String, Vec2, f32)> {
+    let ids = icons::room_icon_ids(r);
+    let both = ids.len() > 1;
     let s = if both { side * PAIR_SHARE } else { side };
     let c = vec2(
         (r.x as f32 + r.w as f32 / 2.0) * layout.cw,
         (r.y as f32 + r.h as f32 / 2.0) * layout.ch,
     );
     let mut x = if both { c.x - s } else { c.x - s / 2.0 };
-    kind.into_iter()
-        .chain(marker)
+    ids.into_iter()
         .map(|id| {
             let corner = vec2(x, c.y - s / 2.0);
             x += s;
@@ -124,6 +123,7 @@ pub fn draw_map(
     painter: &Painter,
     world: &World,
     biomes: &[Biome],
+    special: &[IconDef],
     layout: &Layout,
     map_view: &MapView,
     icons: &mut Icons,
@@ -139,9 +139,9 @@ pub fn draw_map(
             continue;
         }
         let rect = to_screen(view, map, world_rect);
-        let (border, thick) = room_border(r, biomes);
+        let (border, thick) = room_border(r, biomes, special);
         let thickness = if thick { t + 1.0 } else { t };
-        painter.rect_filled(rect, 0.0, room_fill(r, biomes));
+        painter.rect_filled(rect, 0.0, room_fill(r, biomes, special));
         painter.rect_stroke(
             rect,
             0.0,
@@ -172,7 +172,7 @@ pub fn draw_map(
             painter.rect_filled(
                 to_screen(view, map, world_rect),
                 0.0,
-                door_color(world, biomes, d),
+                door_color(world, biomes, special, d),
             );
         }
     }
@@ -187,8 +187,9 @@ pub fn draw_map(
         }
         for (id, corner, s) in room_icons(r, layout, side) {
             let dest = Rect::from_min_size(view.world_to_screen(corner, map), vec2(s, s) * scale);
-            let tex = icons.get(painter.ctx(), id, px);
-            painter.image(tex.id(), dest, uv, Color32::WHITE);
+            if let Some(tex) = icons.get(painter.ctx(), &id, px) {
+                painter.image(tex.id(), dest, uv, Color32::WHITE);
+            }
         }
     }
 }

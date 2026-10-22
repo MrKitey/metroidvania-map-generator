@@ -4,11 +4,11 @@ mod drag;
 
 use super::{UndoEntry, remember};
 use crate::biome::Biome;
-use crate::icons::IconId;
 use crate::layout::Layout;
 use crate::render::{Ghost, RoomLegend};
+use crate::text::icons as ids;
 use crate::view::View;
-use crate::world::{Choice, Marker, RoomKind, World};
+use crate::world::{Choice, RoomKind, World};
 use egui::{Context, Event, Key, Pos2, Rect, Vec2};
 
 /// Pointer travel below this, in points, is a click and clears the selection.
@@ -55,8 +55,8 @@ pub(super) struct Interaction {
     selected: Vec<usize>,
     /// Screen position where the selection rectangle started.
     selecting: Option<Pos2>,
-    /// Icon of the room type legend being dragged onto a room, if any.
-    pub(super) icon_drag: Option<IconId>,
+    /// Icon id of the room type legend being dragged onto a room, if any.
+    pub(super) icon_drag: Option<String>,
 }
 
 impl Interaction {
@@ -227,7 +227,7 @@ impl Interaction {
         cells: u32,
         biomes: &[Biome],
     ) {
-        let Some(icon) = self.icon_drag else {
+        let Some(icon) = self.icon_drag.clone() else {
             if p.left && !p.consumed && self.placing.is_none() && self.moving.is_none() {
                 self.icon_drag = legend.icon_at(p.pos);
             }
@@ -237,7 +237,7 @@ impl Interaction {
             self.icon_drag = None;
         } else if !p.left_down {
             if let Some(room) = hovered {
-                tag_room(world, room, icon, undo, seed, cells, biomes);
+                tag_room(world, room, &icon, undo, seed, cells, biomes);
             }
             self.icon_drag = None;
         }
@@ -310,16 +310,16 @@ impl Interaction {
             return;
         }
         if ctx.input(|i| i.key_pressed(Key::B)) {
-            tag_room(world, room, IconId::Boss, undo, seed, cells, biomes);
+            tag_room(world, room, ids::BOSS, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::S) && !i.modifiers.command) {
-            tag_room(world, room, IconId::Save, undo, seed, cells, biomes);
+            tag_room(world, room, ids::SAVE, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::H)) {
-            tag_room(world, room, IconId::Secret, undo, seed, cells, biomes);
+            tag_room(world, room, ids::SECRET, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::P)) {
-            tag_room(world, room, IconId::Portal, undo, seed, cells, biomes);
+            tag_room(world, room, ids::PORTAL, undo, seed, cells, biomes);
         }
     }
 }
@@ -327,22 +327,16 @@ impl Interaction {
 fn tag_room(
     world: &mut World,
     room: usize,
-    icon: IconId,
+    icon: &str,
     undo: &mut Vec<UndoEntry>,
     seed: u64,
     cells: u32,
     biomes: &[Biome],
 ) {
-    if matches!(icon, IconId::Secret | IconId::Portal)
-        && world.rooms[room].kind == RoomKind::Corridor
+    if matches!(icon, ids::SECRET | ids::PORTAL) && world.rooms[room].kind == RoomKind::Corridor
     {
         return;
     }
     remember(undo, world, seed, cells, biomes);
-    match icon {
-        IconId::Boss => world.toggle_marker(room, Marker::Boss),
-        IconId::Save => world.toggle_marker(room, Marker::Save),
-        IconId::Secret => world.toggle_kind(room, RoomKind::Secret),
-        IconId::Portal => world.toggle_kind(room, RoomKind::Portal),
-    }
+    world.toggle_icon(room, icon);
 }

@@ -1,6 +1,8 @@
 //! Edits made by the user on a generated map.
 
 use super::{Door, Marker, Room, RoomKind, World};
+use crate::icon_lib;
+use crate::text::icons as ids;
 use std::collections::{BTreeMap, HashSet};
 
 /// Kind of room offered by the room picker.
@@ -52,9 +54,10 @@ impl World {
     }
 
     /// Sets the marker, or clears it if the room already has this one.
-    /// A new marker replaces the secret or portal kind.
+    /// A new marker replaces the secret or portal kind and any custom icon.
     pub fn toggle_marker(&mut self, idx: usize, marker: Marker) {
         let room = &mut self.rooms[idx];
+        room.icon = None;
         if room.marker == Some(marker) {
             room.marker = None;
             return;
@@ -66,17 +69,57 @@ impl World {
     }
 
     /// Sets the kind (secret or portal), or goes back to normal if the room already has it.
-    /// A new kind replaces the marker. Corridors keep their kind.
+    /// A new kind replaces the marker and any custom icon. Corridors keep their kind.
     pub fn toggle_kind(&mut self, idx: usize, kind: RoomKind) {
         let room = &mut self.rooms[idx];
         if room.kind == RoomKind::Corridor {
             return;
         }
+        room.icon = None;
         if room.kind == kind {
             room.kind = RoomKind::Normal;
         } else {
             room.kind = kind;
             room.marker = None;
+        }
+    }
+
+    /// Toggles a special-room icon by id. Reserved ids update `marker` / `kind`.
+    /// Custom ids toggle `Room.icon` and clear reserved tags.
+    pub fn toggle_icon(&mut self, idx: usize, id: &str) {
+        if icon_lib::is_reserved(id) {
+            match id {
+                ids::BOSS => self.toggle_marker(idx, Marker::Boss),
+                ids::SAVE => self.toggle_marker(idx, Marker::Save),
+                ids::SECRET => self.toggle_kind(idx, RoomKind::Secret),
+                ids::PORTAL => self.toggle_kind(idx, RoomKind::Portal),
+                _ => {}
+            }
+            return;
+        }
+        let room = &mut self.rooms[idx];
+        if room.kind == RoomKind::Corridor {
+            return;
+        }
+        if room.icon.as_deref() == Some(id) {
+            room.icon = None;
+            return;
+        }
+        room.icon = Some(id.to_owned());
+        room.marker = None;
+        if matches!(room.kind, RoomKind::Secret | RoomKind::Portal) {
+            room.kind = RoomKind::Normal;
+        }
+    }
+
+    /// Clears custom icons that no longer exist in the library.
+    pub fn clear_missing_icons(&mut self, valid: &[String]) {
+        for room in &mut self.rooms {
+            if let Some(id) = &room.icon {
+                if !valid.iter().any(|v| v == id) {
+                    room.icon = None;
+                }
+            }
         }
     }
 

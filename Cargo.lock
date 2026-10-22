@@ -1618,6 +1618,8 @@ dependencies = [
  "num-traits",
  "png",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -1870,6 +1872,7 @@ dependencies = [
  "eframe",
  "egui",
  "fastrand",
+ "image",
  "libc",
  "png",
  "raw-window-handle",

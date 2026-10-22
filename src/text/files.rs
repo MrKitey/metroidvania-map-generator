@@ -3,7 +3,10 @@
 /// Folder created in the user's Documents to hold the app files.
 pub const APP_DIR: &str = "Metroidvania Map Generator";
 pub const BIOMES: &str = "biomes.json";
+pub const SPECIAL_ROOM: &str = "special-room.json";
 pub const SETTINGS: &str = "settings.json";
+pub const IMAGE_FILTER: &str = "Images";
+pub const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "svg"];
 pub const JSON_FILTER: &str = "JSON";
 pub const JSON_EXT: &str = "json";
 pub const ZIP_FILTER: &str = "Zip";

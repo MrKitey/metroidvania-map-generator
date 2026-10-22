@@ -291,6 +291,7 @@ impl super::App {
             settings: &settings,
             world: &self.world,
             biomes: &self.biomes,
+            special: &self.special,
             layout: &layout,
         };
         let thumbnail = match export::thumbnail(&map) {
@@ -344,16 +345,30 @@ impl super::App {
                 .raw
                 .dropped_files
                 .iter()
-                .map(|file| file.path().to_owned())
+                .map(|file| file.path().to_path_buf())
                 .collect()
         });
         self.open_dropped(dropped, now);
     }
 
-    /// Opens the first `.mmg` in the list. Another extension shows an error.
+    /// Opens the first `.mmg`, or feeds an image to the Special Room tab when it is open.
     pub(super) fn open_dropped(&mut self, dropped: Vec<PathBuf>, now: f64) {
         if dropped.is_empty() {
             return;
+        }
+        if self.editor.special_tab_open() {
+            let paths: Vec<_> = dropped.iter().cloned().collect();
+            if self.editor.icons_tab.handle_drops(
+                &paths,
+                &mut self.special,
+                &mut self.icons,
+                &mut self.legend_icons,
+            ) {
+                if let Some(msg) = self.editor.icons_tab.take_status() {
+                    self.session.set_notice(msg, now);
+                }
+                return;
+            }
         }
         let Some(path) = dropped.into_iter().find(|path| project::is_mmg(path)) else {
             self.session.set_notice(status::NOT_MMG.to_owned(), now);

@@ -5,6 +5,8 @@ use std::path::Path;
 
 pub const INVALID_SEED: &str = "Invalid seed";
 pub const AT_LEAST_ONE_BIOME: &str = "At least one biome is required";
+pub const NO_VALID_ICON: &str = "No valid special room icon";
+pub const AT_LEAST_ONE_ICON: &str = "At least one special room is required";
 pub const BAD_VERSION: &str = "Unsupported project version";
 pub const EMPTY_MAP: &str = "Empty map";
 pub const EMPTY_ROOM: &str = "Empty room";

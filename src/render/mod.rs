@@ -16,7 +16,8 @@ pub use picker::{Ghost, Picker, draw_drag_outline, draw_room_list};
 pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, door_color, room_border, room_fill};
 
 use crate::biome::Biome;
-use crate::icons::{IconId, Icons};
+use crate::icon_lib::IconDef;
+use crate::icons::Icons;
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::World;
@@ -47,8 +48,10 @@ pub struct Frame<'a> {
     pub selected: &'a [usize],
     /// Selection rectangle, in screen points, while the button is held.
     pub select_rect: Option<Rect>,
-    /// Icon being dragged from the room type legend, if any.
-    pub dragged_icon: Option<IconId>,
+    /// Icon id being dragged from the room type legend, if any.
+    pub dragged_icon: Option<String>,
+    /// Special-room library used for colors and the drag preview.
+    pub special: &'a [IconDef],
 }
 
 /// World area shown by the camera, with one unit of margin so nothing pops at the edges.
@@ -83,7 +86,15 @@ pub fn draw_world(
         hovered: f.hovered,
         selected: f.selected,
     };
-    draw_map(&painter, world, biomes, f.layout, &view, icons);
+    draw_map(
+        &painter,
+        world,
+        biomes,
+        f.special,
+        f.layout,
+        &view,
+        icons,
+    );
     if let Some(g) = &f.ghost {
         picker::draw_ghost(&painter, g, f.layout, f.view, f.map_rect);
     }
@@ -107,15 +118,15 @@ pub fn draw_world(
     legend::draw_legends(ui, biomes, f.legend, legend_icons);
     hud::draw_seed(ui, f.hud);
     if let Some(i) = f.hovered {
-        hud::draw_tooltip(ui, &world.rooms[i], biomes, f.layout);
+        hud::draw_tooltip(ui, &world.rooms[i], biomes, f.special, f.layout);
     }
     if let Some(g) = &f.ghost {
         hud::draw_ghost_label(ui, g, f.layout);
     } else if let [g] = f.move_ghosts.as_slice() {
         hud::draw_ghost_label(ui, g, f.layout);
     }
-    if let Some(icon) = f.dragged_icon {
-        legend::draw_dragged_icon(ui, icon, legend_icons);
+    if let Some(icon) = &f.dragged_icon {
+        legend::draw_dragged_icon(ui, icon, f.special, legend_icons);
     }
 }
 

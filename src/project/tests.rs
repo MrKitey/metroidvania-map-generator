@@ -36,6 +36,7 @@ fn sample() -> (ProjectFile, World) {
             biome: 0,
             kind: RoomKind::Normal,
             marker: Some(Marker::Boss),
+            icon: None,
         }],
         vec![Door {
             a: 0,

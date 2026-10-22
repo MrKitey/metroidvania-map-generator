@@ -1,23 +1,15 @@
 //! Colors and sizes shared by the drawing code, and the color of each room.
 
 use crate::biome::Biome;
-use crate::world::{Door, Marker, Room, RoomKind, World};
+use crate::icon_lib::{self, IconDef};
+use crate::icons::{fallback_colors, room_icon_ids};
+use crate::world::{Door, Room, RoomKind, World};
 use egui::Color32;
 
 pub const BACKGROUND: Color32 = Color32::from_rgb(15, 15, 22);
 pub const CORRIDOR_BORDER: Color32 = Color32::from_rgb(150, 150, 150);
 /// Color of doors between two different biomes.
 pub const TRANSITION_DOOR: Color32 = Color32::from_rgb(240, 230, 180);
-/// Rooms with a boss or save marker use these instead of their biome colors.
-pub const BOSS_FILL: Color32 = Color32::from_rgb(0x80, 0x00, 0x00);
-pub const BOSS_BORDER: Color32 = Color32::from_rgb(0xFF, 0x00, 0x00);
-pub const SAVE_FILL: Color32 = Color32::from_rgb(0x00, 0x80, 0x00);
-pub const SAVE_BORDER: Color32 = Color32::from_rgb(0x00, 0xFF, 0x00);
-/// Secret and portal rooms use these too.
-pub const SECRET_FILL: Color32 = Color32::from_rgb(0x80, 0x80, 0x00);
-pub const SECRET_BORDER: Color32 = Color32::from_rgb(0xFF, 0xFF, 0x00);
-pub const PORTAL_FILL: Color32 = Color32::from_rgb(0x00, 0x80, 0x80);
-pub const PORTAL_BORDER: Color32 = Color32::from_rgb(0x00, 0xFF, 0xFF);
 pub const BUTTON_BG: Color32 = Color32::from_rgb(35, 35, 50);
 pub const BUTTON_HOVER: Color32 = Color32::from_rgb(55, 55, 75);
 
@@ -35,41 +27,46 @@ fn darker(c: Color32) -> Color32 {
     )
 }
 
+fn special_colors(r: &Room, icons: &[IconDef]) -> Option<(Color32, Color32)> {
+    let id = room_icon_ids(r).into_iter().next()?;
+    if let Some(def) = icon_lib::find(icons, &id) {
+        return Some((def.fill, def.border));
+    }
+    fallback_colors(&id)
+}
+
 /// Biome color for a room. Corridors use a darker shade.
-pub fn room_fill(r: &Room, biomes: &[Biome]) -> Color32 {
-    match r.marker {
-        Some(Marker::Boss) => return BOSS_FILL,
-        Some(Marker::Save) => return SAVE_FILL,
-        None => {}
+pub fn room_fill(r: &Room, biomes: &[Biome], icons: &[IconDef]) -> Color32 {
+    if let Some((fill, _)) = special_colors(r, icons) {
+        return fill;
     }
     let fill = biomes[r.biome].fill;
     match r.kind {
         RoomKind::Normal => fill,
-        RoomKind::Secret => SECRET_FILL,
-        RoomKind::Portal => PORTAL_FILL,
+        RoomKind::Secret | RoomKind::Portal => fill,
         RoomKind::Corridor => darker(fill),
     }
 }
 
 /// Border color of a room, and whether the border is thicker than usual.
 /// Rooms with a marker or a special kind stand out.
-pub fn room_border(r: &Room, biomes: &[Biome]) -> (Color32, bool) {
-    match (r.marker, r.kind) {
-        (Some(Marker::Boss), _) => (BOSS_BORDER, true),
-        (Some(Marker::Save), _) => (SAVE_BORDER, true),
-        (_, RoomKind::Secret) => (SECRET_BORDER, true),
-        (_, RoomKind::Portal) => (PORTAL_BORDER, true),
-        (_, RoomKind::Normal) => (biomes[r.biome].border(), false),
-        (_, RoomKind::Corridor) => (CORRIDOR_BORDER, false),
+pub fn room_border(r: &Room, biomes: &[Biome], icons: &[IconDef]) -> (Color32, bool) {
+    if let Some((_, border)) = special_colors(r, icons) {
+        return (border, true);
+    }
+    match r.kind {
+        RoomKind::Normal => (biomes[r.biome].border(), false),
+        RoomKind::Corridor => (CORRIDOR_BORDER, false),
+        RoomKind::Secret | RoomKind::Portal => (biomes[r.biome].border(), true),
     }
 }
 
 /// Color of a door. A door inside a biome takes the room color so it blends in,
 /// a door between biomes stands out.
-pub fn door_color(world: &World, biomes: &[Biome], d: &Door) -> Color32 {
+pub fn door_color(world: &World, biomes: &[Biome], icons: &[IconDef], d: &Door) -> Color32 {
     let (a, b) = (&world.rooms[d.a], &world.rooms[d.b]);
     if a.biome == b.biome {
-        room_fill(b, biomes)
+        room_fill(b, biomes, icons)
     } else {
         TRANSITION_DOOR
     }

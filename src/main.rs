@@ -13,6 +13,7 @@ mod color;
 mod common;
 mod editor;
 mod export;
+mod icon_lib;
 mod icons;
 mod layout;
 mod platform;

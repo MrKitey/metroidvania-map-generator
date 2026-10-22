@@ -2,17 +2,18 @@
 
 use super::{MapData, PX_PER_UNIT};
 use crate::color::to_hex;
-use crate::icons::IconId;
+use crate::icons::{self, room_icon_ids};
 use crate::render::{
     door_color, door_rect, icon_side_px, line_thickness, room_border, room_fill, room_icons,
     room_rect,
 };
+use std::collections::HashSet;
 use std::fmt::Write;
 
 /// Vector version of the map, in world units, on a transparent background.
 /// Mirrors `render::draw_map`: rooms, then doors, then icons.
 pub fn render(map: &MapData) -> String {
-    let (world, biomes, layout) = (map.world, map.biomes, map.layout);
+    let (world, biomes, special, layout) = (map.world, map.biomes, map.special, map.layout);
     let (min, max) = map.area();
     let size = max - min;
     // Border and door thickness. A thick border is one image pixel thicker.
@@ -33,17 +34,28 @@ pub fn render(map: &MapData) -> String {
         size.y * PX_PER_UNIT,
     );
 
+    let mut used = HashSet::new();
+    for r in &world.rooms {
+        for id in room_icon_ids(r) {
+            used.insert(id);
+        }
+    }
+
     // Each icon is defined once, then placed with <use>.
     svg.push_str("<defs>\n");
-    for id in IconId::ALL {
-        let tag = format!("<svg id=\"{}\"", id.name());
-        svg.push_str(&id.svg().trim().replacen("<svg", &tag, 1));
-        svg.push('\n');
+    for def in special {
+        if !used.contains(&def.id) {
+            continue;
+        }
+        if let Some(def_svg) = icons::export_svg_def(def) {
+            svg.push_str(&def_svg);
+            svg.push('\n');
+        }
     }
     svg.push_str("</defs>\n");
 
     for r in &world.rooms {
-        let (border, is_thick) = room_border(r, biomes);
+        let (border, is_thick) = room_border(r, biomes, special);
         let thickness = if is_thick { thick } else { t };
         // SVG strokes are centered on the edge, so the rectangle is inset by half of it
         // to keep the border inside the room, as in the app.
@@ -56,7 +68,7 @@ pub fn render(map: &MapData) -> String {
             rect.min.y + half,
             rect.width() - thickness,
             rect.height() - thickness,
-            to_hex(room_fill(r, biomes)),
+            to_hex(room_fill(r, biomes, special)),
             to_hex(border),
             thickness,
         );
@@ -72,7 +84,7 @@ pub fn render(map: &MapData) -> String {
             rect.min.y,
             rect.width(),
             rect.height(),
-            to_hex(door_color(world, biomes, d)),
+            to_hex(door_color(world, biomes, special, d)),
         );
     }
 
@@ -81,10 +93,8 @@ pub fn render(map: &MapData) -> String {
         for (id, corner, s) in room_icons(r, layout, side) {
             let _ = writeln!(
                 svg,
-                "<use xlink:href=\"#{}\" x=\"{}\" y=\"{}\" width=\"{s}\" height=\"{s}\"/>",
-                id.name(),
-                corner.x,
-                corner.y,
+                "<use xlink:href=\"#{id}\" x=\"{}\" y=\"{}\" width=\"{s}\" height=\"{s}\"/>",
+                corner.x, corner.y,
             );
         }
     }
