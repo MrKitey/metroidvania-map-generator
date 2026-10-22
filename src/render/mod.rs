@@ -21,7 +21,7 @@ use crate::icons::Icons;
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::World;
-use egui::{Color32, FontId, Rect, Stroke, StrokeKind, Ui, vec2};
+use egui::{Color32, CursorIcon, FontId, Rect, Stroke, StrokeKind, Ui, vec2};
 
 pub(super) fn text_width(ctx: &egui::Context, text: &str, size: f32) -> f32 {
     ctx.fonts_mut(|f| {
@@ -161,6 +161,7 @@ pub fn apply_theme(ctx: &egui::Context, dark: bool) {
         visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(200, 200, 214);
         visuals.widgets.active.bg_fill = egui::Color32::from_rgb(200, 200, 214);
     }
+    visuals.interact_cursor = Some(CursorIcon::PointingHand);
     ctx.set_visuals(visuals);
     ctx.all_styles_mut(|style| {
         style.spacing.item_spacing = vec2(8.0, 6.0);

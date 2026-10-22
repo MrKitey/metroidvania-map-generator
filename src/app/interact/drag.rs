@@ -146,6 +146,9 @@ impl Interaction {
             CursorIcon::PointingHand
         } else if hovered.is_some() {
             CursorIcon::Grab
+        } else if !p.on_map_rect {
+            // Leave the cursor to egui widgets in the header and side panels.
+            return;
         } else {
             CursorIcon::Default
         };
