@@ -9,8 +9,8 @@ Built with Rust and [egui](https://github.com/emilk/egui).
 
 ## Screenshots
 
-[![1](docs/1-thumbnail.png)](docs/1.png) [![2](docs/2-thumbnail.png)](docs/2.png) [![3](docs/3-thumbnail.png)](docs/3.png)
-[![4](docs/4-thumbnail.png)](docs/4.png) [![5](docs/5-thumbnail.png)](docs/5.png) [![6](docs/6-thumbnail.png)](docs/6.png)
+[![1](docs/1-thumbnail.png)](docs/1.png)[![2](docs/2-thumbnail.png)](docs/2.png)[![3](docs/3-thumbnail.png)](docs/3.png)
+[![4](docs/4-thumbnail.png)](docs/4.png)[![5](docs/5-thumbnail.png)](docs/5.png)[![6](docs/6-thumbnail.png)](docs/6.png)
 
 ## Features
 
