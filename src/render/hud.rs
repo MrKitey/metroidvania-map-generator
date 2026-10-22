@@ -4,6 +4,7 @@ use super::picker::Ghost;
 use super::text_width;
 use super::theme::{BACKGROUND, TRANSITION_DOOR};
 use crate::biome::Biome;
+use crate::icon_lib::{self, IconDef};
 use crate::layout::{Layout, MARGIN};
 use crate::text::hud::{self as t, SHORTCUTS};
 use crate::world::{Marker, Room, RoomKind};
@@ -74,7 +75,13 @@ pub fn draw_help(ctx: &Context, open: &mut bool) {
 }
 
 /// Shows the room name and its size, in cells and in pixels, next to the cursor.
-pub fn draw_tooltip(ui: &Ui, r: &Room, biomes: &[Biome], layout: &Layout) {
+pub fn draw_tooltip(
+    ui: &Ui,
+    r: &Room,
+    biomes: &[Biome],
+    special: &[IconDef],
+    layout: &Layout,
+) {
     let biome = &biomes[r.biome].name;
     let mut name = match r.kind {
         RoomKind::Normal => biome.clone(),
@@ -86,6 +93,12 @@ pub fn draw_tooltip(ui: &Ui, r: &Room, biomes: &[Biome], layout: &Layout) {
         Some(Marker::Boss) => name.push_str(t::BOSS_SUFFIX),
         Some(Marker::Save) => name.push_str(t::SAVE_SUFFIX),
         None => {}
+    }
+    if let Some(id) = &r.icon {
+        let label = icon_lib::find(special, id)
+            .map(|d| d.label.as_str())
+            .unwrap_or(id);
+        name.push_str(&format!(" ({label})"));
     }
     let px = (r.w * layout.viewport.0, r.h * layout.viewport.1);
     draw_cursor_label(ui, &t::tooltip(&name, (r.w, r.h), px));

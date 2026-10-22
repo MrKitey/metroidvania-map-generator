@@ -10,6 +10,7 @@ use crate::biome::{self, Biome};
 use crate::biomes::BiomesTab;
 use crate::common::EditorAction;
 use crate::editor::{self, Editor};
+use crate::icon_lib::{self, IconDef};
 use crate::icons::Icons;
 use crate::layout::Layout;
 use crate::platform::WaylandDrop;
@@ -74,6 +75,7 @@ pub struct App {
     cells: u32,
     seed: u64,
     biomes: Vec<Biome>,
+    special: Vec<IconDef>,
     editor: Editor,
     world: World,
     view: View,
@@ -102,17 +104,23 @@ impl App {
         render::apply_theme(&cc.egui_ctx);
         let seed = time_seed();
         let biomes = biome::load();
+        let special = icon_lib::load();
         let editor = Editor::new(seed, &settings::load());
         let world = build_world(START_CELLS, seed, &biomes, &editor);
+        let mut icons = Icons::new();
+        let mut legend_icons = Icons::new();
+        icons.sync(&special);
+        legend_icons.sync(&special);
         let mut app = App {
             cells: START_CELLS,
             seed,
             biomes,
+            special,
             editor,
             world,
             view: View::new(),
-            icons: Icons::new(),
-            legend_icons: Icons::new(),
+            icons,
+            legend_icons,
             fit: true,
             copied_at: f64::NEG_INFINITY,
             help_open: false,
@@ -249,7 +257,13 @@ impl eframe::App for App {
                 .default_size(editor::PANEL_W)
                 .min_size(280.0)
                 .show(ui, |ui| {
-                    action = self.editor.draw(ui);
+                    action = self.editor.draw(
+                        ui,
+                        &mut self.special,
+                        &mut self.world,
+                        &mut self.icons,
+                        &mut self.legend_icons,
+                    );
                 });
             if let Some(action) = action {
                 self.apply_action(action);

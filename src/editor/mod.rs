@@ -1,34 +1,49 @@
-//! Side panel to edit generation settings.
+//! Side panel to edit generation settings and special-room icons.
 
 mod fields;
+mod icons_tab;
 mod settings_tab;
 mod widgets;
 
 use crate::common::EditorAction;
+use crate::icon_lib::IconDef;
+use crate::icons::Icons;
 use crate::settings::{self, Settings};
 use crate::text::{self, status};
-use crate::world::Sizes;
+use crate::world::{Sizes, World};
 use fields::Fields;
 pub use fields::{MAX_ROOM_SIDE, SizeFields};
+pub use icons_tab::IconsTab;
 pub use widgets::{PANEL_W, size_list};
+
+const TAB_SETTINGS: usize = 0;
+const TAB_SPECIAL: usize = 1;
 
 pub struct Editor {
     pub open: bool,
+    tab: usize,
     fields: Fields,
     /// Shows the current seed, can be edited and applied with "Use seed".
     seed: String,
     /// Feedback message shown at the bottom of the panel.
     pub status: String,
+    pub icons_tab: IconsTab,
 }
 
 impl Editor {
     pub fn new(seed: u64, settings: &Settings) -> Editor {
         Editor {
             open: false,
+            tab: TAB_SETTINGS,
             fields: Fields::new(settings),
             seed: seed.to_string(),
             status: String::new(),
+            icons_tab: IconsTab::new(),
         }
+    }
+
+    pub fn special_tab_open(&self) -> bool {
+        self.open && self.tab == TAB_SPECIAL
     }
 
     /// Normal rooms per biome, at least 1.
@@ -85,15 +100,37 @@ impl Editor {
     }
 
     /// Draws the panel and returns what the user asked for, if anything.
-    pub fn draw(&mut self, ui: &mut egui::Ui) -> Option<EditorAction> {
+    pub fn draw(
+        &mut self,
+        ui: &mut egui::Ui,
+        special: &mut Vec<IconDef>,
+        world: &mut World,
+        icons: &mut Icons,
+        legend_icons: &mut Icons,
+    ) -> Option<EditorAction> {
         ui.heading(text::editor::WINDOW_TITLE);
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.tab, TAB_SETTINGS, text::editor::TAB_SETTINGS);
+            ui.selectable_value(
+                &mut self.tab,
+                TAB_SPECIAL,
+                text::editor::TAB_SPECIAL_ROOM,
+            );
+        });
         ui.separator();
 
         let mut action = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
-            .show(ui, |ui| {
-                action = settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status);
+            .show(ui, |ui| match self.tab {
+                TAB_SPECIAL => {
+                    self.icons_tab
+                        .draw(ui, special, world, icons, legend_icons);
+                }
+                _ => {
+                    action =
+                        settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status);
+                }
             });
         action
     }

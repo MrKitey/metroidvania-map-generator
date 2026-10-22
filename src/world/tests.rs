@@ -371,6 +371,7 @@ fn from_parts_rejects_a_bad_map() {
         biome: 0,
         kind: RoomKind::Normal,
         marker: None,
+        icon: None,
     };
     let overlap = World::from_parts(
         vec![

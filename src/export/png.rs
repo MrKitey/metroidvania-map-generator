@@ -80,6 +80,7 @@ mod tests {
             settings,
             world,
             biomes,
+            special: &[],
             layout,
         }
     }

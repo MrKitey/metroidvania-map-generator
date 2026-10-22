@@ -5,6 +5,7 @@ mod png;
 mod svg;
 
 use crate::biome::Biome;
+use crate::icon_lib::IconDef;
 use crate::layout::Layout;
 use crate::settings::Settings;
 use crate::text::{files, status};
@@ -28,6 +29,7 @@ pub struct MapData<'a> {
     pub settings: &'a Settings,
     pub world: &'a World,
     pub biomes: &'a [Biome],
+    pub special: &'a [IconDef],
     pub layout: &'a Layout,
 }
 

@@ -3,6 +3,8 @@
 use std::fmt::Display;
 
 pub const WINDOW_TITLE: &str = "Editor";
+pub const TAB_SETTINGS: &str = "Settings";
+pub const TAB_SPECIAL_ROOM: &str = "Special Room";
 
 pub const USE_SEED: &str = "Use seed";
 pub const GENERATE: &str = "Generate";
@@ -11,9 +13,14 @@ pub const IMPORT: &str = "Import";
 pub const DELETE: &str = "Delete";
 pub const ADD_SIZE: &str = "Add size";
 pub const RESET: &str = "Reset";
+pub const CHOOSE_FILE: &str = "Choose file";
+pub const DROP_IMAGE: &str = "Drop image here (png, jpg, svg)";
 
 pub const NAME: &str = "Name";
+pub const LABEL: &str = "Label";
 pub const COLOR: &str = "Color";
+pub const FILL: &str = "Fill";
+pub const BORDER: &str = "Border";
 pub const WIDTH: &str = "Width";
 pub const HEIGHT: &str = "Height";
 pub const MINIMUM: &str = "Minimum";

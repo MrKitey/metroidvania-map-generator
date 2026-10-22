@@ -38,7 +38,7 @@ impl App {
 
         let copied = now - self.copied_at < render::COPIED_TIME;
         let hud = Hud::new(&ctx, self.seed, copied, map_rect);
-        let legend = RoomLegend::new(&ctx, &self.world, &self.biomes, map_rect);
+        let legend = RoomLegend::new(&ctx, &self.world, &self.biomes, &self.special, map_rect);
         let mut pointer = Pointer {
             pos: pointer_pos,
             left: ctx.input(|i| i.pointer.button_pressed(PointerButton::Primary)),
@@ -155,7 +155,8 @@ impl App {
             move_ghosts,
             selected: self.interact.selected(),
             select_rect,
-            dragged_icon: self.interact.icon_drag,
+            dragged_icon: self.interact.icon_drag.clone(),
+            special: &self.special,
         };
         render::draw_world(
             ui,

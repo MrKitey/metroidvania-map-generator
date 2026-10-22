@@ -69,6 +69,9 @@ pub struct Room {
     pub biome: usize,
     pub kind: RoomKind,
     pub marker: Option<Marker>,
+    /// Custom special-room icon id. Reserved tags still use `kind` / `marker`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 /// Why `World::from_parts` rejected a saved map.
@@ -148,6 +151,7 @@ impl World {
             biome,
             kind,
             marker: None,
+            icon: None,
         });
         idx
     }
