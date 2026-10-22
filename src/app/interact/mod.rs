@@ -4,11 +4,12 @@ mod drag;
 
 use super::{UndoEntry, remember};
 use crate::biome::Biome;
+use crate::layer::LayerStack;
 use crate::layout::Layout;
 use crate::render::{Ghost, RoomLegend};
 use crate::text::icons as ids;
 use crate::view::View;
-use crate::world::{Choice, RoomKind, World};
+use crate::world::{Choice, RoomKind};
 use egui::{Context, Event, Key, Pos2, Rect, Vec2};
 
 /// Pointer travel below this, in points, is a click and clears the selection.
@@ -43,6 +44,13 @@ struct Moving {
     anchor: (i32, i32),
 }
 
+/// Whole layer being dragged by its name label.
+struct MovingLayer {
+    layer: usize,
+    origins: Vec<(i32, i32)>,
+    anchor: (i32, i32),
+}
+
 pub(super) struct Interaction {
     pub(super) panning: bool,
     /// Room being dragged out of the room list.
@@ -51,12 +59,18 @@ pub(super) struct Interaction {
     pub(super) placing_size: Vec2,
     /// Placed rooms being dragged, if any.
     moving: Option<Moving>,
-    /// Rooms chosen by the selection rectangle.
+    /// Layer being dragged by its on-map name label.
+    moving_layer: Option<MovingLayer>,
+    /// Rooms chosen by the selection rectangle (active layer only).
     selected: Vec<usize>,
     /// Screen position where the selection rectangle started.
     selecting: Option<Pos2>,
     /// Icon id of the room type legend being dragged onto a room, if any.
     pub(super) icon_drag: Option<String>,
+    /// Biome paint brush: click a legend biome, then paint rooms.
+    pub(super) paint_biome: Option<usize>,
+    /// Undo snapshot already taken for the current paint stroke.
+    paint_stroke_saved: bool,
 }
 
 impl Interaction {
@@ -66,18 +80,24 @@ impl Interaction {
             placing: None,
             placing_size: Vec2::ZERO,
             moving: None,
+            moving_layer: None,
             selected: Vec::new(),
             selecting: None,
             icon_drag: None,
+            paint_biome: None,
+            paint_stroke_saved: false,
         }
     }
 
     pub(super) fn clear(&mut self) {
         self.moving = None;
+        self.moving_layer = None;
         self.selected.clear();
         self.selecting = None;
         self.placing = None;
         self.icon_drag = None;
+        self.paint_biome = None;
+        self.paint_stroke_saved = false;
         self.panning = false;
     }
 
@@ -85,17 +105,22 @@ impl Interaction {
     pub(super) fn cancel(&mut self) -> bool {
         let active = self.placing.is_some()
             || self.moving.is_some()
+            || self.moving_layer.is_some()
             || self.selecting.is_some()
             || !self.selected.is_empty()
-            || self.icon_drag.is_some();
+            || self.icon_drag.is_some()
+            || self.paint_biome.is_some();
         if !active {
             return false;
         }
         self.placing = None;
         self.moving = None;
+        self.moving_layer = None;
         self.selecting = None;
         self.selected.clear();
         self.icon_drag = None;
+        self.paint_biome = None;
+        self.paint_stroke_saved = false;
         true
     }
 
@@ -107,23 +132,67 @@ impl Interaction {
         self.selecting.map(|start| Rect::from_two_pos(start, pos))
     }
 
-    pub(super) fn select_biome(&mut self, world: &World, biome: usize) {
-        self.selected = world
-            .rooms
-            .iter()
-            .enumerate()
-            .filter(|(_, room)| room.biome == biome)
-            .map(|(i, _)| i)
-            .collect();
+    /// Activates biome paint mode. Clicking the same biome again turns it off.
+    pub(super) fn set_paint_biome(&mut self, biome: usize) {
+        self.paint_biome = match self.paint_biome {
+            Some(b) if b == biome => None,
+            _ => Some(biome),
+        };
+        self.paint_stroke_saved = false;
         self.moving = None;
         self.selecting = None;
+        self.icon_drag = None;
+    }
+
+    /// Paints the brush biome onto rooms under the cursor while the button is held.
+    pub(super) fn update_biome_paint(
+        &mut self,
+        p: &Pointer,
+        hovered: Option<(usize, usize)>,
+        layers: &mut LayerStack,
+        undo: &mut Vec<UndoEntry>,
+        seed: u64,
+        cells: u32,
+        biomes: &[Biome],
+    ) {
+        let Some(biome) = self.paint_biome else {
+            self.paint_stroke_saved = false;
+            return;
+        };
+        if p.right {
+            self.paint_biome = None;
+            self.paint_stroke_saved = false;
+            return;
+        }
+        if !p.left_down {
+            self.paint_stroke_saved = false;
+            return;
+        }
+        if !p.on_map() || p.consumed {
+            return;
+        }
+        let Some((layer, room)) = hovered else {
+            return;
+        };
+        if layer != layers.active() || layers.is_active_locked() {
+            return;
+        }
+        let world = layers.active_world();
+        if world.rooms.get(room).is_some_and(|r| r.biome == biome) {
+            return;
+        }
+        if !self.paint_stroke_saved {
+            remember(undo, layers, seed, cells, biomes);
+            self.paint_stroke_saved = true;
+        }
+        layers.active_world_mut().set_room_biome(room, biome);
     }
 
     /// Room dragged from the list. On the map it snaps to the cell grid, centered on
     /// the cursor cell. Releasing on a free spot places it. Releasing elsewhere cancels.
     pub(super) fn update_placing(
         &mut self,
-        world: &mut World,
+        layers: &mut LayerStack,
         view: &View,
         p: &mut Pointer,
         layout: &Layout,
@@ -146,6 +215,13 @@ impl Interaction {
             }
             return None;
         }
+        if layers.is_active_locked() {
+            if !p.left_down {
+                self.placing = None;
+            }
+            return None;
+        }
+        let world = layers.active_world();
         let (cx, cy) = layout.cell_at(view.screen_to_world(p.pos, map));
         let (x, y) = (cx - (choice.w / 2) as i32, cy - (choice.h / 2) as i32);
         let free = world.can_place(x, y, choice.w, choice.h);
@@ -154,20 +230,26 @@ impl Interaction {
         }
         if free {
             let (kind, marker) = choice.pick.spec();
-            remember(undo, world, seed, cells, biomes);
-            world.place_manual((x, y), (choice.w, choice.h), kind, marker);
+            remember(undo, layers, seed, cells, biomes);
+            layers.active_world_mut().place_manual(
+                (x, y),
+                (choice.w, choice.h),
+                kind,
+                marker,
+                self.paint_biome,
+            );
         }
         self.placing = None;
         None
     }
 
     /// Drags the selection rectangle on an empty cell. Releasing selects every room
-    /// the rectangle cuts. A click without travel clears the selection.
+    /// the rectangle cuts on the active layer. A click without travel clears the selection.
     pub(super) fn update_selection(
         &mut self,
         p: &Pointer,
         view: &View,
-        world: &World,
+        layers: &LayerStack,
         layout: &Layout,
         map: Rect,
     ) {
@@ -175,6 +257,7 @@ impl Interaction {
             self.selecting = None;
             return;
         }
+        let world = layers.active_world();
         let Some(start) = self.selecting else {
             if p.left
                 && p.on_map()
@@ -182,10 +265,12 @@ impl Interaction {
                 && !self.panning
                 && self.placing.is_none()
                 && self.moving.is_none()
+                && self.moving_layer.is_none()
                 && self.icon_drag.is_none()
+                && self.paint_biome.is_none()
             {
                 let (x, y) = layout.cell_at(view.screen_to_world(p.pos, map));
-                if world.room_at(x, y).is_none() {
+                if layers.room_at(x, y).is_none() {
                     self.selecting = Some(p.pos);
                 }
             }
@@ -220,15 +305,20 @@ impl Interaction {
         &mut self,
         p: &Pointer,
         legend: &RoomLegend,
-        world: &mut World,
-        hovered: Option<usize>,
+        layers: &mut LayerStack,
+        hovered: Option<(usize, usize)>,
         undo: &mut Vec<UndoEntry>,
         seed: u64,
         cells: u32,
         biomes: &[Biome],
     ) {
         let Some(icon) = self.icon_drag.clone() else {
-            if p.left && !p.consumed && self.placing.is_none() && self.moving.is_none() {
+            if p.left
+                && !p.consumed
+                && self.placing.is_none()
+                && self.moving.is_none()
+                && self.paint_biome.is_none()
+            {
                 self.icon_drag = legend.icon_at(p.pos);
             }
             return;
@@ -236,27 +326,30 @@ impl Interaction {
         if p.right {
             self.icon_drag = None;
         } else if !p.left_down {
-            if let Some(room) = hovered {
-                tag_room(world, room, &icon, undo, seed, cells, biomes);
+            if let Some((layer, room)) = hovered
+                && layer == layers.active()
+                && !layers.is_active_locked()
+            {
+                tag_room(layers, room, &icon, undo, seed, cells, biomes);
             }
             self.icon_drag = None;
         }
     }
 
-    /// Deletes the selection, the dragged group, or the hovered room.
-    /// At least one room stays. Returns how many rooms were removed.
+    /// Deletes the selection, the dragged group, or the hovered room on the active layer.
+    /// Returns how many rooms were removed.
     pub(super) fn delete_shortcut(
         &mut self,
         ctx: &Context,
-        world: &mut World,
+        layers: &mut LayerStack,
         blocked: bool,
-        hovered: Option<usize>,
+        hovered: Option<(usize, usize)>,
         undo: &mut Vec<UndoEntry>,
         seed: u64,
         cells: u32,
         biomes: &[Biome],
     ) -> usize {
-        if blocked {
+        if blocked || layers.is_active_locked() {
             return 0;
         }
         let pressed = ctx.input(|input| {
@@ -279,13 +372,16 @@ impl Interaction {
             self.selected.clone()
         } else if let Some(moving) = &self.moving {
             moving.rooms.clone()
-        } else if let Some(idx) = hovered {
+        } else if let Some((layer, idx)) = hovered {
+            if layer != layers.active() {
+                return 0;
+            }
             vec![idx]
         } else {
             return 0;
         };
-        remember(undo, world, seed, cells, biomes);
-        let removed = world.remove_rooms(&targets);
+        remember(undo, layers, seed, cells, biomes);
+        let removed = layers.active_world_mut().remove_rooms(&targets);
         if removed > 0 {
             self.moving = None;
             self.selected.clear();
@@ -298,9 +394,9 @@ impl Interaction {
     pub(super) fn room_shortcuts(
         &mut self,
         ctx: &Context,
-        world: &mut World,
+        layers: &mut LayerStack,
         blocked: bool,
-        room: usize,
+        hit: (usize, usize),
         undo: &mut Vec<UndoEntry>,
         seed: u64,
         cells: u32,
@@ -309,23 +405,65 @@ impl Interaction {
         if blocked {
             return;
         }
+        let (layer, room) = hit;
+        if layer != layers.active() || layers.is_active_locked() {
+            return;
+        }
         if ctx.input(|i| i.key_pressed(Key::B)) {
-            tag_room(world, room, ids::BOSS, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::BOSS, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::S) && !i.modifiers.command) {
-            tag_room(world, room, ids::SAVE, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::SAVE, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::H)) {
-            tag_room(world, room, ids::SECRET, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::SECRET, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::P)) {
-            tag_room(world, room, ids::PORTAL, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::PORTAL, undo, seed, cells, biomes);
+        }
+    }
+
+    /// Activates a layer on name click. Starts a whole-layer drag when unlocked.
+    pub(super) fn begin_layer_drag(
+        &mut self,
+        p: &mut Pointer,
+        layers: &mut LayerStack,
+        labels: &[(usize, Rect)],
+        view: &View,
+        layout: &Layout,
+        map: Rect,
+    ) {
+        if self.moving_layer.is_some() || self.moving.is_some() || self.placing.is_some() {
+            return;
+        }
+        if !(p.left && p.on_map() && !p.consumed) {
+            return;
+        }
+        for &(idx, rect) in labels.iter().rev() {
+            if !rect.contains(p.pos) {
+                continue;
+            }
+            layers.set_active(idx);
+            self.selected.clear();
+            p.consumed = true;
+            let layer = &layers.layers()[idx];
+            if layer.locked || layer.world.rooms.is_empty() {
+                return;
+            }
+            let origins = layer.world.rooms.iter().map(|r| (r.x, r.y)).collect();
+            let anchor = layout.cell_at(view.screen_to_world(p.pos, map));
+            self.moving_layer = Some(MovingLayer {
+                layer: idx,
+                origins,
+                anchor,
+            });
+            return;
         }
     }
 }
 
 fn tag_room(
-    world: &mut World,
+    layers: &mut LayerStack,
     room: usize,
     icon: &str,
     undo: &mut Vec<UndoEntry>,
@@ -333,10 +471,10 @@ fn tag_room(
     cells: u32,
     biomes: &[Biome],
 ) {
-    if matches!(icon, ids::SECRET | ids::PORTAL) && world.rooms[room].kind == RoomKind::Corridor
-    {
+    let world = layers.active_world();
+    if matches!(icon, ids::SECRET | ids::PORTAL) && world.rooms[room].kind == RoomKind::Corridor {
         return;
     }
-    remember(undo, world, seed, cells, biomes);
-    world.toggle_icon(room, icon);
+    remember(undo, layers, seed, cells, biomes);
+    layers.active_world_mut().toggle_icon(room, icon);
 }

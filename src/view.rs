@@ -1,7 +1,6 @@
 //! Camera control: pan, zoom and fit-to-map.
 
 use crate::layout::{Layout, MARGIN};
-use crate::world::World;
 use egui::{Pos2, Rect, Vec2, vec2};
 
 /// Zoom factor applied per `POINTS_PER_STEP` of scroll.
@@ -27,11 +26,11 @@ impl View {
         }
     }
 
-    /// Centers the whole map and picks the largest zoom that shows it entirely.
-    pub fn fit(&mut self, world: &World, layout: &Layout, map: Rect) {
-        let (x0, y0, x1, y1) = world.bounds();
-        let w = (x1 - x0) as f32 * layout.cw;
-        let h = (y1 - y0) as f32 * layout.ch;
+    /// Centers cell bounds `(x0, y0, x1, y1)` (max excluded) in the map area.
+    pub fn fit_bounds(&mut self, bounds: (i32, i32, i32, i32), layout: &Layout, map: Rect) {
+        let (x0, y0, x1, y1) = bounds;
+        let w = ((x1 - x0) as f32 * layout.cw).max(layout.cw);
+        let h = ((y1 - y0) as f32 * layout.ch).max(layout.ch);
         self.center = vec2(
             x0 as f32 * layout.cw + w / 2.0,
             y0 as f32 * layout.ch + h / 2.0,

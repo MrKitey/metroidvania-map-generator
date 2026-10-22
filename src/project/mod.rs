@@ -1,6 +1,7 @@
 //! Project files: a zip archive with the `.mmg` extension.
 //!
-//! The archive holds `project.json`, `thumbnail.png`, `biomes.json` and `rooms.json`.
+//! The archive holds `project.json`, `thumbnail.png`, `biomes.json` and `layers.json`.
+//! Version 2 files with `rooms.json` are still loaded and migrated.
 //! Autosave preferences stay in settings.json and are not written here.
 
 mod file;

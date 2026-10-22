@@ -2,6 +2,7 @@
 
 use super::{MAX_CELLS, MIN_CELLS, START_CELLS, build_world};
 use crate::export::{self, MapData};
+use crate::layer::LayerStack;
 use crate::layout::Layout;
 use crate::project::{self, Loaded, ProjectFile};
 use crate::storage;
@@ -205,7 +206,8 @@ impl super::App {
         let name = self.seed.to_string();
         self.cells = START_CELLS;
         self.editor.set_seed(self.seed);
-        self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
+        self.layers =
+            LayerStack::from_world(build_world(self.cells, self.seed, &self.biomes, &self.editor));
         self.interact.clear();
         self.undo.clear();
         self.fit = true;
@@ -262,7 +264,7 @@ impl super::App {
         self.cells = loaded.cells.clamp(MIN_CELLS, MAX_CELLS);
         self.grid = loaded.grid;
         self.biomes = loaded.biomes;
-        self.world = loaded.world;
+        self.layers = loaded.layers;
         self.interact.clear();
         self.undo.clear();
         self.fit = true;
@@ -289,7 +291,8 @@ impl super::App {
             seed: self.seed,
             cells: self.cells,
             settings: &settings,
-            world: &self.world,
+            layers: &self.layers,
+            only_layer: None,
             biomes: &self.biomes,
             special: &self.special,
             layout: &layout,
@@ -335,7 +338,7 @@ impl super::App {
             &self.session.created_at,
             &self.editor.settings(),
             &self.biomes,
-            &self.world,
+            &self.layers,
         )
     }
 

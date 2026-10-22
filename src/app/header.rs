@@ -26,7 +26,7 @@ impl App {
             if ui.button(text::hud::SAVE).clicked() {
                 self.save_project(now);
             }
-            ui.label(text::hud::rooms(self.world.rooms.len()));
+            ui.label(text::hud::rooms(self.layers.room_count()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 self.theme_button(ui);
                 if ui.button(text::hud::HELP_BUTTON).clicked() {
@@ -40,6 +40,9 @@ impl App {
                 }
                 if ui.button(text::hud::EDITOR).clicked() {
                     self.editor.open = !self.editor.open;
+                }
+                if ui.button(text::hud::LAYERS).clicked() {
+                    self.layers_open = !self.layers_open;
                 }
                 if ui.button(text::hud::BIOMES).clicked() {
                     self.biomes_open = !self.biomes_open;
@@ -143,7 +146,8 @@ impl App {
             seed: self.seed,
             cells: self.cells,
             settings: &settings,
-            world: &self.world,
+            layers: &self.layers,
+            only_layer: None,
             biomes: &self.biomes,
             special: &self.special,
             layout: &layout,

@@ -27,6 +27,7 @@ pub const PROJECT_JSON: &str = "project.json";
 pub const PROJECT_THUMB: &str = "thumbnail.png";
 pub const PROJECT_BIOMES: &str = "biomes.json";
 pub const PROJECT_ROOMS: &str = "rooms.json";
+pub const PROJECT_LAYERS: &str = "layers.json";
 
 /// Default name of the export zip.
 pub fn zip_name(seed: u64) -> String {

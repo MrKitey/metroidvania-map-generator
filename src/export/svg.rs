@@ -7,21 +7,21 @@ use crate::render::{
     door_color, door_rect, icon_side_px, line_thickness, room_border, room_fill, room_icons,
     room_rect,
 };
+use crate::world::World;
 use std::collections::HashSet;
 use std::fmt::Write;
 
 /// Vector version of the map, in world units, on a transparent background.
-/// Mirrors `render::draw_map`: rooms, then doors, then icons.
+/// Visible layers are stacked in list order.
 pub fn render(map: &MapData) -> String {
-    let (world, biomes, special, layout) = (map.world, map.biomes, map.special, map.layout);
+    let (biomes, special, layout) = (map.biomes, map.special, map.layout);
+    let worlds = map.worlds();
     let (min, max) = map.area();
     let size = max - min;
-    // Border and door thickness. A thick border is one image pixel thicker.
     let t = line_thickness(layout);
     let thick = t + 1.0 / PX_PER_UNIT;
 
     let mut svg = String::new();
-    // Writing to a String cannot fail.
     let _ = writeln!(
         svg,
         "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
@@ -35,13 +35,14 @@ pub fn render(map: &MapData) -> String {
     );
 
     let mut used = HashSet::new();
-    for r in &world.rooms {
-        for id in room_icon_ids(r) {
-            used.insert(id);
+    for world in &worlds {
+        for r in &world.rooms {
+            for id in room_icon_ids(r) {
+                used.insert(id);
+            }
         }
     }
 
-    // Each icon is defined once, then placed with <use>.
     svg.push_str("<defs>\n");
     for def in special {
         if !used.contains(&def.id) {
@@ -54,11 +55,26 @@ pub fn render(map: &MapData) -> String {
     }
     svg.push_str("</defs>\n");
 
+    for world in &worlds {
+        append_world(&mut svg, world, biomes, special, layout, t, thick);
+    }
+
+    svg.push_str("</svg>\n");
+    svg
+}
+
+fn append_world(
+    svg: &mut String,
+    world: &World,
+    biomes: &[crate::biome::Biome],
+    special: &[crate::icon_lib::IconDef],
+    layout: &crate::layout::Layout,
+    t: f32,
+    thick: f32,
+) {
     for r in &world.rooms {
         let (border, is_thick) = room_border(r, biomes, special);
         let thickness = if is_thick { thick } else { t };
-        // SVG strokes are centered on the edge, so the rectangle is inset by half of it
-        // to keep the border inside the room, as in the app.
         let half = thickness / 2.0;
         let rect = room_rect(r, layout);
         let _ = writeln!(
@@ -74,7 +90,6 @@ pub fn render(map: &MapData) -> String {
         );
     }
 
-    // Doors open a gap in the borders.
     for d in &world.doors {
         let rect = door_rect(d, layout);
         let _ = writeln!(
@@ -98,7 +113,4 @@ pub fn render(map: &MapData) -> String {
             );
         }
     }
-
-    svg.push_str("</svg>\n");
-    svg
 }

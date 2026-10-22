@@ -66,11 +66,12 @@ mod tests {
     use crate::settings::{
         DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ROOM_SIZES, Settings,
     };
+    use crate::layer::LayerStack;
     use crate::world::{Params, Sizes, World};
 
     fn sample_map<'a>(
         biomes: &'a [biome::Biome],
-        world: &'a World,
+        layers: &'a LayerStack,
         settings: &'a Settings,
         layout: &'a Layout,
     ) -> MapData<'a> {
@@ -78,15 +79,15 @@ mod tests {
             seed: 7,
             cells: 96,
             settings,
-            world,
+            layers,
+            only_layer: None,
             biomes,
             special: &[],
             layout,
         }
     }
 
-    #[test]
-    fn svg_rasterizes_to_png() {
+    fn sample_layers() -> LayerStack {
         let biomes = biome::default_biomes();
         let extras: Vec<_> = biomes.iter().map(biome::Biome::extras).collect();
         let sizes = Sizes {
@@ -102,9 +103,16 @@ mod tests {
             max_rooms: 50,
             sizes: &sizes,
         });
+        LayerStack::from_world(world)
+    }
+
+    #[test]
+    fn svg_rasterizes_to_png() {
+        let biomes = biome::default_biomes();
+        let layers = sample_layers();
         let layout = Layout::new((640, 360));
         let settings = Settings::default();
-        let map = sample_map(&biomes, &world, &settings, &layout);
+        let map = sample_map(&biomes, &layers, &settings, &layout);
         let png = render(&map).expect("svg rasterizes");
         assert_eq!(&png[..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
         assert!(png.len() > 100);
@@ -113,23 +121,10 @@ mod tests {
     #[test]
     fn thumbnail_is_png() {
         let biomes = biome::default_biomes();
-        let extras: Vec<_> = biomes.iter().map(biome::Biome::extras).collect();
-        let sizes = Sizes {
-            rooms: DEFAULT_ROOM_SIZES.to_vec(),
-            boss: DEFAULT_BOSS_SIZES.to_vec(),
-            corridor: DEFAULT_CORRIDOR_SIZES.to_vec(),
-        };
-        let world = World::generate(&Params {
-            cells: 96,
-            seed: 7,
-            extras: &extras,
-            min_rooms: 5,
-            max_rooms: 50,
-            sizes: &sizes,
-        });
+        let layers = sample_layers();
         let layout = Layout::new((640, 360));
         let settings = Settings::default();
-        let map = sample_map(&biomes, &world, &settings, &layout);
+        let map = sample_map(&biomes, &layers, &settings, &layout);
         let png = thumbnail(&map).expect("thumbnail rasterizes");
         assert_eq!(&png[..8], &[137, 80, 78, 71, 13, 10, 26, 10]);
         assert!(png.len() > 50);

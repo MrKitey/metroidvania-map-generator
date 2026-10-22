@@ -3,6 +3,7 @@
 
 mod header;
 mod interact;
+mod layers_panel;
 mod map;
 mod session;
 
@@ -12,6 +13,7 @@ use crate::common::EditorAction;
 use crate::editor::{self, Editor};
 use crate::icon_lib::{self, IconDef};
 use crate::icons::{self, Icons};
+use crate::layer::LayerStack;
 use crate::layout::Layout;
 use crate::platform::WaylandDrop;
 use crate::render::{self, COPIED_TIME};
@@ -33,7 +35,7 @@ const UNDO_LIMIT: usize = 50;
 
 /// Snapshot of the map and the values regen may change.
 pub(super) struct UndoEntry {
-    world: World,
+    layers: LayerStack,
     seed: u64,
     cells: u32,
     biomes: Vec<Biome>,
@@ -42,13 +44,13 @@ pub(super) struct UndoEntry {
 /// Pushes a snapshot. Drops the oldest entry past `UNDO_LIMIT`.
 pub(super) fn remember(
     undo: &mut Vec<UndoEntry>,
-    world: &World,
+    layers: &LayerStack,
     seed: u64,
     cells: u32,
     biomes: &[Biome],
 ) {
     undo.push(UndoEntry {
-        world: world.clone(),
+        layers: layers.clone(),
         seed,
         cells,
         biomes: biomes.to_vec(),
@@ -77,7 +79,7 @@ pub struct App {
     biomes: Vec<Biome>,
     special: Vec<IconDef>,
     editor: Editor,
-    world: World,
+    layers: LayerStack,
     view: View,
     icons: Icons,
     legend_icons: Icons,
@@ -86,6 +88,8 @@ pub struct App {
     /// Time of the last seed copy, used to show the "copied" feedback.
     copied_at: f64,
     help_open: bool,
+    /// Floating layers window.
+    layers_open: bool,
     /// Room list panel on the left.
     rooms_open: bool,
     /// Biomes panel.
@@ -112,6 +116,7 @@ impl App {
         let special = icon_lib::load();
         let editor = Editor::new(seed, &loaded);
         let world = build_world(START_CELLS, seed, &biomes, &editor);
+        let layers = LayerStack::from_world(world);
         let mut icons = Icons::new();
         let mut legend_icons = Icons::new();
         icons.sync(&special);
@@ -136,13 +141,14 @@ impl App {
             biomes,
             special,
             editor,
-            world,
+            layers,
             view: View::new(),
             icons,
             legend_icons,
             fit: true,
             copied_at: f64::NEG_INFINITY,
             help_open: false,
+            layers_open: false,
             rooms_open: false,
             biomes_open: false,
             biomes_tab: BiomesTab::new(),
@@ -179,7 +185,7 @@ impl App {
     fn push_undo(&mut self) {
         remember(
             &mut self.undo,
-            &self.world,
+            &self.layers,
             self.seed,
             self.cells,
             &self.biomes,
@@ -190,7 +196,7 @@ impl App {
         let Some(prev) = self.undo.pop() else {
             return;
         };
-        self.world = prev.world;
+        self.layers = prev.layers;
         self.cells = prev.cells;
         self.biomes = prev.biomes;
         self.change_seed(prev.seed);
@@ -198,15 +204,22 @@ impl App {
         self.interact.clear();
     }
 
-    /// Rebuilds the map from the current seed, cells and biomes.
+    /// Rebuilds the active layer from the current seed, cells and biomes.
     fn regen(&mut self) {
+        if self.layers.is_active_locked() {
+            return;
+        }
         self.editor.set_seed(self.seed);
-        self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
+        *self.layers.active_world_mut() =
+            build_world(self.cells, self.seed, &self.biomes, &self.editor);
         self.interact.clear();
         self.fit = true;
     }
 
     fn apply_action(&mut self, action: EditorAction) {
+        if self.layers.is_active_locked() {
+            return;
+        }
         // Snapshot before the seed changes, so undo restores the previous one.
         self.push_undo();
         match action {
@@ -253,6 +266,10 @@ impl App {
             self.help_open = false;
             escape = false;
         }
+        if escape && self.layers_open {
+            self.layers_open = false;
+            escape = false;
+        }
         if escape && self.interact.cancel() {
             escape = false;
         }
@@ -290,7 +307,7 @@ impl eframe::App for App {
                     action = self.editor.draw(
                         ui,
                         &mut self.special,
-                        &mut self.world,
+                        self.layers.active_world_mut(),
                         &mut self.icons,
                         &mut self.legend_icons,
                     );
@@ -336,7 +353,9 @@ impl eframe::App for App {
                 .show(ui, |ui| {
                     ui.heading(text::hud::BIOMES);
                     ui.separator();
-                    action = self.biomes_tab.draw(ui, &mut self.biomes, &mut self.world);
+                    action =
+                        self.biomes_tab
+                            .draw(ui, &mut self.biomes, self.layers.active_world_mut());
                 });
             if let Some(action) = action {
                 self.apply_action(action);
@@ -353,6 +372,20 @@ impl eframe::App for App {
 
         if self.help_open {
             render::draw_help(&ctx, &mut self.help_open);
+        }
+        if self.layers_open {
+            let action = layers_panel::draw_layers_window(
+                &ctx,
+                &mut self.layers_open,
+                &mut self.layers,
+                &mut self.undo,
+                self.seed,
+                self.cells,
+                &self.biomes,
+            );
+            if action.changed {
+                self.interact.clear();
+            }
         }
 
         egui::CentralPanel::default()

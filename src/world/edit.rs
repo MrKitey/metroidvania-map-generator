@@ -123,22 +123,48 @@ impl World {
         }
     }
 
+    /// Sets the biome of room `idx` and records it in `biomes` if new.
+    /// Returns false if the index is out of range or the biome did not change.
+    pub fn set_room_biome(&mut self, idx: usize, biome: usize) -> bool {
+        let Some(room) = self.rooms.get_mut(idx) else {
+            return false;
+        };
+        if room.biome == biome {
+            return false;
+        }
+        room.biome = biome;
+        if !self.biomes.contains(&biome) {
+            self.biomes.push(biome);
+        }
+        true
+    }
+
     /// Places a room chosen by the user. It gets one door per touching room, in the middle
     /// of the shared side, and the biome of the first touching room. With no neighbor it
-    /// gets no door and the first biome. Returns None if the spot is taken.
+    /// uses `preferred` when set, else the first used biome, else biome 0.
+    /// Returns None if the spot is taken.
     pub fn place_manual(
         &mut self,
         (x, y): (i32, i32),
         (w, h): (u32, u32),
         kind: RoomKind,
         marker: Option<Marker>,
+        preferred: Option<usize>,
     ) -> Option<usize> {
         let (wi, hi) = (w as i32, h as i32);
         if !self.is_free(x, y, wi, hi) {
             return None;
         }
         let sides = self.touching(x, y, w, h);
-        let biome = self.neighbor_biome(&sides).unwrap_or(self.biomes[0]);
+        let biome = match self.neighbor_biome(&sides) {
+            Some(b) => b,
+            None => preferred
+                .or_else(|| self.biomes.first().copied())
+                .unwrap_or(0),
+        };
+        if !self.biomes.contains(&biome) {
+            self.biomes.push(biome);
+        }
 
         let idx = self.place(x, y, w, h, biome, kind);
         self.rooms[idx].marker = marker;
@@ -234,9 +260,9 @@ impl World {
 
     /// Removes room `idx` and the doors that touched it.
     /// Rooms after it move down, and door indices follow.
-    /// Returns false, and changes nothing, if `idx` is out of range or it is the last room.
+    /// Returns false, and changes nothing, if `idx` is out of range.
     pub fn remove_room(&mut self, idx: usize) -> bool {
-        if self.rooms.len() <= 1 || idx >= self.rooms.len() {
+        if idx >= self.rooms.len() {
             return false;
         }
         let room = self.rooms.remove(idx);
@@ -259,7 +285,7 @@ impl World {
     }
 
     /// Removes every listed room. Duplicates and out-of-range indices are ignored.
-    /// At least one room always stays. Returns how many rooms were removed.
+    /// Returns how many rooms were removed. The layer may become empty.
     pub fn remove_rooms(&mut self, indices: &[usize]) -> usize {
         let mut to_remove: Vec<usize> = indices
             .iter()
@@ -268,10 +294,6 @@ impl World {
             .collect();
         to_remove.sort_unstable();
         to_remove.dedup();
-        let max_removable = self.rooms.len().saturating_sub(1);
-        if to_remove.len() > max_removable {
-            to_remove.truncate(max_removable);
-        }
         to_remove.sort_unstable_by(|a, b| b.cmp(a));
         let mut removed = 0;
         for idx in to_remove {

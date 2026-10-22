@@ -7,7 +7,7 @@ use crate::icons::{self, Icons};
 use crate::layout::Layout;
 use crate::view::View;
 use crate::world::{Door, Room, World};
-use egui::{Color32, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2, pos2, vec2};
+use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2, pos2, vec2};
 
 /// Share of a cell taken by an icon.
 const ICON_SHARE: f32 = 0.7;
@@ -131,8 +131,14 @@ pub fn draw_grid(
     }
 }
 
-/// Draws rooms, doors and icons.
-pub fn draw_map(
+/// Multiplies RGB alpha by `opacity` (0..=1).
+fn with_opacity(c: Color32, opacity: f32) -> Color32 {
+    let a = (c.a() as f32 * opacity).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a)
+}
+
+/// Draws rooms, doors and icons with a layer opacity multiplier.
+pub fn draw_map_opacity(
     painter: &Painter,
     world: &World,
     biomes: &[Biome],
@@ -140,6 +146,7 @@ pub fn draw_map(
     layout: &Layout,
     map_view: &MapView,
     icons: &mut Icons,
+    opacity: f32,
 ) {
     let (view, map, scale) = (map_view.view, map_view.map, map_view.scale);
     let t = line_thickness(layout) * scale;
@@ -154,25 +161,25 @@ pub fn draw_map(
         let rect = to_screen(view, map, world_rect);
         let (border, thick) = room_border(r, biomes, special);
         let thickness = if thick { t + 1.0 } else { t };
-        painter.rect_filled(rect, 0.0, room_fill(r, biomes, special));
+        painter.rect_filled(rect, 0.0, with_opacity(room_fill(r, biomes, special), opacity));
         painter.rect_stroke(
             rect,
             0.0,
-            Stroke::new(thickness, border),
+            Stroke::new(thickness, with_opacity(border, opacity)),
             StrokeKind::Middle,
         );
         if map_view.selected.contains(&i) {
             painter.rect_filled(
                 rect,
                 0.0,
-                Color32::from_rgba_unmultiplied(255, 255, 255, 70),
+                with_opacity(Color32::from_rgba_unmultiplied(255, 255, 255, 70), opacity),
             );
         }
         if map_view.hovered == Some(i) {
             painter.rect_filled(
                 rect,
                 0.0,
-                Color32::from_rgba_unmultiplied(255, 255, 255, 38),
+                with_opacity(Color32::from_rgba_unmultiplied(255, 255, 255, 38), opacity),
             );
         }
     }
@@ -185,7 +192,7 @@ pub fn draw_map(
             painter.rect_filled(
                 to_screen(view, map, world_rect),
                 0.0,
-                door_color(world, biomes, special, d),
+                with_opacity(door_color(world, biomes, special, d), opacity),
             );
         }
     }
@@ -194,6 +201,7 @@ pub fn draw_map(
     let side_px = icon_side_px(layout, scale);
     let px = (side_px * painter.ctx().pixels_per_point()).ceil() as u32;
     let side = side_px / scale;
+    let tint = with_opacity(Color32::WHITE, opacity);
     for r in &world.rooms {
         if !shown(room_rect(r, layout)) {
             continue;
@@ -201,8 +209,89 @@ pub fn draw_map(
         for (id, corner, s) in room_icons(r, layout, side) {
             let dest = Rect::from_min_size(view.world_to_screen(corner, map), vec2(s, s) * scale);
             if let Some(tex) = icons.get(painter.ctx(), &id, px) {
-                painter.image(tex.id(), dest, uv, Color32::WHITE);
+                painter.image(tex.id(), dest, uv, tint);
             }
         }
     }
+}
+
+const LABEL_SIZE: f32 = 13.0;
+const LABEL_PAD: f32 = 4.0;
+/// Padding around layer group bounds, in cells.
+const GROUP_PAD: f32 = 0.35;
+
+/// Screen rect of the layer name label for each visible non-empty layer.
+pub fn layer_label_rects(
+    ctx: &egui::Context,
+    layers: &crate::layer::LayerStack,
+    layout: &Layout,
+    view: &View,
+    map: Rect,
+) -> Vec<(usize, Rect)> {
+    let mut out = Vec::new();
+    for (i, layer) in layers.layers().iter().enumerate() {
+        if !layer.visible {
+            continue;
+        }
+        let Some(bounds) = layer.world.bounds_opt() else {
+            continue;
+        };
+        let group = group_world_rect(bounds, layout);
+        let screen = to_screen(view, map, group);
+        let w = super::text_width(ctx, &layer.name, LABEL_SIZE) + LABEL_PAD * 2.0;
+        let h = LABEL_SIZE + LABEL_PAD;
+        let label = Rect::from_min_size(
+            pos2(screen.min.x + 2.0, screen.min.y - h + 2.0),
+            vec2(w, h),
+        );
+        out.push((i, label));
+    }
+    out
+}
+
+fn group_world_rect(bounds: (i32, i32, i32, i32), layout: &Layout) -> Rect {
+    let (x0, y0, x1, y1) = bounds;
+    Rect::from_min_max(
+        pos2(x0 as f32 * layout.cw - GROUP_PAD * layout.cw, y0 as f32 * layout.ch - GROUP_PAD * layout.ch),
+        pos2(x1 as f32 * layout.cw + GROUP_PAD * layout.cw, y1 as f32 * layout.ch + GROUP_PAD * layout.ch),
+    )
+}
+
+/// Draws the group frame and name label for one layer.
+pub fn draw_layer_group(
+    painter: &Painter,
+    ctx: &egui::Context,
+    layer: &crate::layer::Layer,
+    active: bool,
+    layout: &Layout,
+    view: &View,
+    map: Rect,
+) {
+    let Some(bounds) = layer.world.bounds_opt() else {
+        return;
+    };
+    let group = group_world_rect(bounds, layout);
+    let screen = to_screen(view, map, group);
+    painter.rect_filled(screen, 0.0, layer.group_fill());
+    let stroke_w = if active { 2.5 } else { 1.5 };
+    painter.rect_stroke(
+        screen,
+        0.0,
+        Stroke::new(stroke_w, layer.group_stroke()),
+        StrokeKind::Outside,
+    );
+    let w = super::text_width(ctx, &layer.name, LABEL_SIZE) + LABEL_PAD * 2.0;
+    let h = LABEL_SIZE + LABEL_PAD;
+    let label = Rect::from_min_size(
+        pos2(screen.min.x + 2.0, screen.min.y - h + 2.0),
+        vec2(w, h),
+    );
+    painter.rect_filled(label, 3.0, layer.group_stroke());
+    painter.text(
+        label.min + vec2(LABEL_PAD, LABEL_PAD * 0.5),
+        Align2::LEFT_TOP,
+        &layer.name,
+        FontId::proportional(LABEL_SIZE),
+        Color32::WHITE,
+    );
 }

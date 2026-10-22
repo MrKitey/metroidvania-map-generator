@@ -13,7 +13,11 @@ impl App {
         let map_rect = response.rect;
         let layout = Layout::new(self.editor.viewport());
         if self.fit {
-            self.view.fit(&self.world, &layout, map_rect);
+            let bounds = self
+                .layers
+                .visible_bounds()
+                .unwrap_or((0, 0, 1, 1));
+            self.view.fit_bounds(bounds, &layout, map_rect);
             self.fit = false;
         }
 
@@ -38,7 +42,7 @@ impl App {
 
         let copied = now - self.copied_at < render::COPIED_TIME;
         let hud = Hud::new(&ctx, self.seed, copied, map_rect);
-        let legend = RoomLegend::new(&ctx, &self.world, &self.biomes, &self.special, map_rect);
+        let legend = RoomLegend::new(&ctx, &self.biomes, &self.special, map_rect);
         let mut pointer = Pointer {
             pos: pointer_pos,
             left: ctx.input(|i| i.pointer.button_pressed(PointerButton::Primary)),
@@ -58,11 +62,28 @@ impl App {
             && !pointer.consumed
             && let Some(biome) = legend.biome_at(pointer.pos)
         {
-            self.interact.select_biome(&self.world, biome);
+            self.interact.set_paint_biome(biome);
+            pointer.consumed = true;
         }
 
+        let layer_labels = render::layer_label_rects(
+            &ctx,
+            &self.layers,
+            &layout,
+            &self.view,
+            map_rect,
+        );
+        self.interact.begin_layer_drag(
+            &mut pointer,
+            &mut self.layers,
+            &layer_labels,
+            &self.view,
+            &layout,
+            map_rect,
+        );
+
         let ghost = self.interact.update_placing(
-            &mut self.world,
+            &mut self.layers,
             &self.view,
             &mut pointer,
             &layout,
@@ -81,17 +102,17 @@ impl App {
         let mut hovered =
             if pointer.on_map() && !pointer.consumed && self.interact.placing.is_none() {
                 let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
-                self.world.room_at(x, y)
+                self.layers.room_at(x, y)
             } else {
                 None
             };
         let blocked = self.editor.open || self.session.renaming;
-        if let Some(i) = hovered {
+        if let Some(hit) = hovered {
             self.interact.room_shortcuts(
                 &ctx,
-                &mut self.world,
+                &mut self.layers,
                 blocked,
-                i,
+                hit,
                 &mut self.undo,
                 self.seed,
                 self.cells,
@@ -100,7 +121,7 @@ impl App {
         }
         if self.interact.delete_shortcut(
             &ctx,
-            &mut self.world,
+            &mut self.layers,
             blocked,
             hovered,
             &mut self.undo,
@@ -113,14 +134,22 @@ impl App {
             && self.interact.placing.is_none()
         {
             let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
-            hovered = self.world.room_at(x, y);
+            hovered = self.layers.room_at(x, y);
         }
-        self.interact
-            .update_selection(&pointer, &self.view, &self.world, &layout, map_rect);
-        let move_ghosts = self.interact.update_moving(
+        self.interact.update_biome_paint(
             &pointer,
             hovered,
-            &mut self.world,
+            &mut self.layers,
+            &mut self.undo,
+            self.seed,
+            self.cells,
+            &self.biomes,
+        );
+        self.interact
+            .update_selection(&pointer, &self.view, &self.layers, &layout, map_rect);
+        let mut move_ghosts = self.interact.update_layer_moving(
+            &pointer,
+            &mut self.layers,
             &self.view,
             &layout,
             map_rect,
@@ -129,11 +158,25 @@ impl App {
             self.cells,
             &self.biomes,
         );
+        if move_ghosts.is_empty() {
+            move_ghosts = self.interact.update_moving(
+                &pointer,
+                hovered,
+                &mut self.layers,
+                &self.view,
+                &layout,
+                map_rect,
+                &mut self.undo,
+                self.seed,
+                self.cells,
+                &self.biomes,
+            );
+        }
         let select_rect = self.interact.select_rect(pointer.pos);
         self.interact.update_icon_drag(
             &pointer,
             &legend,
-            &mut self.world,
+            &mut self.layers,
             hovered,
             &mut self.undo,
             self.seed,
@@ -149,19 +192,21 @@ impl App {
             map_rect,
             hud: &hud,
             legend: &legend,
-            hovered,
+            hovered: hovered.map(|(_, ri)| ri),
+            hovered_layer: hovered.map(|(li, _)| li),
             grid: self.grid,
             ghost,
             move_ghosts,
             selected: self.interact.selected(),
             select_rect,
             dragged_icon: self.interact.icon_drag.clone(),
+            paint_biome: self.interact.paint_biome,
             special: &self.special,
             dark: self.dark,
         };
-        render::draw_world(
+        render::draw_layers(
             ui,
-            &self.world,
+            &self.layers,
             &self.biomes,
             &frame,
             &mut self.icons,

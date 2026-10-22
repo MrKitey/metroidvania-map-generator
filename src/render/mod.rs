@@ -10,7 +10,8 @@ mod theme;
 pub use hud::{COPIED_TIME, Hud, draw_help};
 pub use legend::RoomLegend;
 pub use map::{
-    MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect,
+    MapView, door_rect, draw_grid, draw_layer_group, draw_map_opacity, icon_side_px,
+    layer_label_rects, line_thickness, room_icons, room_rect,
 };
 pub use picker::{Ghost, Picker, draw_drag_outline, draw_room_list};
 pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, background, door_color, room_border, room_fill};
@@ -18,9 +19,9 @@ pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, background, door_color, roo
 use crate::biome::Biome;
 use crate::icon_lib::IconDef;
 use crate::icons::Icons;
+use crate::layer::LayerStack;
 use crate::layout::Layout;
 use crate::view::View;
-use crate::world::World;
 use egui::{Color32, CursorIcon, FontId, Rect, Stroke, StrokeKind, Ui, vec2};
 
 pub(super) fn text_width(ctx: &egui::Context, text: &str, size: f32) -> f32 {
@@ -39,6 +40,8 @@ pub struct Frame<'a> {
     pub hud: &'a Hud,
     pub legend: &'a RoomLegend,
     pub hovered: Option<usize>,
+    /// Layer index of the hovered room, for tooltip lookup.
+    pub hovered_layer: Option<usize>,
     pub grid: bool,
     /// Room being placed, if any.
     pub ghost: Option<Ghost>,
@@ -50,6 +53,8 @@ pub struct Frame<'a> {
     pub select_rect: Option<Rect>,
     /// Icon id being dragged from the room type legend, if any.
     pub dragged_icon: Option<String>,
+    /// Biome currently used for paint mode, if any.
+    pub paint_biome: Option<usize>,
     /// Special-room library used for colors and the drag preview.
     pub special: &'a [IconDef],
     /// Dark map canvas when true.
@@ -63,12 +68,10 @@ fn visible_area(view: &View, map: Rect) -> Rect {
     Rect::from_min_max(a.to_pos2(), b.to_pos2()).expand(1.0)
 }
 
-/// Draws one frame. The map is clipped to `map_rect`, the overlays sit on top.
-/// `legend_icons` is a second set used at a fixed size, so the map zoom does not
-/// make the legend icons rasterize again every frame.
-pub fn draw_world(
+/// Draws every visible layer, then overlays.
+pub fn draw_layers(
     ui: &mut Ui,
-    world: &World,
+    layers: &LayerStack,
     biomes: &[Biome],
     f: &Frame,
     icons: &mut Icons,
@@ -80,23 +83,45 @@ pub fn draw_world(
     if f.grid {
         draw_grid(&painter, f.layout, f.view, f.map_rect, area, f.dark);
     }
-    let view = MapView {
-        view: f.view,
-        map: f.map_rect,
-        scale: f.view.scale,
-        visible: Some(area),
-        hovered: f.hovered,
-        selected: f.selected,
-    };
-    draw_map(
-        &painter,
-        world,
-        biomes,
-        f.special,
-        f.layout,
-        &view,
-        icons,
-    );
+    let active = layers.active();
+    for (i, layer) in layers.layers().iter().enumerate() {
+        if !layer.visible {
+            continue;
+        }
+        draw_layer_group(
+            &painter,
+            ui.ctx(),
+            layer,
+            i == active,
+            f.layout,
+            f.view,
+            f.map_rect,
+        );
+        let selected = if i == active { f.selected } else { &[][..] };
+        let hovered = if f.hovered_layer == Some(i) {
+            f.hovered
+        } else {
+            None
+        };
+        let view = MapView {
+            view: f.view,
+            map: f.map_rect,
+            scale: f.view.scale,
+            visible: Some(area),
+            hovered,
+            selected,
+        };
+        draw_map_opacity(
+            &painter,
+            &layer.world,
+            biomes,
+            f.special,
+            f.layout,
+            &view,
+            icons,
+            layer.opacity,
+        );
+    }
     if let Some(g) = &f.ghost {
         picker::draw_ghost(&painter, g, f.layout, f.view, f.map_rect);
     }
@@ -124,10 +149,11 @@ pub fn draw_world(
         );
     }
 
-    legend::draw_legends(ui, biomes, f.legend, legend_icons);
+    legend::draw_legends(ui, biomes, f.legend, legend_icons, f.paint_biome);
     hud::draw_seed(ui, f.hud, f.dark);
-    if let Some(i) = f.hovered {
-        hud::draw_tooltip(ui, &world.rooms[i], biomes, f.special, f.layout);
+    if let (Some(li), Some(ri)) = (f.hovered_layer, f.hovered) {
+        let room = &layers.layers()[li].world.rooms[ri];
+        hud::draw_tooltip(ui, room, biomes, f.special, f.layout);
     }
     if let Some(g) = &f.ghost {
         hud::draw_ghost_label(ui, g, f.layout);

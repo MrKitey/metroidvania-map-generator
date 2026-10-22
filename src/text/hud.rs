@@ -13,7 +13,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Drag from Rooms", "Place a room"),
     ("Left drag empty", "Select rooms"),
     ("Left drag", "Move room or group"),
-    ("Click biome", "Select its rooms"),
+    ("Click biome", "Biome paint brush"),
     ("Del / Backspace", "Delete room(s)"),
     ("Drag legend icon", "Set room type"),
     ("C", "Recenter"),
@@ -44,6 +44,15 @@ pub const LOAD: &str = "Load";
 pub const RECENT: &str = "Recent";
 pub const SAVE: &str = "Save";
 pub const BIOMES: &str = "Biomes";
+pub const LAYERS: &str = "Layers";
+pub const LAYER_ADD: &str = "+ Add layer";
+pub const LAYER_VISIBILITY: &str = "Visibility";
+pub const LAYER_LOCK: &str = "Lock";
+pub const LAYER_DUPLICATE: &str = "Duplicate";
+pub const LAYER_DELETE: &str = "Delete";
+pub const LAYER_SET_ACTIVE: &str = "Set active";
+pub const LAYER_DELETE_TITLE: &str = "Delete layer";
+pub const LAYER_DELETE_CONFIRM: &str = "This layer has rooms. Delete it anyway?";
 /// Shown when the recent list has no path.
 pub const NO_RECENT: &str = "None";
 

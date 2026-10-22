@@ -6,6 +6,7 @@ mod svg;
 
 use crate::biome::Biome;
 use crate::icon_lib::IconDef;
+use crate::layer::LayerStack;
 use crate::layout::Layout;
 use crate::settings::Settings;
 use crate::text::{files, status};
@@ -27,16 +28,45 @@ pub struct MapData<'a> {
     pub seed: u64,
     pub cells: u32,
     pub settings: &'a Settings,
-    pub world: &'a World,
+    pub layers: &'a LayerStack,
+    /// When set, only this layer is exported (PNG-per-layer).
+    pub only_layer: Option<usize>,
     pub biomes: &'a [Biome],
     pub special: &'a [IconDef],
     pub layout: &'a Layout,
 }
 
 impl MapData<'_> {
+    /// Worlds to draw, in list order.
+    pub(crate) fn worlds(&self) -> Vec<&World> {
+        if let Some(i) = self.only_layer {
+            self.layers
+                .layers()
+                .get(i)
+                .map(|l| &l.world)
+                .into_iter()
+                .collect()
+        } else {
+            self.layers
+                .layers()
+                .iter()
+                .filter(|l| l.visible)
+                .map(|l| &l.world)
+                .collect()
+        }
+    }
+
     /// Corners of the map including its padding, in world units.
     fn area(&self) -> (Vec2, Vec2) {
-        let (x0, y0, x1, y1) = self.world.bounds();
+        let bounds = if let Some(i) = self.only_layer {
+            self.layers
+                .layers()
+                .get(i)
+                .and_then(|l| l.world.bounds_opt())
+        } else {
+            self.layers.visible_bounds()
+        };
+        let (x0, y0, x1, y1) = bounds.unwrap_or((0, 0, 1, 1));
         let (cw, ch) = (self.layout.cw, self.layout.ch);
         (
             vec2(x0 as f32 * cw, y0 as f32 * ch) - Vec2::splat(PADDING),
@@ -78,13 +108,14 @@ fn write_zip(path: &Path, map: &MapData) -> Result<(), Box<dyn Error>> {
     let json = json::render(map)?;
 
     let mut zip = zip::ZipWriter::new(File::create(path)?);
-    // PNG data is already compressed.
+    let deflated = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
     zip.start_file(files::EXPORT_PNG, stored)?;
     zip.write_all(&png)?;
-    zip.start_file(files::EXPORT_SVG, SimpleFileOptions::default())?;
+    zip.start_file(files::EXPORT_SVG, deflated)?;
     zip.write_all(svg.as_bytes())?;
-    zip.start_file(files::EXPORT_JSON, SimpleFileOptions::default())?;
+    zip.start_file(files::EXPORT_JSON, deflated)?;
     zip.write_all(json.as_bytes())?;
     zip.finish()?;
     Ok(())

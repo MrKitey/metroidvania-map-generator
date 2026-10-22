@@ -109,19 +109,29 @@ pub struct World {
     pub biomes: Vec<usize>,
 }
 
+impl PartialEq for World {
+    fn eq(&self, other: &Self) -> bool {
+        self.rooms == other.rooms && self.doors == other.doors && self.biomes == other.biomes
+    }
+}
+
 impl World {
-    /// Returns (min_x, min_y, max_x, max_y) in cells, max excluded.
-    pub fn bounds(&self) -> (i32, i32, i32, i32) {
-        self.rooms
-            .iter()
-            .fold((i32::MAX, i32::MAX, i32::MIN, i32::MIN), |b, r| {
+    /// Bounds when the map has at least one room: (min_x, min_y, max_x, max_y), max excluded.
+    pub fn bounds_opt(&self) -> Option<(i32, i32, i32, i32)> {
+        if self.rooms.is_empty() {
+            return None;
+        }
+        Some(self.rooms.iter().fold(
+            (i32::MAX, i32::MAX, i32::MIN, i32::MIN),
+            |b, r| {
                 (
                     b.0.min(r.x),
                     b.1.min(r.y),
                     b.2.max(r.x + r.w as i32),
                     b.3.max(r.y + r.h as i32),
                 )
-            })
+            },
+        ))
     }
 
     /// Index of the room covering cell (x, y), if any.

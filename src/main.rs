@@ -15,6 +15,7 @@ mod editor;
 mod export;
 mod icon_lib;
 mod icons;
+mod layer;
 mod layout;
 mod platform;
 mod project;
