@@ -9,11 +9,8 @@ Built with Rust and [egui](https://github.com/emilk/egui).
 
 ## Screenshots
 
-[![Map](docs/screenshot-map-miniature.png)](docs/screenshot-map.png) [![Tooltip](docs/screenshot-tooltip-miniature.png)](docs/screenshot-tooltip.png) [![Shortcuts](docs/screenshot-help-miniature.png)](docs/screenshot-help.png)
-[![Picker](docs/screenshot-picker-miniature.png)](docs/screenshot-picker.png) [![Place](docs/screenshot-place-miniature.png)](docs/screenshot-place.png) [![Blocked](docs/screenshot-place-blocked-miniature.png)](docs/screenshot-place-blocked.png)
-[![Move](docs/screenshot-move-miniature.png)](docs/screenshot-move.png) [![Select](docs/screenshot-select-miniature.png)](docs/screenshot-select.png) [![Biome](docs/screenshot-biome-miniature.png)](docs/screenshot-biome.png)
-[![Icon](docs/screenshot-icon-miniature.png)](docs/screenshot-icon.png) [![Settings](docs/screenshot-editor-miniature.png)](docs/screenshot-editor.png) [![Biomes](docs/screenshot-biomes-miniature.png)](docs/screenshot-biomes.png)
-[![Rename](docs/screenshot-rename-miniature.png)](docs/screenshot-rename.png)
+[![1](docs/1-thumbnail.png)](docs/1.png) [![2](docs/2-thumbnail.png)](docs/2.png) [![3](docs/3-thumbnail.png)](docs/3.png)
+[![4](docs/4-thumbnail.png)](docs/4.png) [![5](docs/5-thumbnail.png)](docs/5.png) [![6](docs/6-thumbnail.png)](docs/6.png)
 
 ## Features
 
