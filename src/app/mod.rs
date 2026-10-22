@@ -96,6 +96,8 @@ pub struct App {
     biomes_open: bool,
     biomes_tab: BiomesTab,
     grid: bool,
+    /// Layer group fill, border and name labels on the map.
+    layer_frames: bool,
     session: Session,
     interact: Interaction,
     /// File drops on Wayland, where winit does not report them.
@@ -153,6 +155,7 @@ impl App {
             biomes_open: false,
             biomes_tab: BiomesTab::new(),
             grid: true,
+            layer_frames: true,
             session: Session::new(seed.to_string()),
             interact: Interaction::new(),
             wayland_drop: WaylandDrop::start(&cc.egui_ctx, cc),
@@ -287,6 +290,9 @@ impl App {
         }
         if ctx.input(|i| i.key_pressed(Key::G)) {
             self.grid = !self.grid;
+        }
+        if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::F)) {
+            self.layer_frames = !self.layer_frames;
         }
     }
 }

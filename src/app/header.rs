@@ -41,6 +41,13 @@ impl App {
                 if ui.button(text::hud::EDITOR).clicked() {
                     self.editor.open = !self.editor.open;
                 }
+                if ui
+                    .add(egui::Button::new(text::hud::LAYER_FRAMES).selected(self.layer_frames))
+                    .on_hover_text("Toggle layer borders and fills (F)")
+                    .clicked()
+                {
+                    self.layer_frames = !self.layer_frames;
+                }
                 if ui.button(text::hud::LAYERS).clicked() {
                     self.layers_open = !self.layers_open;
                 }

@@ -43,6 +43,8 @@ pub struct Frame<'a> {
     /// Layer index of the hovered room, for tooltip lookup.
     pub hovered_layer: Option<usize>,
     pub grid: bool,
+    /// Layer group fill, border and name labels.
+    pub layer_frames: bool,
     /// Room being placed, if any.
     pub ghost: Option<Ghost>,
     /// Rooms being dragged, drawn together in green or red.
@@ -88,15 +90,17 @@ pub fn draw_layers(
         if !layer.visible {
             continue;
         }
-        draw_layer_group(
-            &painter,
-            ui.ctx(),
-            layer,
-            i == active,
-            f.layout,
-            f.view,
-            f.map_rect,
-        );
+        if f.layer_frames {
+            draw_layer_group(
+                &painter,
+                ui.ctx(),
+                layer,
+                i == active,
+                f.layout,
+                f.view,
+                f.map_rect,
+            );
+        }
         let selected = if i == active { f.selected } else { &[][..] };
         let hovered = if f.hovered_layer == Some(i) {
             f.hovered

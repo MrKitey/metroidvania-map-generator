@@ -18,6 +18,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Drag legend icon", "Set room type"),
     ("C", "Recenter"),
     ("G", "Grid"),
+    ("F", "Layer frames"),
     ("B", "Boss room"),
     ("S", "Save room"),
     ("H", "Secret room"),
@@ -45,6 +46,7 @@ pub const RECENT: &str = "Recent";
 pub const SAVE: &str = "Save";
 pub const BIOMES: &str = "Biomes";
 pub const LAYERS: &str = "Layers";
+pub const LAYER_FRAMES: &str = "Frames";
 pub const LAYER_ADD: &str = "+ Add layer";
 pub const LAYER_VISIBILITY: &str = "Visibility";
 pub const LAYER_LOCK: &str = "Lock";

@@ -66,13 +66,17 @@ impl App {
             pointer.consumed = true;
         }
 
-        let layer_labels = render::layer_label_rects(
-            &ctx,
-            &self.layers,
-            &layout,
-            &self.view,
-            map_rect,
-        );
+        let layer_labels = if self.layer_frames {
+            render::layer_label_rects(
+                &ctx,
+                &self.layers,
+                &layout,
+                &self.view,
+                map_rect,
+            )
+        } else {
+            Vec::new()
+        };
         self.interact.begin_layer_drag(
             &mut pointer,
             &mut self.layers,
@@ -195,6 +199,7 @@ impl App {
             hovered: hovered.map(|(_, ri)| ri),
             hovered_layer: hovered.map(|(li, _)| li),
             grid: self.grid,
+            layer_frames: self.layer_frames,
             ghost,
             move_ghosts,
             selected: self.interact.selected(),
