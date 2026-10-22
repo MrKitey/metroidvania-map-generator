@@ -2,6 +2,8 @@
 
 mod drag;
 
+use super::{UndoEntry, remember};
+use crate::biome::Biome;
 use crate::icons::IconId;
 use crate::layout::Layout;
 use crate::render::{Ghost, RoomLegend};
@@ -126,6 +128,10 @@ impl Interaction {
         p: &mut Pointer,
         layout: &Layout,
         map: Rect,
+        undo: &mut Vec<UndoEntry>,
+        seed: u64,
+        cells: u32,
+        biomes: &[Biome],
     ) -> Option<Ghost> {
         let choice = self.placing?;
         if p.right {
@@ -148,6 +154,7 @@ impl Interaction {
         }
         if free {
             let (kind, marker) = choice.pick.spec();
+            remember(undo, world, seed, cells, biomes);
             world.place_manual((x, y), (choice.w, choice.h), kind, marker);
         }
         self.placing = None;
@@ -215,6 +222,10 @@ impl Interaction {
         legend: &RoomLegend,
         world: &mut World,
         hovered: Option<usize>,
+        undo: &mut Vec<UndoEntry>,
+        seed: u64,
+        cells: u32,
+        biomes: &[Biome],
     ) {
         let Some(icon) = self.icon_drag else {
             if p.left && !p.consumed && self.placing.is_none() && self.moving.is_none() {
@@ -226,7 +237,7 @@ impl Interaction {
             self.icon_drag = None;
         } else if !p.left_down {
             if let Some(room) = hovered {
-                tag_room(world, room, icon);
+                tag_room(world, room, icon, undo, seed, cells, biomes);
             }
             self.icon_drag = None;
         }
@@ -240,6 +251,10 @@ impl Interaction {
         world: &mut World,
         blocked: bool,
         hovered: Option<usize>,
+        undo: &mut Vec<UndoEntry>,
+        seed: u64,
+        cells: u32,
+        biomes: &[Biome],
     ) -> usize {
         if blocked {
             return 0;
@@ -269,10 +284,13 @@ impl Interaction {
         } else {
             return 0;
         };
+        remember(undo, world, seed, cells, biomes);
         let removed = world.remove_rooms(&targets);
         if removed > 0 {
             self.moving = None;
             self.selected.clear();
+        } else {
+            undo.pop();
         }
         removed
     }
@@ -283,26 +301,44 @@ impl Interaction {
         world: &mut World,
         blocked: bool,
         room: usize,
+        undo: &mut Vec<UndoEntry>,
+        seed: u64,
+        cells: u32,
+        biomes: &[Biome],
     ) {
         if blocked {
             return;
         }
         if ctx.input(|i| i.key_pressed(Key::B)) {
-            tag_room(world, room, IconId::Boss);
+            tag_room(world, room, IconId::Boss, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::S) && !i.modifiers.command) {
-            tag_room(world, room, IconId::Save);
+            tag_room(world, room, IconId::Save, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::H)) {
-            tag_room(world, room, IconId::Secret);
+            tag_room(world, room, IconId::Secret, undo, seed, cells, biomes);
         }
         if ctx.input(|i| i.key_pressed(Key::P)) {
-            tag_room(world, room, IconId::Portal);
+            tag_room(world, room, IconId::Portal, undo, seed, cells, biomes);
         }
     }
 }
 
-fn tag_room(world: &mut World, room: usize, icon: IconId) {
+fn tag_room(
+    world: &mut World,
+    room: usize,
+    icon: IconId,
+    undo: &mut Vec<UndoEntry>,
+    seed: u64,
+    cells: u32,
+    biomes: &[Biome],
+) {
+    if matches!(icon, IconId::Secret | IconId::Portal)
+        && world.rooms[room].kind == RoomKind::Corridor
+    {
+        return;
+    }
+    remember(undo, world, seed, cells, biomes);
     match icon {
         IconId::Boss => world.toggle_marker(room, Marker::Boss),
         IconId::Save => world.toggle_marker(room, Marker::Save),

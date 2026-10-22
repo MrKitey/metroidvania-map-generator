@@ -16,6 +16,7 @@ pub const MAX_COUNT: u32 = 5;
 /// give the same map, and only the counts above 1 add corridors.
 pub const MIN_CORRIDORS: u32 = 0;
 
+#[derive(Clone)]
 pub struct Biome {
     pub name: String,
     pub fill: Color32,

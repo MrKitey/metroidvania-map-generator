@@ -207,6 +207,7 @@ impl super::App {
         self.editor.set_seed(self.seed);
         self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
         self.interact.clear();
+        self.undo.clear();
         self.fit = true;
         self.session.reset_new(name, now);
     }
@@ -263,6 +264,7 @@ impl super::App {
         self.biomes = loaded.biomes;
         self.world = loaded.world;
         self.interact.clear();
+        self.undo.clear();
         self.fit = true;
         self.session.created_at = loaded.created_at;
         let modified_at = loaded.modified_at;

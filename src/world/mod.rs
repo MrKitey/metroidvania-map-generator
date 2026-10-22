@@ -96,7 +96,7 @@ pub struct Door {
     pub vertical: bool,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct World {
     /// Maps each occupied cell to the index of the room covering it.
     grid: HashMap<(i32, i32), usize>,

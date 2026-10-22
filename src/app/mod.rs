@@ -28,6 +28,34 @@ use std::time::Duration;
 const MIN_CELLS: u32 = 96;
 const MAX_CELLS: u32 = 5120;
 const START_CELLS: u32 = 768;
+const UNDO_LIMIT: usize = 50;
+
+/// Snapshot of the map and the values regen may change.
+pub(super) struct UndoEntry {
+    world: World,
+    seed: u64,
+    cells: u32,
+    biomes: Vec<Biome>,
+}
+
+/// Pushes a snapshot. Drops the oldest entry past `UNDO_LIMIT`.
+pub(super) fn remember(
+    undo: &mut Vec<UndoEntry>,
+    world: &World,
+    seed: u64,
+    cells: u32,
+    biomes: &[Biome],
+) {
+    undo.push(UndoEntry {
+        world: world.clone(),
+        seed,
+        cells,
+        biomes: biomes.to_vec(),
+    });
+    if undo.len() > UNDO_LIMIT {
+        undo.remove(0);
+    }
+}
 
 /// Builds a world from the biomes and the editor settings.
 fn build_world(cells: u32, seed: u64, biomes: &[Biome], editor: &Editor) -> World {
@@ -66,6 +94,7 @@ pub struct App {
     interact: Interaction,
     /// File drops on Wayland, where winit does not report them.
     wayland_drop: Option<WaylandDrop>,
+    undo: Vec<UndoEntry>,
 }
 
 impl App {
@@ -94,6 +123,7 @@ impl App {
             session: Session::new(seed.to_string()),
             interact: Interaction::new(),
             wayland_drop: WaylandDrop::start(&cc.egui_ctx, cc),
+            undo: Vec::new(),
         };
         crate::project::register_mime();
         app.open_startup();
@@ -108,6 +138,29 @@ impl App {
         self.seed = seed;
     }
 
+    fn push_undo(&mut self) {
+        remember(
+            &mut self.undo,
+            &self.world,
+            self.seed,
+            self.cells,
+            &self.biomes,
+        );
+    }
+
+    fn undo_edit(&mut self) {
+        let Some(prev) = self.undo.pop() else {
+            return;
+        };
+        self.world = prev.world;
+        self.cells = prev.cells;
+        self.biomes = prev.biomes;
+        self.change_seed(prev.seed);
+        self.editor.set_seed(prev.seed);
+        self.interact.clear();
+    }
+
+    /// Rebuilds the map from the current seed, cells and biomes.
     fn regen(&mut self) {
         self.editor.set_seed(self.seed);
         self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
@@ -116,16 +169,13 @@ impl App {
     }
 
     fn apply_action(&mut self, action: EditorAction) {
+        // Snapshot before the seed changes, so undo restores the previous one.
+        self.push_undo();
         match action {
-            EditorAction::UseSeed(seed) => {
-                self.change_seed(seed);
-                self.regen();
-            }
-            EditorAction::Regenerate => {
-                self.change_seed(time_seed());
-                self.regen();
-            }
+            EditorAction::UseSeed(seed) => self.change_seed(seed),
+            EditorAction::Regenerate => self.change_seed(time_seed()),
         }
+        self.regen();
     }
 
     /// Keyboard shortcuts. Returns after closing overlays, or quits the window.
@@ -157,6 +207,9 @@ impl App {
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::S)) {
             self.save_project(now);
+        }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
+            self.undo_edit();
         }
         if escape && self.help_open {
             self.help_open = false;

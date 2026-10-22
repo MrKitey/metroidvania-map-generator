@@ -67,6 +67,10 @@ impl App {
             &mut pointer,
             &layout,
             map_rect,
+            &mut self.undo,
+            self.seed,
+            self.cells,
+            &self.biomes,
         );
         if ghost.is_none() {
             if let Some(choice) = self.interact.placing {
@@ -83,13 +87,27 @@ impl App {
             };
         let blocked = self.editor.open || self.session.renaming;
         if let Some(i) = hovered {
-            self.interact
-                .room_shortcuts(&ctx, &mut self.world, blocked, i);
+            self.interact.room_shortcuts(
+                &ctx,
+                &mut self.world,
+                blocked,
+                i,
+                &mut self.undo,
+                self.seed,
+                self.cells,
+                &self.biomes,
+            );
         }
-        if self
-            .interact
-            .delete_shortcut(&ctx, &mut self.world, blocked, hovered)
-            > 0
+        if self.interact.delete_shortcut(
+            &ctx,
+            &mut self.world,
+            blocked,
+            hovered,
+            &mut self.undo,
+            self.seed,
+            self.cells,
+            &self.biomes,
+        ) > 0
             && pointer.on_map()
             && !pointer.consumed
             && self.interact.placing.is_none()
@@ -106,10 +124,22 @@ impl App {
             &self.view,
             &layout,
             map_rect,
+            &mut self.undo,
+            self.seed,
+            self.cells,
+            &self.biomes,
         );
         let select_rect = self.interact.select_rect(pointer.pos);
-        self.interact
-            .update_icon_drag(&pointer, &legend, &mut self.world, hovered);
+        self.interact.update_icon_drag(
+            &pointer,
+            &legend,
+            &mut self.world,
+            hovered,
+            &mut self.undo,
+            self.seed,
+            self.cells,
+            &self.biomes,
+        );
         self.interact
             .update_cursor(&ctx, &pointer, rooms, ghost.as_ref(), &move_ghosts, hovered);
 

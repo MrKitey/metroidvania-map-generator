@@ -1,6 +1,8 @@
 //! Dragging placed rooms, and the cursor that follows the gesture.
 
+use super::super::{UndoEntry, remember};
 use super::{Interaction, Moving, Pointer};
+use crate::biome::Biome;
 use crate::layout::Layout;
 use crate::render::{Ghost, Picker};
 use crate::view::View;
@@ -20,6 +22,10 @@ impl Interaction {
         view: &View,
         layout: &Layout,
         map: Rect,
+        undo: &mut Vec<UndoEntry>,
+        seed: u64,
+        cells: u32,
+        biomes: &[Biome],
     ) -> Vec<Ghost> {
         let cell = layout.cell_at(view.screen_to_world(p.pos, map));
         let Some(m) = &self.moving else {
@@ -81,12 +87,19 @@ impl Interaction {
                 .collect();
         }
         if p.on_map() && delta != (0, 0) {
-            match moves.as_slice() {
-                [(idx, x, y)] => {
-                    world.move_room(*idx, *x, *y);
-                }
-                _ => {
-                    world.move_rooms(&moves);
+            let free = match moves.as_slice() {
+                [(idx, x, y)] => world.can_move(*idx, *x, *y),
+                _ => world.can_move_rooms(&moves),
+            };
+            if free {
+                remember(undo, world, seed, cells, biomes);
+                match moves.as_slice() {
+                    [(idx, x, y)] => {
+                        world.move_room(*idx, *x, *y);
+                    }
+                    _ => {
+                        world.move_rooms(&moves);
+                    }
                 }
             }
         }

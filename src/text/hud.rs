@@ -7,6 +7,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+N", "New project"),
     ("Ctrl+O", "Load project"),
     ("Ctrl+S", "Save project"),
+    ("Ctrl+Z", "Undo"),
     ("Wheel", "Zoom"),
     ("Middle drag", "Pan"),
     ("Drag from Rooms", "Place a room"),
