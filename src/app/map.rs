@@ -86,15 +86,16 @@ impl App {
             self.interact
                 .room_shortcuts(&ctx, &mut self.world, blocked, i);
         }
-        if let Some(removed) =
-            self.interact
-                .delete_shortcut(&ctx, &mut self.world, blocked, hovered)
+        if self
+            .interact
+            .delete_shortcut(&ctx, &mut self.world, blocked, hovered)
+            > 0
+            && pointer.on_map()
+            && !pointer.consumed
+            && self.interact.placing.is_none()
         {
-            hovered = match hovered {
-                Some(i) if i == removed => None,
-                Some(i) if i > removed => Some(i - 1),
-                other => other,
-            };
+            let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
+            hovered = self.world.room_at(x, y);
         }
         self.interact
             .update_selection(&pointer, &self.view, &self.world, &layout, map_rect);

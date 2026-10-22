@@ -31,6 +31,26 @@ pub struct Choice {
 }
 
 impl World {
+    /// True if any room uses this biome index.
+    pub fn uses_biome(&self, idx: usize) -> bool {
+        self.rooms.iter().any(|r| r.biome == idx)
+    }
+
+    /// Shifts biome indices after removing an unused entry from the biome list.
+    pub fn reindex_after_biome_removal(&mut self, removed: usize) {
+        debug_assert!(!self.uses_biome(removed));
+        for room in &mut self.rooms {
+            if room.biome > removed {
+                room.biome -= 1;
+            }
+        }
+        for biome in &mut self.biomes {
+            if *biome > removed {
+                *biome -= 1;
+            }
+        }
+    }
+
     /// Sets the marker, or clears it if the room already has this one.
     /// A new marker replaces the secret or portal kind.
     pub fn toggle_marker(&mut self, idx: usize, marker: Marker) {
@@ -193,6 +213,30 @@ impl World {
             }
         }
         true
+    }
+
+    /// Removes every listed room. Duplicates and out-of-range indices are ignored.
+    /// At least one room always stays. Returns how many rooms were removed.
+    pub fn remove_rooms(&mut self, indices: &[usize]) -> usize {
+        let mut to_remove: Vec<usize> = indices
+            .iter()
+            .copied()
+            .filter(|&i| i < self.rooms.len())
+            .collect();
+        to_remove.sort_unstable();
+        to_remove.dedup();
+        let max_removable = self.rooms.len().saturating_sub(1);
+        if to_remove.len() > max_removable {
+            to_remove.truncate(max_removable);
+        }
+        to_remove.sort_unstable_by(|a, b| b.cmp(a));
+        let mut removed = 0;
+        for idx in to_remove {
+            if self.remove_room(idx) {
+                removed += 1;
+            }
+        }
+        removed
     }
 
     /// Per side (right, left, down, up): each room touching the rectangle, with the door

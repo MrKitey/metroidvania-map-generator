@@ -232,18 +232,17 @@ impl Interaction {
         }
     }
 
-    /// Deletes the dragged room, or the hovered one if nothing is dragged.
-    /// One press removes one room. The last room stays.
-    /// Returns the removed index.
+    /// Deletes the selection, the dragged group, or the hovered room.
+    /// At least one room stays. Returns how many rooms were removed.
     pub(super) fn delete_shortcut(
         &mut self,
         ctx: &Context,
         world: &mut World,
         blocked: bool,
         hovered: Option<usize>,
-    ) -> Option<usize> {
+    ) -> usize {
         if blocked {
-            return None;
+            return 0;
         }
         let pressed = ctx.input(|input| {
             input.events.iter().any(|event| {
@@ -259,25 +258,23 @@ impl Interaction {
             })
         });
         if !pressed {
-            return None;
+            return 0;
         }
-        let idx = self
-            .moving
-            .as_ref()
-            .filter(|m| m.rooms.len() == 1)
-            .map(|m| m.rooms[0])
-            .or(hovered)?;
-        if !world.remove_room(idx) {
-            return None;
+        let targets = if !self.selected.is_empty() {
+            self.selected.clone()
+        } else if let Some(moving) = &self.moving {
+            moving.rooms.clone()
+        } else if let Some(idx) = hovered {
+            vec![idx]
+        } else {
+            return 0;
+        };
+        let removed = world.remove_rooms(&targets);
+        if removed > 0 {
+            self.moving = None;
+            self.selected.clear();
         }
-        self.moving = None;
-        self.selected.retain(|&i| i != idx);
-        for i in &mut self.selected {
-            if *i > idx {
-                *i -= 1;
-            }
-        }
-        Some(idx)
+        removed
     }
 
     pub(super) fn room_shortcuts(

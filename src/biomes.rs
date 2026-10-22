@@ -3,6 +3,7 @@
 use crate::biome::{self, Biome, MAX_COUNT, MIN_CORRIDORS};
 use crate::common::EditorAction;
 use crate::text::{biomes, editor as text, files, rooms, status};
+use crate::world::World;
 
 pub struct BiomesTab {
     status: String,
@@ -15,17 +16,18 @@ impl BiomesTab {
         }
     }
 
-    /// Returns `Regenerate` when the biome list changed.
+    /// Returns `Regenerate` only after a successful import.
     pub fn draw(
         &mut self,
         ui: &mut egui::Ui,
         biomes_list: &mut Vec<Biome>,
+        world: &mut World,
     ) -> Option<EditorAction> {
         let mut action = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                action = self.draw_list(ui, biomes_list);
+                action = self.draw_list(ui, biomes_list, world);
             });
         action
     }
@@ -34,12 +36,15 @@ impl BiomesTab {
         &mut self,
         ui: &mut egui::Ui,
         biomes_list: &mut Vec<Biome>,
+        world: &mut World,
     ) -> Option<EditorAction> {
         let mut action = None;
         let mut remove = None;
         let mut changed = false;
+        let can_delete = biomes_list.len() > 1;
 
         for (i, b) in biomes_list.iter_mut().enumerate() {
+            let used = world.uses_biome(i);
             ui.push_id(i, |ui| {
                 egui::CollapsingHeader::new(b.name.clone())
                     .id_salt(i)
@@ -78,7 +83,10 @@ impl BiomesTab {
                         ) {
                             changed = true;
                         }
-                        if ui.button(text::DELETE).clicked() {
+                        if ui
+                            .add_enabled(can_delete && !used, egui::Button::new(text::DELETE))
+                            .clicked()
+                        {
                             remove = Some(i);
                         }
                     });
@@ -89,7 +97,6 @@ impl BiomesTab {
         ui.horizontal(|ui| {
             if ui.button(text::ADD).clicked() {
                 biomes_list.push(Biome::new(biomes::NEW, 128, 128, 128));
-                action = Some(EditorAction::Regenerate);
                 changed = true;
             }
             if ui.button(text::IMPORT).clicked() {
@@ -113,11 +120,11 @@ impl BiomesTab {
         });
 
         if let Some(i) = remove {
-            if biomes_list.len() > 1 {
+            if biomes_list.len() > 1 && !world.uses_biome(i) {
                 biomes_list.remove(i);
-                action = Some(EditorAction::Regenerate);
+                world.reindex_after_biome_removal(i);
                 changed = true;
-            } else {
+            } else if biomes_list.len() <= 1 {
                 self.status = status::AT_LEAST_ONE_BIOME.to_owned();
             }
         }
@@ -156,11 +163,12 @@ mod tests {
         events: Vec<egui::Event>,
         tab: &mut BiomesTab,
         list: &mut Vec<Biome>,
+        world: &mut World,
     ) -> egui::FullOutput {
         let mut input = input(time);
         input.events = events;
         ctx.run_ui(input, |ui| {
-            tab.draw(ui, list);
+            tab.draw(ui, list, world);
         })
     }
 
@@ -209,19 +217,28 @@ mod tests {
         let ctx = egui::Context::default();
         let mut list = vec![Biome::new("Castle", 1, 2, 3)];
         let mut tab = BiomesTab::new();
+        let mut world = World::default();
 
-        let closed = draw(&ctx, 0.0, Vec::new(), &mut tab, &mut list);
+        let closed = draw(&ctx, 0.0, Vec::new(), &mut tab, &mut list, &mut world);
         let header = text_center(&closed, "Castle").unwrap();
         closed.drop_without_applying_deltas();
 
-        draw(&ctx, 0.05, click(header), &mut tab, &mut list).drop_without_applying_deltas();
-        let open = draw(&ctx, 1.0, Vec::new(), &mut tab, &mut list);
+        draw(
+            &ctx,
+            0.05,
+            click(header),
+            &mut tab,
+            &mut list,
+            &mut world,
+        )
+        .drop_without_applying_deltas();
+        let open = draw(&ctx, 1.0, Vec::new(), &mut tab, &mut list, &mut world);
         let name_visible = shows(&open, text::NAME);
         open.drop_without_applying_deltas();
         assert!(name_visible);
 
         list[0].name.push('x');
-        let renamed = draw(&ctx, 2.0, Vec::new(), &mut tab, &mut list);
+        let renamed = draw(&ctx, 2.0, Vec::new(), &mut tab, &mut list, &mut world);
         let name_still_visible = shows(&renamed, text::NAME);
         renamed.drop_without_applying_deltas();
         assert!(name_still_visible);

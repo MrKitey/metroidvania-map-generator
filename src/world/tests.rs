@@ -331,6 +331,20 @@ fn removing_a_room_frees_its_cells_and_keeps_the_last_one() {
 }
 
 #[test]
+fn remove_rooms_deletes_a_batch_and_keeps_one() {
+    let mut world = generate(768, 1);
+    assert!(world.rooms.len() > 3);
+    let before = world.rooms.len();
+    assert_eq!(world.remove_rooms(&[1, 2, 1]), 2);
+    assert_eq!(world.rooms.len(), before - 2);
+    let len = world.rooms.len();
+    let all: Vec<usize> = (0..len).collect();
+    assert_eq!(world.remove_rooms(&all), len - 1);
+    assert_eq!(world.rooms.len(), 1);
+    assert_eq!(world.remove_rooms(&[0]), 0);
+}
+
+#[test]
 fn from_parts_rebuilds_the_grid() {
     let world = generate(256, 1);
     let restored = World::from_parts(

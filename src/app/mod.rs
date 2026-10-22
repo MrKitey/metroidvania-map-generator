@@ -232,7 +232,7 @@ impl eframe::App for App {
                 .show(ui, |ui| {
                     ui.heading(text::hud::BIOMES);
                     ui.separator();
-                    action = self.biomes_tab.draw(ui, &mut self.biomes);
+                    action = self.biomes_tab.draw(ui, &mut self.biomes, &mut self.world);
                 });
             if let Some(action) = action {
                 self.apply_action(action);
