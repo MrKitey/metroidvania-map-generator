@@ -261,16 +261,23 @@ impl eframe::App for App {
             let sizes = self.editor.sizes();
             let layout = Layout::new(self.editor.viewport());
             let mut started = None;
+            let mut sizes_changed = false;
             egui::Panel::left("rooms")
                 .default_size(editor::PANEL_W)
                 .min_size(280.0)
                 .show(ui, |ui| {
                     ui.heading(text::rooms::ROOMS);
                     ui.separator();
-                    let (picker, drag) = render::draw_room_list(ui, &sizes, &layout);
+                    let (rooms, bosses, corridors) = self.editor.size_lists_mut();
+                    let (picker, drag, changed) =
+                        render::draw_room_list(ui, &sizes, &layout, rooms, bosses, corridors);
+                    sizes_changed = changed;
                     started = drag;
                     room_list = Some(picker);
                 });
+            if sizes_changed {
+                self.editor.save_settings();
+            }
             if let Some((choice, size)) = started {
                 self.interact.placing = Some(choice);
                 self.interact.placing_size = size;

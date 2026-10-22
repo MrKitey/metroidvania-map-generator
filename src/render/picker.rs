@@ -2,8 +2,10 @@
 
 use super::map::line_thickness;
 use super::pack::pack_rooms;
+use crate::editor::{self, SizeFields};
 use crate::layout::Layout;
-use crate::text::rooms;
+use crate::settings::{DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ROOM_SIZES};
+use crate::text::{editor as editor_text, rooms};
 use crate::view::View;
 use crate::world::{Choice, Pick, Sizes};
 use egui::{
@@ -79,25 +81,53 @@ fn draw_section(
 }
 
 /// Draws the room list in the side panel.
-/// Returns the sizes on screen, and the entry under the pointer when the drag starts.
+/// Returns the sizes on screen, the entry under the pointer when the drag starts,
+/// and whether any size list was edited.
 pub fn draw_room_list(
     ui: &mut Ui,
     sizes: &Sizes,
     layout: &Layout,
-) -> (Picker, Option<(Choice, Vec2)>) {
+    room_fields: &mut SizeFields,
+    boss_fields: &mut SizeFields,
+    corridor_fields: &mut SizeFields,
+) -> (Picker, Option<(Choice, Vec2)>, bool) {
     egui::ScrollArea::both()
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let sections = [
-                (rooms::ROOMS, Pick::Room, sizes.rooms.as_slice()),
-                (rooms::BOSS_ROOMS, Pick::Boss, sizes.boss.as_slice()),
-                (rooms::CORRIDORS, Pick::Corridor, sizes.corridor.as_slice()),
+                (
+                    rooms::ROOMS,
+                    Pick::Room,
+                    sizes.rooms.as_slice(),
+                    editor_text::room_sizes_label(editor::MAX_ROOM_SIDE),
+                    room_fields,
+                    DEFAULT_ROOM_SIZES,
+                ),
+                (
+                    rooms::BOSS_ROOMS,
+                    Pick::Boss,
+                    sizes.boss.as_slice(),
+                    editor_text::boss_sizes_label(editor::MAX_ROOM_SIDE),
+                    boss_fields,
+                    DEFAULT_BOSS_SIZES,
+                ),
+                (
+                    rooms::CORRIDORS,
+                    Pick::Corridor,
+                    sizes.corridor.as_slice(),
+                    editor_text::corridor_sizes_label(editor::MAX_ROOM_SIDE),
+                    corridor_fields,
+                    DEFAULT_CORRIDOR_SIZES,
+                ),
             ];
             let pressed = ui.input(|i| i.pointer.button_pressed(PointerButton::Primary));
             let pos = ui.input(|i| i.pointer.hover_pos());
             let mut items = Vec::new();
             let mut drag = None;
-            for (i, (title, pick, list)) in sections.into_iter().enumerate() {
+            let mut changed = false;
+            for (i, (title, pick, list, size_label, fields, defaults)) in
+                sections.into_iter().enumerate()
+            {
                 if i > 0 {
                     ui.add_space(SECTION_GAP);
                 }
@@ -115,9 +145,14 @@ pub fn draw_room_list(
                             });
                         }
                         items.extend(section);
+                        ui.collapsing(size_label, |ui| {
+                            if editor::size_list(ui, fields, defaults) {
+                                changed = true;
+                            }
+                        });
                     });
             }
-            (Picker { items }, drag)
+            (Picker { items }, drag, changed)
         })
         .inner
 }

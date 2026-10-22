@@ -148,6 +148,7 @@ impl RoomLegend {
 /// Room types, one per row with its icon and name.
 fn draw_room_legend(ui: &Ui, legend: &RoomLegend, icons: &mut Icons) {
     let painter = ui.painter();
+    let hover = ui.input(|i| i.pointer.hover_pos());
     painter.rect_filled(
         legend.rect,
         4.0,
@@ -155,6 +156,10 @@ fn draw_room_legend(ui: &Ui, legend: &RoomLegend, icons: &mut Icons) {
     );
     let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
     for (i, (name, fill, border, icon)) in LEGEND_ROOMS.iter().enumerate() {
+        let row = legend.rows[i].1;
+        if hover.is_some_and(|p| row.contains(p)) {
+            painter.rect_filled(row, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 28));
+        }
         let row_y = legend.rect.min.y + PAD + i as f32 * ROW_H;
         let box_y = row_y + (ROW_H - ICON_BOX) / 2.0;
         let boxed = Rect::from_min_size(

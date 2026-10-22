@@ -5,11 +5,13 @@ mod settings_tab;
 mod widgets;
 
 use crate::common::EditorAction;
-use crate::settings::Settings;
-use crate::text;
+use crate::settings::{self, Settings};
+use crate::text::{self, status};
 use crate::world::Sizes;
 use fields::Fields;
-pub use widgets::PANEL_W;
+pub use fields::{MAX_ROOM_SIDE, SizeFields};
+pub use widgets::{PANEL_W, size_list};
+
 pub struct Editor {
     pub open: bool,
     fields: Fields,
@@ -47,6 +49,23 @@ impl Editor {
     /// All allowed room sizes, ready for the generator.
     pub fn sizes(&self) -> Sizes {
         self.fields.room_sizes()
+    }
+
+    /// Editable size lists for the rooms panel.
+    pub fn size_lists_mut(&mut self) -> (&mut SizeFields, &mut SizeFields, &mut SizeFields) {
+        (
+            &mut self.fields.sizes,
+            &mut self.fields.boss_sizes,
+            &mut self.fields.corridor_sizes,
+        )
+    }
+
+    /// Persists the current fields and updates the status message.
+    pub fn save_settings(&mut self) {
+        self.status = match settings::save(&self.fields.settings()) {
+            Ok(path) => status::saved_to(&path),
+            Err(e) => status::error(e),
+        };
     }
 
     /// Current field values, validated, in the format saved to disk.

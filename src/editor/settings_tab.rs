@@ -1,9 +1,8 @@
-//! Settings tab: seed, screen size, room counts and allowed room sizes.
+//! Settings tab: seed, screen size, room counts and autosave.
 
 use super::EditorAction;
-use super::fields::{Fields, MAX_MIN_ROOMS, MAX_ROOM_SIDE};
-use super::widgets::size_list;
-use crate::settings::{self, DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ROOM_SIZES};
+use super::fields::{Fields, MAX_MIN_ROOMS};
+use crate::settings;
 use crate::text::{editor as text, status};
 
 pub fn draw(
@@ -70,23 +69,6 @@ pub fn draw(
             .add(egui::TextEdit::singleline(&mut fields.max_rooms).desired_width(80.0))
             .changed()
         {
-            changed = true;
-        }
-    });
-    ui.separator();
-
-    ui.collapsing(text::room_sizes_label(MAX_ROOM_SIDE), |ui| {
-        if size_list(ui, &mut fields.sizes, DEFAULT_ROOM_SIZES) {
-            changed = true;
-        }
-    });
-    ui.collapsing(text::boss_sizes_label(MAX_ROOM_SIDE), |ui| {
-        if size_list(ui, &mut fields.boss_sizes, DEFAULT_BOSS_SIZES) {
-            changed = true;
-        }
-    });
-    ui.collapsing(text::corridor_sizes_label(MAX_ROOM_SIDE), |ui| {
-        if size_list(ui, &mut fields.corridor_sizes, DEFAULT_CORRIDOR_SIZES) {
             changed = true;
         }
     });
