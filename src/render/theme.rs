@@ -7,11 +7,21 @@ use crate::world::{Door, Room, RoomKind, World};
 use egui::Color32;
 
 pub const BACKGROUND: Color32 = Color32::from_rgb(15, 15, 22);
+pub const LIGHT_BACKGROUND: Color32 = Color32::from_rgb(236, 236, 242);
 pub const CORRIDOR_BORDER: Color32 = Color32::from_rgb(150, 150, 150);
 /// Color of doors between two different biomes.
 pub const TRANSITION_DOOR: Color32 = Color32::from_rgb(240, 230, 180);
 pub const BUTTON_BG: Color32 = Color32::from_rgb(35, 35, 50);
 pub const BUTTON_HOVER: Color32 = Color32::from_rgb(55, 55, 75);
+
+/// Map canvas fill for the current UI theme.
+pub fn background(dark: bool) -> Color32 {
+    if dark {
+        BACKGROUND
+    } else {
+        LIGHT_BACKGROUND
+    }
+}
 
 /// Inner spacing of the buttons, popups and legends.
 pub const PAD: f32 = 8.0;

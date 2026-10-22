@@ -47,6 +47,8 @@ impl FileSettings {
             corridor_sizes: self.corridor_sizes,
             autosave: settings::DEFAULT_AUTOSAVE,
             autosave_secs: settings::DEFAULT_AUTOSAVE_SECS,
+            // UI theme lives in settings.json, not in the project archive.
+            dark: true,
         }
     }
 }

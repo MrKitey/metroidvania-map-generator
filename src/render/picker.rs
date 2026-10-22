@@ -17,6 +17,23 @@ const PICKER_TEXT: f32 = 14.0;
 /// Extra space between the foldable sections.
 const SECTION_GAP: f32 = 16.0;
 
+/// Outline, label and hover fill for the room size previews.
+fn picker_colors(dark: bool) -> (Color32, Color32, Color32) {
+    if dark {
+        (
+            Color32::WHITE,
+            Color32::WHITE,
+            Color32::from_rgba_unmultiplied(255, 255, 255, 38),
+        )
+    } else {
+        (
+            Color32::from_rgb(40, 40, 55),
+            Color32::from_rgb(40, 40, 55),
+            Color32::from_rgba_unmultiplied(0, 0, 0, 30),
+        )
+    }
+}
+
 /// Room sizes currently shown, with screen positions already computed.
 pub struct Picker {
     pub items: Vec<(Choice, Rect)>,
@@ -54,27 +71,19 @@ fn draw_section(
         );
     }
     let mouse = ui.input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO);
+    let (stroke, text, hover) = picker_colors(ui.visuals().dark_mode);
     let painter = ui.painter();
     for (choice, rect) in &items {
         if rect.contains(mouse) {
-            painter.rect_filled(
-                *rect,
-                0.0,
-                Color32::from_rgba_unmultiplied(255, 255, 255, 38),
-            );
+            painter.rect_filled(*rect, 0.0, hover);
         }
-        painter.rect_stroke(
-            *rect,
-            0.0,
-            Stroke::new(2.0, Color32::WHITE),
-            StrokeKind::Inside,
-        );
+        painter.rect_stroke(*rect, 0.0, Stroke::new(2.0, stroke), StrokeKind::Inside);
         painter.text(
             rect.center(),
             Align2::CENTER_CENTER,
             format!("{}x{}", choice.w, choice.h),
             FontId::proportional(PICKER_TEXT),
-            Color32::WHITE,
+            text,
         );
     }
     items
@@ -157,18 +166,19 @@ pub fn draw_room_list(
         .inner
 }
 
-/// White outline of the dragged room, centered on the cursor, above the panels.
+/// Outline of the dragged room, centered on the cursor, above the panels.
 /// `size` is the size of that entry in the list.
 pub fn draw_drag_outline(ctx: &Context, choice: Choice, size: Vec2) {
     let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else {
         return;
     };
+    let (stroke, text, _) = picker_colors(ctx.global_style().visuals.dark_mode);
     let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::unique("room-drag")));
     let rect = Rect::from_center_size(pos, size);
     painter.rect_stroke(
         rect,
         0.0,
-        Stroke::new(2.0, Color32::WHITE),
+        Stroke::new(2.0, stroke),
         StrokeKind::Inside,
     );
     painter.text(
@@ -176,7 +186,7 @@ pub fn draw_drag_outline(ctx: &Context, choice: Choice, size: Vec2) {
         Align2::CENTER_CENTER,
         format!("{}x{}", choice.w, choice.h),
         FontId::proportional(PICKER_TEXT),
-        Color32::WHITE,
+        text,
     );
 }
 

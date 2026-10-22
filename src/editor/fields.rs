@@ -31,6 +31,8 @@ pub struct Fields {
     pub autosave: bool,
     /// Delay in seconds, kept as typed.
     pub autosave_secs: String,
+    /// Dark UI theme. Edited by the header switch, not the settings panel.
+    pub dark: bool,
 }
 
 /// Width and height field texts for each size.
@@ -74,6 +76,7 @@ impl Fields {
             corridor_sizes: size_fields(&settings.corridor_sizes),
             autosave: settings.autosave,
             autosave_secs: settings.autosave_secs.to_string(),
+            dark: settings.dark,
         }
     }
 
@@ -143,6 +146,7 @@ impl Fields {
             corridor_sizes: sizes.corridor,
             autosave: self.autosave,
             autosave_secs: self.autosave_secs(),
+            dark: self.dark,
         }
     }
 }
@@ -165,6 +169,7 @@ mod tests {
         assert_eq!(settings.room_sizes, defaults.room_sizes);
         assert_eq!(settings.autosave, defaults.autosave);
         assert_eq!(settings.autosave_secs, defaults.autosave_secs);
+        assert_eq!(settings.dark, defaults.dark);
     }
 
     #[test]

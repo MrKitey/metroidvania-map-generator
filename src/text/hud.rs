@@ -29,6 +29,10 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
 ];
 /// Glyph on the shortcuts button.
 pub const HELP_BUTTON: &str = "?";
+/// Hover text when the UI is dark: click to go light.
+pub const THEME_TO_LIGHT: &str = "Light mode";
+/// Hover text when the UI is light: click to go dark.
+pub const THEME_TO_DARK: &str = "Dark mode";
 /// Label of the editor button.
 pub const EDITOR: &str = "Editor";
 /// Label of the regenerate-map button.

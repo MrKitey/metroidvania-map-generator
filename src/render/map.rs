@@ -82,7 +82,13 @@ pub fn room_icons(r: &Room, layout: &Layout, side: f32) -> Vec<(String, Vec2, f3
 }
 
 /// Grid line color, transparent white.
-const GRID_COLOR: Color32 = Color32::from_rgba_unmultiplied_const(255, 255, 255, 20);
+fn grid_color(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 20)
+    } else {
+        Color32::from_rgba_unmultiplied(0, 0, 0, 25)
+    }
+}
 /// Smallest cell on screen, in points. Below it the grid is too dense and is skipped.
 const MIN_GRID_CELL_PX: f32 = 6.0;
 
@@ -95,11 +101,18 @@ fn to_screen(view: &View, map: Rect, world: Rect) -> Rect {
 
 /// Draws one line per cell edge over `area`, one pixel thick. Meant to be drawn
 /// before the map so the rooms cover it.
-pub fn draw_grid(painter: &Painter, layout: &Layout, view: &View, map: Rect, area: Rect) {
+pub fn draw_grid(
+    painter: &Painter,
+    layout: &Layout,
+    view: &View,
+    map: Rect,
+    area: Rect,
+    dark: bool,
+) {
     if layout.cw.min(layout.ch) * view.scale < MIN_GRID_CELL_PX {
         return;
     }
-    let stroke = Stroke::new(1.0, GRID_COLOR);
+    let stroke = Stroke::new(1.0, grid_color(dark));
     let first_x = (area.min.x / layout.cw).floor() as i32;
     let last_x = (area.max.x / layout.cw).ceil() as i32;
     for i in first_x..=last_x {

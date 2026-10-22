@@ -7,7 +7,7 @@ use crate::layout::Layout;
 use crate::project;
 use crate::storage;
 use crate::text;
-use egui::{Color32, Rect, Sense};
+use egui::{Button, Color32, Rect, Sense, Vec2, load::SizedTexture};
 
 pub(super) const HEADER_H: f32 = 40.0;
 
@@ -28,6 +28,7 @@ impl App {
             }
             ui.label(text::hud::rooms(self.world.rooms.len()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                self.theme_button(ui);
                 if ui.button(text::hud::HELP_BUTTON).clicked() {
                     self.help_open = !self.help_open;
                 }
@@ -102,6 +103,19 @@ impl App {
                 }
             }
         });
+    }
+
+    fn theme_button(&mut self, ui: &mut egui::Ui) {
+        let (tex, tip) = if self.dark {
+            (&self.theme_sun, text::hud::THEME_TO_LIGHT)
+        } else {
+            (&self.theme_night, text::hud::THEME_TO_DARK)
+        };
+        let image = SizedTexture::new(tex.id(), Vec2::splat(16.0));
+        let button = Button::image(image).image_tint_follows_text_color(true);
+        if ui.add(button).on_hover_text(tip).clicked() {
+            self.toggle_theme(ui.ctx());
+        }
     }
 
     fn recent_menu(&mut self, ui: &mut egui::Ui, now: f64) {

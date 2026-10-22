@@ -12,6 +12,9 @@ use std::path::Path;
 const MIN_PX: u32 = 8;
 const MAX_PX: u32 = 512;
 
+/// Pixel size of the theme switch icons in the header.
+pub const UI_ICON_PX: u32 = 48;
+
 /// Effective icon id(s) of a room for display.
 pub fn room_icon_ids(r: &Room) -> Vec<String> {
     if let Some(id) = &r.icon {
@@ -106,6 +109,14 @@ fn rasterize_svg(tree: &usvg::Tree, px: u32) -> ColorImage {
 fn scale_raster(img: &image::RgbaImage, px: u32) -> ColorImage {
     let scaled = image::imageops::resize(img, px, px, image::imageops::FilterType::Triangle);
     ColorImage::from_rgba_unmultiplied([px as usize, px as usize], &scaled)
+}
+
+/// Loads an embedded SVG once for a UI control.
+pub fn texture_from_svg(ctx: &Context, name: &str, bytes: &[u8], px: u32) -> Option<TextureHandle> {
+    let tree = usvg::Tree::from_data(bytes, &usvg::Options::default()).ok()?;
+    let px = px.clamp(MIN_PX, MAX_PX);
+    let image = rasterize_svg(&tree, px);
+    Some(ctx.load_texture(name.to_owned(), image, TextureOptions::LINEAR))
 }
 
 /// Texture cache keyed by icon id.

@@ -11,7 +11,7 @@ use crate::biomes::BiomesTab;
 use crate::common::EditorAction;
 use crate::editor::{self, Editor};
 use crate::icon_lib::{self, IconDef};
-use crate::icons::Icons;
+use crate::icons::{self, Icons};
 use crate::layout::Layout;
 use crate::platform::WaylandDrop;
 use crate::render::{self, COPIED_TIME};
@@ -19,7 +19,7 @@ use crate::settings;
 use crate::text;
 use crate::view::View;
 use crate::world::{Params, World, time_seed};
-use egui::{Color32, Key, ViewportCommand};
+use egui::{Key, TextureHandle, ViewportCommand};
 use header::HEADER_H;
 use interact::Interaction;
 use session::Session;
@@ -97,20 +97,39 @@ pub struct App {
     /// File drops on Wayland, where winit does not report them.
     wayland_drop: Option<WaylandDrop>,
     undo: Vec<UndoEntry>,
+    /// Dark UI theme when true.
+    dark: bool,
+    theme_sun: TextureHandle,
+    theme_night: TextureHandle,
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> App {
-        render::apply_theme(&cc.egui_ctx);
+        let loaded = settings::load();
+        render::apply_theme(&cc.egui_ctx, loaded.dark);
         let seed = time_seed();
         let biomes = biome::load();
         let special = icon_lib::load();
-        let editor = Editor::new(seed, &settings::load());
+        let editor = Editor::new(seed, &loaded);
         let world = build_world(START_CELLS, seed, &biomes, &editor);
         let mut icons = Icons::new();
         let mut legend_icons = Icons::new();
         icons.sync(&special);
         legend_icons.sync(&special);
+        let theme_sun = icons::texture_from_svg(
+            &cc.egui_ctx,
+            "theme-sun",
+            include_bytes!("../../assets/icons/sun.svg"),
+            icons::UI_ICON_PX,
+        )
+        .expect("sun.svg");
+        let theme_night = icons::texture_from_svg(
+            &cc.egui_ctx,
+            "theme-night",
+            include_bytes!("../../assets/icons/night.svg"),
+            icons::UI_ICON_PX,
+        )
+        .expect("night.svg");
         let mut app = App {
             cells: START_CELLS,
             seed,
@@ -132,10 +151,21 @@ impl App {
             interact: Interaction::new(),
             wayland_drop: WaylandDrop::start(&cc.egui_ctx, cc),
             undo: Vec::new(),
+            dark: loaded.dark,
+            theme_sun,
+            theme_night,
         };
         crate::project::register_mime();
         app.open_startup();
         app
+    }
+
+    /// Flips the UI theme and writes it to settings.json.
+    pub(super) fn toggle_theme(&mut self, ctx: &egui::Context) {
+        self.dark = !self.dark;
+        self.editor.set_dark(self.dark);
+        render::apply_theme(ctx, self.dark);
+        let _ = settings::save(&self.editor.settings());
     }
 
     /// Keeps a project name that is still the previous seed in step with the new one.
@@ -326,7 +356,7 @@ impl eframe::App for App {
         }
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(render::BACKGROUND))
+            .frame(egui::Frame::NONE.fill(render::background(self.dark)))
             .show(ui, |ui| {
                 self.draw_map_panel(ui, now, room_list.as_ref());
             });
@@ -347,6 +377,6 @@ impl eframe::App for App {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        Color32::from_rgb(15, 15, 22).to_normalized_gamma_f32()
+        render::background(self.dark).to_normalized_gamma_f32()
     }
 }

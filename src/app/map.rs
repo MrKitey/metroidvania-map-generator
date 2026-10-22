@@ -157,6 +157,7 @@ impl App {
             select_rect,
             dragged_icon: self.interact.icon_drag.clone(),
             special: &self.special,
+            dark: self.dark,
         };
         render::draw_world(
             ui,

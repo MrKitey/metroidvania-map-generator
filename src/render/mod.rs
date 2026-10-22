@@ -13,7 +13,7 @@ pub use map::{
     MapView, door_rect, draw_grid, draw_map, icon_side_px, line_thickness, room_icons, room_rect,
 };
 pub use picker::{Ghost, Picker, draw_drag_outline, draw_room_list};
-pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, door_color, room_border, room_fill};
+pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, background, door_color, room_border, room_fill};
 
 use crate::biome::Biome;
 use crate::icon_lib::IconDef;
@@ -52,6 +52,8 @@ pub struct Frame<'a> {
     pub dragged_icon: Option<String>,
     /// Special-room library used for colors and the drag preview.
     pub special: &'a [IconDef],
+    /// Dark map canvas when true.
+    pub dark: bool,
 }
 
 /// World area shown by the camera, with one unit of margin so nothing pops at the edges.
@@ -73,10 +75,10 @@ pub fn draw_world(
     legend_icons: &mut Icons,
 ) {
     let painter = ui.painter().with_clip_rect(f.map_rect);
-    painter.rect_filled(f.map_rect, 0.0, theme::BACKGROUND);
+    painter.rect_filled(f.map_rect, 0.0, theme::background(f.dark));
     let area = visible_area(f.view, f.map_rect);
     if f.grid {
-        draw_grid(&painter, f.layout, f.view, f.map_rect, area);
+        draw_grid(&painter, f.layout, f.view, f.map_rect, area, f.dark);
     }
     let view = MapView {
         view: f.view,
@@ -102,21 +104,28 @@ pub fn draw_world(
         picker::draw_ghost(&painter, g, f.layout, f.view, f.map_rect);
     }
     if let Some(rect) = f.select_rect {
-        painter.rect_filled(
-            rect,
-            0.0,
-            Color32::from_rgba_unmultiplied(255, 255, 255, 30),
-        );
+        let (fill, stroke) = if f.dark {
+            (
+                Color32::from_rgba_unmultiplied(255, 255, 255, 30),
+                Color32::WHITE,
+            )
+        } else {
+            (
+                Color32::from_rgba_unmultiplied(0, 0, 0, 30),
+                Color32::from_rgb(40, 40, 55),
+            )
+        };
+        painter.rect_filled(rect, 0.0, fill);
         painter.rect_stroke(
             rect,
             0.0,
-            Stroke::new(1.0, Color32::WHITE),
+            Stroke::new(1.0, stroke),
             StrokeKind::Inside,
         );
     }
 
     legend::draw_legends(ui, biomes, f.legend, legend_icons);
-    hud::draw_seed(ui, f.hud);
+    hud::draw_seed(ui, f.hud, f.dark);
     if let Some(i) = f.hovered {
         hud::draw_tooltip(ui, &world.rooms[i], biomes, f.special, f.layout);
     }
@@ -130,15 +139,28 @@ pub fn draw_world(
     }
 }
 
-/// Dark theme matching the map background.
-pub fn apply_theme(ctx: &egui::Context) {
-    let mut visuals = egui::Visuals::dark();
-    visuals.panel_fill = BACKGROUND;
-    visuals.window_fill = egui::Color32::from_rgb(20, 20, 28);
-    visuals.extreme_bg_color = BACKGROUND;
-    visuals.widgets.inactive.bg_fill = BUTTON_BG;
-    visuals.widgets.hovered.bg_fill = BUTTON_HOVER;
-    visuals.widgets.active.bg_fill = BUTTON_HOVER;
+/// UI theme, including the map canvas fill used by the central panel.
+pub fn apply_theme(ctx: &egui::Context, dark: bool) {
+    let mut visuals = if dark {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
+    if dark {
+        visuals.panel_fill = BACKGROUND;
+        visuals.window_fill = egui::Color32::from_rgb(20, 20, 28);
+        visuals.extreme_bg_color = BACKGROUND;
+        visuals.widgets.inactive.bg_fill = BUTTON_BG;
+        visuals.widgets.hovered.bg_fill = BUTTON_HOVER;
+        visuals.widgets.active.bg_fill = BUTTON_HOVER;
+    } else {
+        visuals.panel_fill = egui::Color32::from_rgb(236, 236, 242);
+        visuals.window_fill = egui::Color32::from_rgb(248, 248, 252);
+        visuals.extreme_bg_color = egui::Color32::from_rgb(220, 220, 228);
+        visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(220, 220, 230);
+        visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(200, 200, 214);
+        visuals.widgets.active.bg_fill = egui::Color32::from_rgb(200, 200, 214);
+    }
     ctx.set_visuals(visuals);
     ctx.all_styles_mut(|style| {
         style.spacing.item_spacing = vec2(8.0, 6.0);

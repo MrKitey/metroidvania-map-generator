@@ -83,6 +83,11 @@ impl Editor {
         };
     }
 
+    /// Keeps the theme flag in sync with the header switch.
+    pub fn set_dark(&mut self, dark: bool) {
+        self.fields.dark = dark;
+    }
+
     /// Current field values, validated, in the format saved to disk.
     pub fn settings(&self) -> Settings {
         self.fields.settings()
@@ -94,8 +99,11 @@ impl Editor {
     }
 
     /// Replaces the generation fields after a project load. The panel stays as it was.
+    /// Keeps the current UI theme, which is not part of a project file.
     pub fn apply_loaded(&mut self, seed: u64, settings: &Settings) {
+        let dark = self.fields.dark;
         self.fields = Fields::new(settings);
+        self.fields.dark = dark;
         self.set_seed(seed);
     }
 

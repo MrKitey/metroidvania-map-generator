@@ -2,7 +2,7 @@
 
 use super::picker::Ghost;
 use super::text_width;
-use super::theme::{BACKGROUND, TRANSITION_DOOR};
+use super::theme::{TRANSITION_DOOR, background};
 use crate::biome::Biome;
 use crate::icon_lib::{self, IconDef};
 use crate::layout::{Layout, MARGIN};
@@ -38,22 +38,26 @@ impl Hud {
 }
 
 /// Seed label over a backdrop, so it stays readable over the map.
-pub fn draw_seed(ui: &Ui, hud: &Hud) {
+pub fn draw_seed(ui: &Ui, hud: &Hud, dark: bool) {
     let painter = ui.painter();
     let hover = ui
         .input(|i| i.pointer.hover_pos())
         .is_some_and(|p| hud.seed.contains(p));
-    painter.rect_filled(hud.seed.expand(6.0), 4.0, BACKGROUND);
+    let (idle, active) = if dark {
+        (Color32::LIGHT_GRAY, Color32::WHITE)
+    } else {
+        (
+            Color32::from_rgb(80, 80, 95),
+            Color32::from_rgb(30, 30, 40),
+        )
+    };
+    painter.rect_filled(hud.seed.expand(6.0), 4.0, background(dark));
     painter.text(
         hud.seed.min,
         Align2::LEFT_TOP,
         &hud.seed_text,
         FontId::proportional(SEED_SIZE),
-        if hover {
-            Color32::WHITE
-        } else {
-            Color32::LIGHT_GRAY
-        },
+        if hover { active } else { idle },
     );
 }
 

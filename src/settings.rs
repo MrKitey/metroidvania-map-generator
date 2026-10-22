@@ -54,6 +54,8 @@ pub struct Settings {
     pub autosave: bool,
     /// Seconds between the last edit and the next autosave.
     pub autosave_secs: u64,
+    /// Dark UI theme when true. Kept in settings.json only.
+    pub dark: bool,
 }
 
 impl Default for Settings {
@@ -67,6 +69,7 @@ impl Default for Settings {
             corridor_sizes: DEFAULT_CORRIDOR_SIZES.to_vec(),
             autosave: DEFAULT_AUTOSAVE,
             autosave_secs: DEFAULT_AUTOSAVE_SECS,
+            dark: true,
         }
     }
 }
