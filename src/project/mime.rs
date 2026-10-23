@@ -1,8 +1,5 @@
 //! Registers the `.mmg` type with the desktop.
 
-use crate::storage;
-use crate::text::files;
-use std::fs;
 
 /// Registers the `.mmg` type with the desktop, once. Failures are ignored.
 /// A missing `xdg-mime` is retried on a later launch.
