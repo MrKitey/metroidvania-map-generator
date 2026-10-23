@@ -14,7 +14,9 @@ pub use map::{
     layer_label_rects, line_thickness, room_icons, room_rect,
 };
 pub use picker::{Ghost, Picker, draw_drag_outline, draw_room_list};
-pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, background, door_color, room_border, room_fill};
+pub use theme::{
+    BACKGROUND, BUTTON_BG, BUTTON_HOVER, background, door_color, room_border, room_fill,
+};
 
 use crate::biome::Biome;
 use crate::icon_lib::IconDef;
@@ -145,12 +147,7 @@ pub fn draw_layers(
             )
         };
         painter.rect_filled(rect, 0.0, fill);
-        painter.rect_stroke(
-            rect,
-            0.0,
-            Stroke::new(1.0, stroke),
-            StrokeKind::Inside,
-        );
+        painter.rect_stroke(rect, 0.0, Stroke::new(1.0, stroke), StrokeKind::Inside);
     }
 
     legend::draw_legends(ui, biomes, f.legend, legend_icons, f.paint_biome);

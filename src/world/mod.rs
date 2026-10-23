@@ -121,17 +121,18 @@ impl World {
         if self.rooms.is_empty() {
             return None;
         }
-        Some(self.rooms.iter().fold(
-            (i32::MAX, i32::MAX, i32::MIN, i32::MIN),
-            |b, r| {
-                (
-                    b.0.min(r.x),
-                    b.1.min(r.y),
-                    b.2.max(r.x + r.w as i32),
-                    b.3.max(r.y + r.h as i32),
-                )
-            },
-        ))
+        Some(
+            self.rooms
+                .iter()
+                .fold((i32::MAX, i32::MAX, i32::MIN, i32::MIN), |b, r| {
+                    (
+                        b.0.min(r.x),
+                        b.1.min(r.y),
+                        b.2.max(r.x + r.w as i32),
+                        b.3.max(r.y + r.h as i32),
+                    )
+                }),
+        )
     }
 
     /// Index of the room covering cell (x, y), if any.

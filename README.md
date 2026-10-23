@@ -2,7 +2,7 @@
 
 A desktop tool that generates random Metroidvania style maps. Rooms are grouped by biome,
 biomes are linked by corridors, and every room is reachable. You can pan, zoom, mark boss
-and save rooms, place rooms by hand, tune the generation from a built-in editor, and
+and save rooms, place rooms by hand, tune the generation from a built-in settings panel, and
 export the result.
 
 Built with Rust and [egui](https://github.com/emilk/egui).
@@ -39,7 +39,7 @@ Built with Rust and [egui](https://github.com/emilk/egui).
 - Legend of the biomes and of the room types on the left.
 - Room tooltip with its size in cells and in pixels.
 - Clickable seed in the bottom right corner, copied to the clipboard.
-- Editor panel for generation settings, room sizes and biomes.
+- Settings panel for generation settings, room sizes and biomes.
 - Biomes and settings saved as JSON. Biomes can be imported from any JSON file.
 - Export of the map as a zip holding a PNG image, an SVG image and a JSON description.
 
@@ -105,23 +105,23 @@ The same list is shown in the app with the `?` button in the top right corner.
 | H | Secret room under the cursor, press again to clear |
 | P | Portal room under the cursor, press again to clear |
 | L | Open or close the room list |
-| Tab | Open or close the editor |
+| Tab | Open or close Settings |
 | Esc | Close the shortcuts popup, cancel a room drag, a move or an icon drag, or quit |
 
-Keyboard shortcuts other than Tab and L are disabled while the editor is open, so typing
+Keyboard shortcuts other than Tab and L are disabled while Settings is open, so typing
 in its fields is safe. L is ignored while a text field is focused.
 
 The header holds four buttons in the top right corner:
 
 - Rooms opens or closes the room list on the left. L does the same.
-- Editor opens or closes the side panel. Tab does the same.
+- Settings opens or closes the side panel. Tab does the same.
 - Export writes the map zip. See [Export](#export).
 - The `?` button opens the shortcuts popup.
 
 ## Placing rooms
 
 Press L, or the Rooms button in the header, to open the panel on the left. It lists every
-room size from the editor, in three sections: rooms, boss rooms and corridors. Each section
+room size from Settings, in three sections: rooms, boss rooms and corridors. Each section
 folds. Each size is drawn as a white outline with its size in the middle.
 
 - Drag a size onto the map. The outline follows the cursor. On the map the room snaps to
@@ -151,9 +151,9 @@ red where it overlaps another room.
 - A room moved away from the others can leave the map in several parts.
 - Moves are lost when the map is regenerated.
 
-## Editor
+## Settings
 
-Press Tab, or the Editor button in the header, to open the panel on the right.
+Press Tab, or the Settings button in the header, to open the panel on the right.
 
 **Settings tab**
 
@@ -270,7 +270,7 @@ src/render/                Frame drawing (mod.rs), map (map.rs), overlays (hud.r
                            colors (theme.rs)
 src/layout.rs              Cell size and header height
 src/view.rs                Camera pan, zoom and fit
-src/editor/                Editor panel: state (mod.rs), validated fields (fields.rs),
+src/settings_panel/       Settings panel: state (mod.rs), validated fields (fields.rs),
                            settings tab, biomes tab and shared widgets
 src/biome.rs               Biomes and biomes.json
 src/settings.rs            Generation settings and settings.json

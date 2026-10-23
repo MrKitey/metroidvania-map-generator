@@ -46,10 +46,7 @@ pub fn draw_seed(ui: &Ui, hud: &Hud, dark: bool) {
     let (idle, active) = if dark {
         (Color32::LIGHT_GRAY, Color32::WHITE)
     } else {
-        (
-            Color32::from_rgb(80, 80, 95),
-            Color32::from_rgb(30, 30, 40),
-        )
+        (Color32::from_rgb(80, 80, 95), Color32::from_rgb(30, 30, 40))
     };
     painter.rect_filled(hud.seed.expand(6.0), 4.0, background(dark));
     painter.text(
@@ -79,13 +76,7 @@ pub fn draw_help(ctx: &Context, open: &mut bool) {
 }
 
 /// Shows the room name and its size, in cells and in pixels, next to the cursor.
-pub fn draw_tooltip(
-    ui: &Ui,
-    r: &Room,
-    biomes: &[Biome],
-    special: &[IconDef],
-    layout: &Layout,
-) {
+pub fn draw_tooltip(ui: &Ui, r: &Room, biomes: &[Biome], special: &[IconDef], layout: &Layout) {
     let biome = &biomes[r.biome].name;
     let mut name = match r.kind {
         RoomKind::Normal => biome.clone(),

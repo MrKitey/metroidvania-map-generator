@@ -33,7 +33,7 @@ pub const DEFAULT_AUTOSAVE_SECS: u64 = 30;
 pub const MIN_AUTOSAVE_SECS: u64 = 5;
 pub const MAX_AUTOSAVE_SECS: u64 = 3600;
 
-/// Values are stored as read. The editor validates them when parsing its fields.
+/// Values are stored as read. The settings panel validates them when parsing its fields.
 /// Fields missing from the file take their default value.
 #[derive(Serialize, Deserialize)]
 #[serde(default)]

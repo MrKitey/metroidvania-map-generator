@@ -1,8 +1,8 @@
 //! Biomes panel: one folding entry per biome, plus add, import and save.
 
 use crate::biome::{self, Biome, MAX_COUNT, MIN_CORRIDORS};
-use crate::common::EditorAction;
-use crate::text::{biomes, editor as text, files, rooms, status};
+use crate::common::SettingsAction;
+use crate::text::{biomes, files, rooms, settings as text, status};
 use crate::world::World;
 
 pub struct BiomesTab {
@@ -22,7 +22,7 @@ impl BiomesTab {
         ui: &mut egui::Ui,
         biomes_list: &mut Vec<Biome>,
         world: &mut World,
-    ) -> Option<EditorAction> {
+    ) -> Option<SettingsAction> {
         let mut action = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
@@ -37,7 +37,7 @@ impl BiomesTab {
         ui: &mut egui::Ui,
         biomes_list: &mut Vec<Biome>,
         world: &mut World,
-    ) -> Option<EditorAction> {
+    ) -> Option<SettingsAction> {
         let mut action = None;
         let mut remove = None;
         let mut changed = false;
@@ -107,7 +107,7 @@ impl BiomesTab {
                     match biome::read(&path) {
                         Ok(list) => {
                             *biomes_list = list;
-                            action = Some(EditorAction::Regenerate);
+                            action = Some(SettingsAction::Regenerate);
                             self.status = match biome::save(biomes_list) {
                                 Ok(_) => status::imported(&path),
                                 Err(e) => status::error(e),
@@ -223,15 +223,8 @@ mod tests {
         let header = text_center(&closed, "Castle").unwrap();
         closed.drop_without_applying_deltas();
 
-        draw(
-            &ctx,
-            0.05,
-            click(header),
-            &mut tab,
-            &mut list,
-            &mut world,
-        )
-        .drop_without_applying_deltas();
+        draw(&ctx, 0.05, click(header), &mut tab, &mut list, &mut world)
+            .drop_without_applying_deltas();
         let open = draw(&ctx, 1.0, Vec::new(), &mut tab, &mut list, &mut world);
         let name_visible = shows(&open, text::NAME);
         open.drop_without_applying_deltas();

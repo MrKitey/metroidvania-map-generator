@@ -85,12 +85,7 @@ pub struct RoomLegend {
 }
 
 impl RoomLegend {
-    pub fn new(
-        ctx: &Context,
-        biomes: &[Biome],
-        special: &[IconDef],
-        map: Rect,
-    ) -> RoomLegend {
+    pub fn new(ctx: &Context, biomes: &[Biome], special: &[IconDef], map: Rect) -> RoomLegend {
         let biome_rect = biome_legend_rect(ctx, biomes, map);
         let names_w = special
             .iter()
@@ -181,7 +176,11 @@ fn draw_room_legend(ui: &Ui, legend: &RoomLegend, icons: &mut Icons) {
     for (i, (name, fill, border)) in legend.entries.iter().enumerate() {
         let (id, row) = &legend.rows[i];
         if hover.is_some_and(|p| row.contains(p)) {
-            painter.rect_filled(*row, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 28));
+            painter.rect_filled(
+                *row,
+                0.0,
+                Color32::from_rgba_unmultiplied(255, 255, 255, 28),
+            );
         }
         let row_y = legend.rect.min.y + PAD + i as f32 * ROW_H;
         let box_y = row_y + (ROW_H - ICON_BOX) / 2.0;
@@ -223,12 +222,7 @@ pub(super) fn draw_legends(
 }
 
 /// Icon being dragged from the legend, centered on the cursor.
-pub(super) fn draw_dragged_icon(
-    ui: &Ui,
-    icon_id: &str,
-    special: &[IconDef],
-    icons: &mut Icons,
-) {
+pub(super) fn draw_dragged_icon(ui: &Ui, icon_id: &str, special: &[IconDef], icons: &mut Icons) {
     let Some(pos) = ui.input(|i| i.pointer.hover_pos()) else {
         return;
     };

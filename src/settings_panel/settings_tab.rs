@@ -1,16 +1,16 @@
 //! Settings tab: seed, screen size, room counts and autosave.
 
-use super::EditorAction;
+use super::SettingsAction;
 use super::fields::{Fields, MAX_MIN_ROOMS};
 use crate::settings;
-use crate::text::{editor as text, status};
+use crate::text::{settings as text, status};
 
 pub fn draw(
     ui: &mut egui::Ui,
     fields: &mut Fields,
     seed: &mut String,
     status: &mut String,
-) -> Option<EditorAction> {
+) -> Option<SettingsAction> {
     let mut action = None;
     let mut changed = false;
 
@@ -24,7 +24,7 @@ pub fn draw(
         if ui.button(text::USE_SEED).clicked() {
             match seed.trim().parse() {
                 Ok(s) => {
-                    action = Some(EditorAction::UseSeed(s));
+                    action = Some(SettingsAction::UseSeed(s));
                     changed = true;
                 }
                 Err(_) => *status = status::INVALID_SEED.to_owned(),
@@ -91,7 +91,7 @@ pub fn draw(
     ui.horizontal(|ui| {
         // Generating wins over a seed typed in the same frame.
         if ui.button(text::GENERATE).clicked() {
-            action = Some(EditorAction::Regenerate);
+            action = Some(SettingsAction::Regenerate);
         }
     });
     if !status.is_empty() {

@@ -207,9 +207,8 @@ pub fn read(path: &Path) -> Result<Loaded, Box<dyn Error>> {
         LayerStack::from_saved(file.active, file.layers, biomes.len()).map_err(map_error)?
     } else {
         let rooms: RoomsFile = read_json_entry(&mut zip, files::PROJECT_ROOMS)?;
-        let world =
-            World::from_parts(rooms.rooms, rooms.doors, rooms.used_biomes, biomes.len())
-                .map_err(map_error)?;
+        let world = World::from_parts(rooms.rooms, rooms.doors, rooms.used_biomes, biomes.len())
+            .map_err(map_error)?;
         LayerStack::from_world(world)
     };
 
@@ -241,7 +240,10 @@ fn read_json_entry<T: serde::de::DeserializeOwned>(
     Ok(serde_json::from_str(&text)?)
 }
 
-fn read_bytes_entry(zip: &mut zip::ZipArchive<File>, name: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+fn read_bytes_entry(
+    zip: &mut zip::ZipArchive<File>,
+    name: &str,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut entry = zip.by_name(name)?;
     let mut bytes = Vec::new();
     entry.read_to_end(&mut bytes)?;

@@ -161,7 +161,11 @@ pub fn draw_map_opacity(
         let rect = to_screen(view, map, world_rect);
         let (border, thick) = room_border(r, biomes, special);
         let thickness = if thick { t + 1.0 } else { t };
-        painter.rect_filled(rect, 0.0, with_opacity(room_fill(r, biomes, special), opacity));
+        painter.rect_filled(
+            rect,
+            0.0,
+            with_opacity(room_fill(r, biomes, special), opacity),
+        );
         painter.rect_stroke(
             rect,
             0.0,
@@ -240,10 +244,8 @@ pub fn layer_label_rects(
         let screen = to_screen(view, map, group);
         let w = super::text_width(ctx, &layer.name, LABEL_SIZE) + LABEL_PAD * 2.0;
         let h = LABEL_SIZE + LABEL_PAD;
-        let label = Rect::from_min_size(
-            pos2(screen.min.x + 2.0, screen.min.y - h + 2.0),
-            vec2(w, h),
-        );
+        let label =
+            Rect::from_min_size(pos2(screen.min.x + 2.0, screen.min.y - h + 2.0), vec2(w, h));
         out.push((i, label));
     }
     out
@@ -252,8 +254,14 @@ pub fn layer_label_rects(
 fn group_world_rect(bounds: (i32, i32, i32, i32), layout: &Layout) -> Rect {
     let (x0, y0, x1, y1) = bounds;
     Rect::from_min_max(
-        pos2(x0 as f32 * layout.cw - GROUP_PAD * layout.cw, y0 as f32 * layout.ch - GROUP_PAD * layout.ch),
-        pos2(x1 as f32 * layout.cw + GROUP_PAD * layout.cw, y1 as f32 * layout.ch + GROUP_PAD * layout.ch),
+        pos2(
+            x0 as f32 * layout.cw - GROUP_PAD * layout.cw,
+            y0 as f32 * layout.ch - GROUP_PAD * layout.ch,
+        ),
+        pos2(
+            x1 as f32 * layout.cw + GROUP_PAD * layout.cw,
+            y1 as f32 * layout.ch + GROUP_PAD * layout.ch,
+        ),
     )
 }
 
@@ -282,10 +290,7 @@ pub fn draw_layer_group(
     );
     let w = super::text_width(ctx, &layer.name, LABEL_SIZE) + LABEL_PAD * 2.0;
     let h = LABEL_SIZE + LABEL_PAD;
-    let label = Rect::from_min_size(
-        pos2(screen.min.x + 2.0, screen.min.y - h + 2.0),
-        vec2(w, h),
-    );
+    let label = Rect::from_min_size(pos2(screen.min.x + 2.0, screen.min.y - h + 2.0), vec2(w, h));
     painter.rect_filled(label, 3.0, layer.group_stroke());
     painter.text(
         label.min + vec2(LABEL_PAD, LABEL_PAD * 0.5),

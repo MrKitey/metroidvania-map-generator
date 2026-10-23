@@ -1,7 +1,7 @@
-//! Small widgets shared by the editor tabs.
+//! Small widgets shared by the settings panel.
 
 use super::fields::{SizeFields, size_fields};
-use crate::text::editor as text;
+use crate::text::settings as text;
 
 /// Default panel width, in screen points.
 pub const PANEL_W: f32 = 320.0;

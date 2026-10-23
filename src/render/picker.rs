@@ -2,10 +2,10 @@
 
 use super::map::line_thickness;
 use super::pack::pack_rooms;
-use crate::editor::{self, SizeFields};
 use crate::layout::Layout;
 use crate::settings::{DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ROOM_SIZES};
-use crate::text::{editor as editor_text, rooms};
+use crate::settings_panel::{self, SizeFields};
+use crate::text::{rooms, settings as settings_text};
 use crate::view::View;
 use crate::world::{Choice, Pick, Sizes};
 use egui::{
@@ -108,7 +108,7 @@ pub fn draw_room_list(
                     rooms::ROOMS,
                     Pick::Room,
                     sizes.rooms.as_slice(),
-                    editor_text::room_sizes_label(editor::MAX_ROOM_SIDE),
+                    settings_text::room_sizes_label(settings_panel::MAX_ROOM_SIDE),
                     room_fields,
                     DEFAULT_ROOM_SIZES,
                 ),
@@ -116,7 +116,7 @@ pub fn draw_room_list(
                     rooms::BOSS_ROOMS,
                     Pick::Boss,
                     sizes.boss.as_slice(),
-                    editor_text::boss_sizes_label(editor::MAX_ROOM_SIDE),
+                    settings_text::boss_sizes_label(settings_panel::MAX_ROOM_SIDE),
                     boss_fields,
                     DEFAULT_BOSS_SIZES,
                 ),
@@ -124,7 +124,7 @@ pub fn draw_room_list(
                     rooms::CORRIDORS,
                     Pick::Corridor,
                     sizes.corridor.as_slice(),
-                    editor_text::corridor_sizes_label(editor::MAX_ROOM_SIDE),
+                    settings_text::corridor_sizes_label(settings_panel::MAX_ROOM_SIDE),
                     corridor_fields,
                     DEFAULT_CORRIDOR_SIZES,
                 ),
@@ -155,7 +155,7 @@ pub fn draw_room_list(
                         }
                         items.extend(section);
                         ui.collapsing(size_label, |ui| {
-                            if editor::size_list(ui, fields, defaults) {
+                            if settings_panel::size_list(ui, fields, defaults) {
                                 changed = true;
                             }
                         });
@@ -175,12 +175,7 @@ pub fn draw_drag_outline(ctx: &Context, choice: Choice, size: Vec2) {
     let (stroke, text, _) = picker_colors(ctx.global_style().visuals.dark_mode);
     let painter = ctx.layer_painter(LayerId::new(Order::Foreground, Id::unique("room-drag")));
     let rect = Rect::from_center_size(pos, size);
-    painter.rect_stroke(
-        rect,
-        0.0,
-        Stroke::new(2.0, stroke),
-        StrokeKind::Inside,
-    );
+    painter.rect_stroke(rect, 0.0, Stroke::new(2.0, stroke), StrokeKind::Inside);
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,

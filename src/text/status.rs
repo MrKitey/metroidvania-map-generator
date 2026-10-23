@@ -1,4 +1,4 @@
-//! Feedback messages, shown in the editor panel and in the header.
+//! Feedback messages, shown in the settings panel and in the header.
 
 use std::fmt::Display;
 use std::path::Path;

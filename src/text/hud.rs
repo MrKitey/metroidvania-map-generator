@@ -23,9 +23,9 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("S", "Save room"),
     ("H", "Secret room"),
     ("P", "Portal room"),
-    ("L", "Rooms"),
-    ("M", "Biomes"),
-    ("Tab", "Editor"),
+    ("L", "Tools: Rooms"),
+    ("M", "Tools: Biomes"),
+    ("Tab", "Settings"),
     ("Esc", "Quit"),
 ];
 /// Glyph on the shortcuts button.
@@ -34,8 +34,10 @@ pub const HELP_BUTTON: &str = "?";
 pub const THEME_TO_LIGHT: &str = "Light mode";
 /// Hover text when the UI is light: click to go dark.
 pub const THEME_TO_DARK: &str = "Dark mode";
-/// Label of the editor button.
-pub const EDITOR: &str = "Editor";
+/// Label of the settings button.
+pub const SETTINGS: &str = "Settings";
+/// Label of the tools button and panel.
+pub const TOOLS: &str = "Tools";
 /// Label of the regenerate-map button.
 pub const REGENERATE: &str = "Regenerate Map";
 /// Label of the export button.

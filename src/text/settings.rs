@@ -1,10 +1,9 @@
-//! Labels and buttons of the editor panel. Room names come from `rooms`.
+//! Labels and buttons of the settings panel. Room names come from `rooms`.
 
 use std::fmt::Display;
 
-pub const WINDOW_TITLE: &str = "Editor";
-pub const TAB_SETTINGS: &str = "Settings";
-pub const TAB_SPECIAL_ROOM: &str = "Special Room";
+pub const WINDOW_TITLE: &str = "Settings";
+pub const TAB_SPECIAL_ROOM: &str = "Special rooms";
 
 pub const USE_SEED: &str = "Use seed";
 pub const GENERATE: &str = "Generate";

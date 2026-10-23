@@ -2,7 +2,7 @@
 
 use crate::icon_lib::{self, IconDef};
 use crate::icons::Icons;
-use crate::text::{editor as text, files, status};
+use crate::text::{files, settings as text, status};
 use crate::world::World;
 use egui::{Color32, Sense};
 use std::path::PathBuf;
@@ -63,11 +63,8 @@ impl IconsTab {
                                 changed = true;
                             }
                             ui.label(text::BORDER);
-                            let mut rgb = [
-                                list[i].border.r(),
-                                list[i].border.g(),
-                                list[i].border.b(),
-                            ];
+                            let mut rgb =
+                                [list[i].border.r(), list[i].border.g(), list[i].border.b()];
                             if ui.color_edit_button_srgb(&mut rgb).changed() {
                                 list[i].border = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
                                 changed = true;

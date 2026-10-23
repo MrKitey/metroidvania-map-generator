@@ -1,6 +1,5 @@
 //! Registers the `.mmg` type with the desktop.
 
-
 /// Registers the `.mmg` type with the desktop, once. Failures are ignored.
 /// A missing `xdg-mime` is retried on a later launch.
 pub fn register_mime() {

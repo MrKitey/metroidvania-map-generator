@@ -62,11 +62,11 @@ fn render_scaled(map: &MapData, max_side: f32) -> Result<Vec<u8>, Box<dyn Error>
 mod tests {
     use super::*;
     use crate::biome;
+    use crate::layer::LayerStack;
     use crate::layout::Layout;
     use crate::settings::{
         DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ROOM_SIZES, Settings,
     };
-    use crate::layer::LayerStack;
     use crate::world::{Params, Sizes, World};
 
     fn sample_map<'a>(

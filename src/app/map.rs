@@ -11,12 +11,9 @@ impl App {
         let ctx = ui.ctx().clone();
         let (response, _) = ui.allocate_painter(ui.available_size(), Sense::hover());
         let map_rect = response.rect;
-        let layout = Layout::new(self.editor.viewport());
+        let layout = Layout::new(self.settings.viewport());
         if self.fit {
-            let bounds = self
-                .layers
-                .visible_bounds()
-                .unwrap_or((0, 0, 1, 1));
+            let bounds = self.layers.visible_bounds().unwrap_or((0, 0, 1, 1));
             self.view.fit_bounds(bounds, &layout, map_rect);
             self.fit = false;
         }
@@ -67,13 +64,7 @@ impl App {
         }
 
         let layer_labels = if self.layer_frames {
-            render::layer_label_rects(
-                &ctx,
-                &self.layers,
-                &layout,
-                &self.view,
-                map_rect,
-            )
+            render::layer_label_rects(&ctx, &self.layers, &layout, &self.view, map_rect)
         } else {
             Vec::new()
         };
@@ -110,7 +101,7 @@ impl App {
             } else {
                 None
             };
-        let blocked = self.editor.open || self.session.renaming;
+        let blocked = self.settings.open || self.session.renaming;
         if let Some(hit) = hovered {
             self.interact.room_shortcuts(
                 &ctx,

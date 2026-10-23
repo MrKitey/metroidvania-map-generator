@@ -202,14 +202,12 @@ pub fn find<'a>(icons: &'a [IconDef], id: &str) -> Option<&'a IconDef> {
 
 /// Allowed image extensions for import.
 pub fn is_image_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| {
-            matches!(
-                e.to_ascii_lowercase().as_str(),
-                "png" | "jpg" | "jpeg" | "svg"
-            )
-        })
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        matches!(
+            e.to_ascii_lowercase().as_str(),
+            "png" | "jpg" | "jpeg" | "svg"
+        )
+    })
 }
 
 /// Builds a unique slug from a label.

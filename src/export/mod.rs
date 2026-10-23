@@ -108,7 +108,8 @@ fn write_zip(path: &Path, map: &MapData) -> Result<(), Box<dyn Error>> {
     let json = json::render(map)?;
 
     let mut zip = zip::ZipWriter::new(File::create(path)?);
-    let deflated = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let deflated =
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
     zip.start_file(files::EXPORT_PNG, stored)?;

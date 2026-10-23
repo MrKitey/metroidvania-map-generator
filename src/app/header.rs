@@ -1,7 +1,7 @@
 //! Header bar: project actions, the name, and the recent-files menu.
 
 use super::App;
-use crate::common::EditorAction;
+use crate::common::SettingsAction;
 use crate::export::{self, MapData};
 use crate::layout::Layout;
 use crate::project;
@@ -36,10 +36,13 @@ impl App {
                     self.export(now);
                 }
                 if ui.button(text::hud::REGENERATE).clicked() {
-                    self.apply_action(EditorAction::Regenerate);
+                    self.apply_action(SettingsAction::Regenerate);
                 }
-                if ui.button(text::hud::EDITOR).clicked() {
-                    self.editor.open = !self.editor.open;
+                if ui
+                    .add(egui::Button::new(text::hud::SETTINGS).selected(self.settings.open))
+                    .clicked()
+                {
+                    self.settings.open = !self.settings.open;
                 }
                 if ui
                     .add(egui::Button::new(text::hud::LAYER_FRAMES).selected(self.layer_frames))
@@ -48,14 +51,11 @@ impl App {
                 {
                     self.layer_frames = !self.layer_frames;
                 }
-                if ui.button(text::hud::LAYERS).clicked() {
-                    self.layers_open = !self.layers_open;
-                }
-                if ui.button(text::hud::BIOMES).clicked() {
-                    self.biomes_open = !self.biomes_open;
-                }
-                if ui.button(text::rooms::ROOMS).clicked() {
-                    self.rooms_open = !self.rooms_open;
+                if ui
+                    .add(egui::Button::new(text::hud::TOOLS).selected(self.tools.open))
+                    .clicked()
+                {
+                    self.tools.open = !self.tools.open;
                 }
                 if let Some(notice) = &notice {
                     ui.label(notice);
@@ -147,8 +147,8 @@ impl App {
     }
 
     pub(super) fn export(&mut self, now: f64) {
-        let settings = self.editor.settings();
-        let layout = Layout::new(self.editor.viewport());
+        let settings = self.settings.settings();
+        let layout = Layout::new(self.settings.viewport());
         let map = MapData {
             seed: self.seed,
             cells: self.cells,

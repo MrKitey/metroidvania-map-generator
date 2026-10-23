@@ -205,9 +205,13 @@ impl super::App {
         self.seed = crate::world::time_seed();
         let name = self.seed.to_string();
         self.cells = START_CELLS;
-        self.editor.set_seed(self.seed);
-        self.layers =
-            LayerStack::from_world(build_world(self.cells, self.seed, &self.biomes, &self.editor));
+        self.settings.set_seed(self.seed);
+        self.layers = LayerStack::from_world(build_world(
+            self.cells,
+            self.seed,
+            &self.biomes,
+            &self.settings,
+        ));
         self.interact.clear();
         self.undo.clear();
         self.fit = true;
@@ -255,11 +259,11 @@ impl super::App {
     }
 
     fn apply_loaded(&mut self, loaded: Loaded, path: Option<PathBuf>) {
-        let current = self.editor.settings();
+        let current = self.settings.settings();
         let mut settings = loaded.settings;
         settings.autosave = current.autosave;
         settings.autosave_secs = current.autosave_secs;
-        self.editor.apply_loaded(loaded.seed, &settings);
+        self.settings.apply_loaded(loaded.seed, &settings);
         self.seed = loaded.seed;
         self.cells = loaded.cells.clamp(MIN_CELLS, MAX_CELLS);
         self.grid = loaded.grid;
@@ -273,20 +277,15 @@ impl super::App {
         let file = self.project_file_named(&loaded.name);
         self.session.install(loaded.name, path, file);
         if let Some(path) = &self.session.path {
-            let _ = project::remember(
-                &storage::app_dir(),
-                path,
-                &self.session.name,
-                &modified_at,
-            );
+            let _ = project::remember(&storage::app_dir(), path, &self.session.name, &modified_at);
         }
     }
 
     /// `announce` shows the path in the header. Autosave stays quiet unless it fails.
     fn write_path(&mut self, path: &Path, now: f64, announce: bool) -> bool {
         let file = self.project_file();
-        let settings = self.editor.settings();
-        let layout = Layout::new(self.editor.viewport());
+        let settings = self.settings.settings();
+        let layout = Layout::new(self.settings.viewport());
         let map = MapData {
             seed: self.seed,
             cells: self.cells,
@@ -307,12 +306,8 @@ impl super::App {
         match project::write(path, &file, &thumbnail) {
             Ok(modified_at) => {
                 self.session.mark_saved(path, file);
-                let _ = project::remember(
-                    &storage::app_dir(),
-                    path,
-                    &self.session.name,
-                    &modified_at,
-                );
+                let _ =
+                    project::remember(&storage::app_dir(), path, &self.session.name, &modified_at);
                 if announce {
                     self.session.set_notice(status::saved_to(path), now);
                 }
@@ -336,7 +331,7 @@ impl super::App {
             self.cells,
             self.grid,
             &self.session.created_at,
-            &self.editor.settings(),
+            &self.settings.settings(),
             &self.biomes,
             &self.layers,
         )
@@ -354,20 +349,20 @@ impl super::App {
         self.open_dropped(dropped, now);
     }
 
-    /// Opens the first `.mmg`, or feeds an image to the Special Room tab when it is open.
+    /// Opens the first `.mmg`, or feeds an image to Special rooms when that tab is open.
     pub(super) fn open_dropped(&mut self, dropped: Vec<PathBuf>, now: f64) {
         if dropped.is_empty() {
             return;
         }
-        if self.editor.special_tab_open() {
+        if self.tools.special_open() {
             let paths: Vec<_> = dropped.iter().cloned().collect();
-            if self.editor.icons_tab.handle_drops(
+            if self.settings.icons_tab.handle_drops(
                 &paths,
                 &mut self.special,
                 &mut self.icons,
                 &mut self.legend_icons,
             ) {
-                if let Some(msg) = self.editor.icons_tab.take_status() {
+                if let Some(msg) = self.settings.icons_tab.take_status() {
                     self.session.set_notice(msg, now);
                 }
                 return;
@@ -386,7 +381,7 @@ impl super::App {
     }
 
     pub(super) fn autosave(&mut self, ctx: &egui::Context, now: f64) {
-        let settings = self.editor.settings();
+        let settings = self.settings.settings();
         match self
             .session
             .autosave(settings.autosave, settings.autosave_secs, now)

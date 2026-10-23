@@ -115,7 +115,7 @@ fn default_count() -> u32 {
     DEFAULT_COUNT
 }
 
-/// One stored biome. A bad color fails. Counts are clamped to the editor limits.
+/// One stored biome. A bad color fails. Counts are clamped to the settings limits.
 pub fn from_entry(entry: Entry) -> Result<Biome, &'static str> {
     let Some(fill) = parse_hex(&entry.color) else {
         return Err(text::NO_VALID_BIOME);
