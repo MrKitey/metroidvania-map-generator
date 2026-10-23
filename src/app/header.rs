@@ -7,14 +7,22 @@ use crate::layout::Layout;
 use crate::project;
 use crate::storage;
 use crate::text;
-use egui::{Button, Color32, Rect, Sense, Vec2, load::SizedTexture};
+use egui::{Button, Color32, FontId, Rect, RichText, Sense, TextStyle, Vec2, load::SizedTexture};
 
-pub(super) const HEADER_H: f32 = 40.0;
+pub(super) const HEADER_H: f32 = 48.0;
+const HUD_TEXT: f32 = 16.0;
+const HUD_ICON: f32 = 20.0;
 
 impl App {
     pub(super) fn draw_header(&mut self, ui: &mut egui::Ui, now: f64) {
         let header = ui.max_rect();
-        let notice = self.session.notice_text(now);
+        ui.style_mut().text_styles.insert(
+            TextStyle::Button,
+            FontId::proportional(HUD_TEXT),
+        );
+        ui.style_mut()
+            .text_styles
+            .insert(TextStyle::Body, FontId::proportional(HUD_TEXT));
         ui.horizontal_centered(|ui| {
             self.recent_menu(ui, now);
             if ui.button(text::hud::NEW).clicked() {
@@ -26,9 +34,9 @@ impl App {
             if ui.button(text::hud::SAVE).clicked() {
                 self.save_project(now);
             }
-            ui.label(text::hud::rooms(self.layers.room_count()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 self.theme_button(ui);
+                self.settings_button(ui);
                 if ui.button(text::hud::HELP_BUTTON).clicked() {
                     self.help_open = !self.help_open;
                 }
@@ -37,12 +45,6 @@ impl App {
                 }
                 if ui.button(text::hud::REGENERATE).clicked() {
                     self.apply_action(SettingsAction::Regenerate);
-                }
-                if ui
-                    .add(egui::Button::new(text::hud::SETTINGS).selected(self.settings.open))
-                    .clicked()
-                {
-                    self.settings.open = !self.settings.open;
                 }
                 if ui
                     .add(egui::Button::new(text::hud::LAYER_FRAMES).selected(self.layer_frames))
@@ -57,9 +59,6 @@ impl App {
                 {
                     self.tools.open = !self.tools.open;
                 }
-                if let Some(notice) = &notice {
-                    ui.label(notice);
-                }
             });
         });
         self.draw_project_name(ui, header);
@@ -67,10 +66,10 @@ impl App {
 
     fn draw_project_name(&mut self, ui: &mut egui::Ui, header: Rect) {
         let extra = if self.session.dirty { 28.0 } else { 12.0 };
-        let font = egui::TextStyle::Body.resolve(ui.style());
+        let font = FontId::proportional(HUD_TEXT);
         let text_width = ui.ctx().fonts_mut(|fonts| {
             fonts
-                .layout_no_wrap(self.session.name.clone(), font, Color32::WHITE)
+                .layout_no_wrap(self.session.name.clone(), font.clone(), Color32::WHITE)
                 .size()
                 .x
         });
@@ -92,6 +91,7 @@ impl App {
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut self.session.name)
                         .desired_width(width - 16.0)
+                        .font(FontId::proportional(HUD_TEXT))
                         .align(egui::Align2::CENTER_CENTER),
                 );
                 if self.session.rename_focus {
@@ -102,14 +102,14 @@ impl App {
                 }
             } else {
                 let response = ui.add(
-                    egui::Label::new(egui::RichText::new(&self.session.name).strong())
+                    egui::Label::new(RichText::new(&self.session.name).size(HUD_TEXT).strong())
                         .sense(Sense::click()),
                 );
                 if response.clicked() {
                     self.session.start_rename();
                 }
                 if self.session.dirty {
-                    ui.label(egui::RichText::new("*").strong());
+                    ui.label(RichText::new("*").size(HUD_TEXT).strong());
                 }
             }
         });
@@ -121,10 +121,24 @@ impl App {
         } else {
             (&self.theme_night, text::hud::THEME_TO_DARK)
         };
-        let image = SizedTexture::new(tex.id(), Vec2::splat(16.0));
+        let image = SizedTexture::new(tex.id(), Vec2::splat(HUD_ICON));
         let button = Button::image(image).image_tint_follows_text_color(true);
         if ui.add(button).on_hover_text(tip).clicked() {
             self.toggle_theme(ui.ctx());
+        }
+    }
+
+    fn settings_button(&mut self, ui: &mut egui::Ui) {
+        let image = SizedTexture::new(self.settings_icon.id(), Vec2::splat(HUD_ICON));
+        let button = Button::image(image)
+            .image_tint_follows_text_color(true)
+            .selected(self.settings.open);
+        if ui
+            .add(button)
+            .on_hover_text(text::hud::SETTINGS)
+            .clicked()
+        {
+            self.settings.open = !self.settings.open;
         }
     }
 

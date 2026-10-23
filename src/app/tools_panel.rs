@@ -1,4 +1,4 @@
-//! Tools panel body: Rooms, Biomes, Layers and Special rooms.
+//! Tools panel body: Layers, Rooms, Biomes and Special rooms.
 
 use super::App;
 use crate::layout::Layout;
@@ -40,9 +40,9 @@ impl App {
         ui.add_space(8.0);
         ui.heading(text::hud::TOOLS);
         ui.horizontal_wrapped(|ui| {
+            ui.selectable_value(&mut self.tools.tab, ToolsTab::Layers, text::hud::LAYERS);
             ui.selectable_value(&mut self.tools.tab, ToolsTab::Rooms, text::rooms::ROOMS);
             ui.selectable_value(&mut self.tools.tab, ToolsTab::Biomes, text::hud::BIOMES);
-            ui.selectable_value(&mut self.tools.tab, ToolsTab::Layers, text::hud::LAYERS);
             ui.selectable_value(
                 &mut self.tools.tab,
                 ToolsTab::Special,

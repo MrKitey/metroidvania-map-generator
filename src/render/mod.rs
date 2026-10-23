@@ -7,7 +7,7 @@ mod pack;
 mod picker;
 mod theme;
 
-pub use hud::{COPIED_TIME, Hud, draw_help};
+pub use hud::{COPIED_TIME, Hud, draw_help, draw_notice};
 pub use legend::RoomLegend;
 pub use map::{
     MapView, door_rect, draw_grid, draw_layer_group, draw_map_opacity, icon_side_px,
@@ -151,6 +151,7 @@ pub fn draw_layers(
     }
 
     legend::draw_legends(ui, biomes, f.legend, legend_icons, f.paint_biome);
+    hud::draw_rooms(ui, f.hud, f.dark);
     hud::draw_seed(ui, f.hud, f.dark);
     if let (Some(li), Some(ri)) = (f.hovered_layer, f.hovered) {
         let room = &layers.layers()[li].world.rooms[ri];

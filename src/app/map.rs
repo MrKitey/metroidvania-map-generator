@@ -38,7 +38,7 @@ impl App {
         }
 
         let copied = now - self.copied_at < render::COPIED_TIME;
-        let hud = Hud::new(&ctx, self.seed, copied, map_rect);
+        let hud = Hud::new(&ctx, self.seed, copied, self.layers.room_count(), map_rect);
         let legend = RoomLegend::new(&ctx, &self.biomes, &self.special, map_rect);
         let mut pointer = Pointer {
             pos: pointer_pos,

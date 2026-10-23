@@ -102,6 +102,7 @@ pub struct App {
     dark: bool,
     theme_sun: TextureHandle,
     theme_night: TextureHandle,
+    settings_icon: TextureHandle,
     layer_icons: layers_panel::LayerIcons,
 }
 
@@ -133,6 +134,16 @@ impl App {
             icons::UI_ICON_PX,
         )
         .expect("night.svg");
+        let settings_svg = std::str::from_utf8(include_bytes!("../../assets/icons/settings.svg"))
+            .expect("utf8 settings.svg")
+            .replace("currentColor", "white");
+        let settings_icon = icons::texture_from_svg(
+            &cc.egui_ctx,
+            "hud-settings",
+            settings_svg.as_bytes(),
+            icons::UI_ICON_PX,
+        )
+        .expect("settings.svg");
         let layer_icons = layers_panel::LayerIcons::load(&cc.egui_ctx);
         let mut app = App {
             cells: START_CELLS,
@@ -158,6 +169,7 @@ impl App {
             dark: loaded.dark,
             theme_sun,
             theme_night,
+            settings_icon,
             layer_icons,
         };
         crate::project::register_mime();
@@ -302,13 +314,11 @@ impl eframe::App for App {
         self.session.take_pending(now);
         self.handle_keys(&ctx, now);
 
-        let max_panel = ui.ctx().content_rect().width() * 0.2;
         let mut picker = None;
         if self.tools.open {
             egui::Panel::left("tools")
                 .default_size(settings_panel::PANEL_W)
                 .min_size(280.0)
-                .max_size(max_panel)
                 .show(ui, |ui| {
                     picker = self.draw_tools_body(ui);
                 });
@@ -319,7 +329,6 @@ impl eframe::App for App {
             egui::Panel::right("settings")
                 .default_size(settings_panel::PANEL_W)
                 .min_size(280.0)
-                .max_size(max_panel)
                 .show(ui, |ui| {
                     action = self.settings.draw(ui);
                 });
@@ -344,6 +353,9 @@ impl eframe::App for App {
             .show(ui, |ui| {
                 self.draw_map_panel(ui, now, picker.as_ref());
             });
+        if let Some(notice) = self.session.notice_text(now) {
+            render::draw_notice(&ctx, &notice, self.dark);
+        }
 
         self.handle_dropped(&ctx, now);
         let wayland_paths = self

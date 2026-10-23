@@ -9,15 +9,12 @@ use std::path::PathBuf;
 
 pub struct IconsTab {
     status: String,
-    /// Index that should receive the next dropped image, if any.
-    drop_target: Option<usize>,
 }
 
 impl IconsTab {
     pub fn new() -> IconsTab {
         IconsTab {
             status: String::new(),
-            drop_target: None,
         }
     }
 
@@ -93,22 +90,6 @@ impl IconsTab {
                             }
                         });
 
-                        let drop_zone = ui
-                            .add_sized(
-                                [ui.available_width(), 36.0],
-                                egui::Label::new(text::DROP_IMAGE).sense(Sense::hover()),
-                            )
-                            .rect;
-                        if ui.rect_contains_pointer(drop_zone) {
-                            self.drop_target = Some(i);
-                            ui.painter().rect_stroke(
-                                drop_zone,
-                                4.0,
-                                egui::Stroke::new(1.0, Color32::LIGHT_GRAY),
-                                egui::StrokeKind::Inside,
-                            );
-                        }
-
                         if ui
                             .add_enabled(can_delete, egui::Button::new(text::DELETE))
                             .clicked()
@@ -168,11 +149,10 @@ impl IconsTab {
         let Some(path) = dropped.iter().find(|p| icon_lib::is_image_path(p)) else {
             return false;
         };
-        let target = self.drop_target.unwrap_or(list.len().saturating_sub(1));
         if list.is_empty() {
             list.push(icon_lib::new_blank(list));
         }
-        let idx = target.min(list.len() - 1);
+        let idx = list.len() - 1;
         match apply_image(&mut list[idx], path) {
             Ok(()) => {
                 icons.reload(&list[idx]);

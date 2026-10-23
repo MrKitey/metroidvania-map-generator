@@ -1,4 +1,4 @@
-//! Project name, path, dirty flag and the notices shown in the header.
+//! Project name, path, dirty flag and the notices shown in the corner.
 
 use super::{MAX_CELLS, MIN_CELLS, START_CELLS, build_world};
 use crate::export::{self, MapData};

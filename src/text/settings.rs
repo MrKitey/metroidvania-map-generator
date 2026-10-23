@@ -13,7 +13,6 @@ pub const DELETE: &str = "Delete";
 pub const ADD_SIZE: &str = "Add size";
 pub const RESET: &str = "Reset";
 pub const CHOOSE_FILE: &str = "Choose file";
-pub const DROP_IMAGE: &str = "Drop image here (png, jpg, svg)";
 
 pub const NAME: &str = "Name";
 pub const LABEL: &str = "Label";

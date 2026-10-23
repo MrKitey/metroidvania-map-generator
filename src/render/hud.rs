@@ -19,42 +19,90 @@ const TOOLTIP_TEXT: f32 = 14.0;
 /// Positions of the clickable overlays for one frame.
 pub struct Hud {
     seed_text: String,
+    rooms_text: String,
     /// Clickable area of the seed label, in the bottom right corner of the map area.
     pub seed: Rect,
+    /// Room count label, top center of the map area.
+    rooms: Rect,
 }
 
 impl Hud {
-    pub fn new(ctx: &Context, seed: u64, copied: bool, map: Rect) -> Hud {
+    pub fn new(ctx: &Context, seed: u64, copied: bool, rooms: usize, map: Rect) -> Hud {
         let seed_text = t::seed(seed, copied);
-        let w = text_width(ctx, &seed_text, SEED_SIZE);
+        let seed_w = text_width(ctx, &seed_text, SEED_SIZE);
         let h = SEED_SIZE + 4.0;
-        let x = map.max.x - MARGIN - w;
-        let y = map.max.y - MARGIN - h;
+        let rooms_text = t::rooms(rooms);
+        let rooms_w = text_width(ctx, &rooms_text, SEED_SIZE);
         Hud {
             seed_text,
-            seed: Rect::from_min_size(pos2(x, y), vec2(w, h)),
+            rooms_text,
+            seed: Rect::from_min_size(
+                pos2(map.max.x - MARGIN - seed_w, map.max.y - MARGIN - h),
+                vec2(seed_w, h),
+            ),
+            rooms: Rect::from_min_size(
+                pos2(map.center().x - rooms_w * 0.5, map.min.y + MARGIN),
+                vec2(rooms_w, h),
+            ),
         }
     }
 }
 
-/// Seed label over a backdrop, so it stays readable over the map.
-pub fn draw_seed(ui: &Ui, hud: &Hud, dark: bool) {
-    let painter = ui.painter();
-    let hover = ui
-        .input(|i| i.pointer.hover_pos())
-        .is_some_and(|p| hud.seed.contains(p));
+fn label_color(dark: bool, hover: bool) -> Color32 {
     let (idle, active) = if dark {
         (Color32::LIGHT_GRAY, Color32::WHITE)
     } else {
         (Color32::from_rgb(80, 80, 95), Color32::from_rgb(30, 30, 40))
     };
-    painter.rect_filled(hud.seed.expand(6.0), 4.0, background(dark));
+    if hover { active } else { idle }
+}
+
+/// Label over a backdrop, so it stays readable over the map.
+fn draw_label(ui: &Ui, rect: Rect, text: &str, dark: bool, hover: bool) {
+    let painter = ui.painter();
+    painter.rect_filled(rect.expand(6.0), 4.0, background(dark));
     painter.text(
-        hud.seed.min,
+        rect.min,
         Align2::LEFT_TOP,
-        &hud.seed_text,
+        text,
         FontId::proportional(SEED_SIZE),
-        if hover { active } else { idle },
+        label_color(dark, hover),
+    );
+}
+
+/// Seed label over a backdrop, so it stays readable over the map.
+pub fn draw_seed(ui: &Ui, hud: &Hud, dark: bool) {
+    let hover = ui
+        .input(|i| i.pointer.hover_pos())
+        .is_some_and(|p| hud.seed.contains(p));
+    draw_label(ui, hud.seed, &hud.seed_text, dark, hover);
+}
+
+/// Room count at the top center of the map area.
+pub fn draw_rooms(ui: &Ui, hud: &Hud, dark: bool) {
+    draw_label(ui, hud.rooms, &hud.rooms_text, dark, false);
+}
+
+/// Session notice in the bottom left corner of the window.
+pub fn draw_notice(ctx: &Context, text: &str, dark: bool) {
+    let w = text_width(ctx, text, SEED_SIZE);
+    let h = SEED_SIZE + 4.0;
+    let screen = ctx.content_rect();
+    let rect = Rect::from_min_size(
+        pos2(screen.min.x + MARGIN, screen.max.y - MARGIN - h),
+        vec2(w, h),
+    );
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::unique("session-notice"),
+    ));
+    painter.rect_filled(rect.expand(6.0), 4.0, background(dark));
+    painter.text(
+        rect.min,
+        Align2::LEFT_TOP,
+        text,
+        FontId::proportional(SEED_SIZE),
+        label_color(dark, false),
     );
 }
 
