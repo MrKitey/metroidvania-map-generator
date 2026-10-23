@@ -1,5 +1,12 @@
 //! Registers the `.mmg` type with the desktop.
 
+#[cfg(target_os = "linux")]
+use crate::storage;
+#[cfg(target_os = "linux")]
+use crate::text::files;
+#[cfg(target_os = "linux")]
+use std::fs;
+
 /// Registers the `.mmg` type with the desktop, once. Failures are ignored.
 /// A missing `xdg-mime` is retried on a later launch.
 pub fn register_mime() {
