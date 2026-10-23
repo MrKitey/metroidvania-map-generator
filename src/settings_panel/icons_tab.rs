@@ -2,6 +2,7 @@
 
 use crate::icon_lib::{self, IconDef};
 use crate::icons::Icons;
+use crate::settings::{MAX_ICON_SIZE, MIN_ICON_SIZE, clamp_icon_size};
 use crate::text::{files, settings as text, status};
 use crate::world::World;
 use egui::{Color32, Sense};
@@ -89,6 +90,20 @@ impl IconsTab {
                                 }
                             }
                         });
+                        if ui
+                            .add(
+                                egui::Slider::new(
+                                    &mut list[i].size,
+                                    MIN_ICON_SIZE..=MAX_ICON_SIZE,
+                                )
+                                .integer()
+                                .text(text::ICON_SIZE),
+                            )
+                            .changed()
+                        {
+                            list[i].size = clamp_icon_size(list[i].size);
+                            changed = true;
+                        }
 
                         if ui
                             .add_enabled(can_delete, egui::Button::new(text::DELETE))

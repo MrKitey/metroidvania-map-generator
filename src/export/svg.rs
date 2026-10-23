@@ -4,8 +4,7 @@ use super::{MapData, PX_PER_UNIT};
 use crate::color::to_hex;
 use crate::icons::{self, room_icon_ids};
 use crate::render::{
-    door_color, door_rect, icon_side_px, line_thickness, room_border, room_fill, room_icons,
-    room_rect,
+    door_color, door_rect, line_thickness, room_border, room_fill, room_icons, room_rect,
 };
 use crate::world::World;
 use std::collections::HashSet;
@@ -55,18 +54,8 @@ pub fn render(map: &MapData) -> String {
     }
     svg.push_str("</defs>\n");
 
-    let icon_size = map.settings.icon_size;
     for world in &worlds {
-        append_world(
-            &mut svg,
-            world,
-            biomes,
-            special,
-            layout,
-            t,
-            thick,
-            icon_size,
-        );
+        append_world(&mut svg, world, biomes, special, layout, t, thick);
     }
 
     svg.push_str("</svg>\n");
@@ -81,7 +70,6 @@ fn append_world(
     layout: &crate::layout::Layout,
     t: f32,
     thick: f32,
-    icon_size: u32,
 ) {
     for r in &world.rooms {
         let (border, is_thick) = room_border(r, biomes, special);
@@ -114,9 +102,8 @@ fn append_world(
         );
     }
 
-    let side = icon_side_px(layout, PX_PER_UNIT, icon_size) / PX_PER_UNIT;
     for r in &world.rooms {
-        for (id, corner, s) in room_icons(r, layout, side) {
+        for (id, corner, s) in room_icons(r, layout, special, PX_PER_UNIT) {
             let _ = writeln!(
                 svg,
                 "<use xlink:href=\"#{id}\" x=\"{}\" y=\"{}\" width=\"{s}\" height=\"{s}\"/>",

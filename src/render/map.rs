@@ -2,7 +2,7 @@
 
 use super::theme::{door_color, room_border, room_fill};
 use crate::biome::Biome;
-use crate::icon_lib::IconDef;
+use crate::icon_lib::{self, IconDef};
 use crate::icons::{self, Icons};
 use crate::layout::Layout;
 use crate::settings;
@@ -55,7 +55,7 @@ pub fn door_rect(d: &Door, layout: &Layout) -> Rect {
 }
 
 /// Side of an icon in points, at `scale` points per world unit.
-/// `icon_size` is the 1..=10 setting; cell share is `icon_size / 10`.
+/// `icon_size` is 1..=10; cell share is `icon_size / 10`.
 pub fn icon_side_px(layout: &Layout, scale: f32, icon_size: u32) -> f32 {
     let share = settings::icon_share(icon_size);
     (layout.cw.min(layout.ch) * share * scale).max(MIN_ICON_PX)
@@ -63,18 +63,32 @@ pub fn icon_side_px(layout: &Layout, scale: f32, icon_size: u32) -> f32 {
 
 /// Icons of a room, left to right, as (id, top-left corner, side) in world units.
 /// A room with a kind icon and a marker shows both, side by side, smaller.
-/// `side` is the side of a single icon.
-pub fn room_icons(r: &Room, layout: &Layout, side: f32) -> Vec<(String, Vec2, f32)> {
+/// Each id uses its own size from `special`.
+pub fn room_icons(
+    r: &Room,
+    layout: &Layout,
+    special: &[IconDef],
+    scale: f32,
+) -> Vec<(String, Vec2, f32)> {
     let ids = icons::room_icon_ids(r);
     let both = ids.len() > 1;
-    let s = if both { side * PAIR_SHARE } else { side };
+    let sides: Vec<f32> = ids
+        .iter()
+        .map(|id| {
+            let size = icon_lib::size_of(special, id);
+            let side = icon_side_px(layout, scale, size) / scale;
+            if both { side * PAIR_SHARE } else { side }
+        })
+        .collect();
+    let total: f32 = sides.iter().sum();
     let c = vec2(
         (r.x as f32 + r.w as f32 / 2.0) * layout.cw,
         (r.y as f32 + r.h as f32 / 2.0) * layout.ch,
     );
-    let mut x = if both { c.x - s } else { c.x - s / 2.0 };
+    let mut x = c.x - total / 2.0;
     ids.into_iter()
-        .map(|id| {
+        .zip(sides)
+        .map(|(id, s)| {
             let corner = vec2(x, c.y - s / 2.0);
             x += s;
             (id, corner, s)
@@ -148,7 +162,6 @@ pub fn draw_map_opacity(
     map_view: &MapView,
     icons: &mut Icons,
     opacity: f32,
-    icon_size: u32,
 ) {
     let (view, map, scale) = (map_view.view, map_view.map, map_view.scale);
     let t = line_thickness(layout) * scale;
@@ -204,16 +217,15 @@ pub fn draw_map_opacity(
     }
 
     // Icons are rasterized at their size in pixels, so they stay sharp at any zoom.
-    let side_px = icon_side_px(layout, scale, icon_size);
-    let px = (side_px * painter.ctx().pixels_per_point()).ceil() as u32;
-    let side = side_px / scale;
+    let ppp = painter.ctx().pixels_per_point();
     let tint = with_opacity(Color32::WHITE, opacity);
     for r in &world.rooms {
         if !shown(room_rect(r, layout)) {
             continue;
         }
-        for (id, corner, s) in room_icons(r, layout, side) {
+        for (id, corner, s) in room_icons(r, layout, special, scale) {
             let dest = Rect::from_min_size(view.world_to_screen(corner, map), vec2(s, s) * scale);
+            let px = (s * scale * ppp).ceil() as u32;
             if let Some(tex) = icons.get(painter.ctx(), &id, px) {
                 painter.image(tex.id(), dest, uv, tint);
             }

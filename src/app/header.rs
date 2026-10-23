@@ -11,7 +11,7 @@ use egui::{Button, Color32, FontId, Rect, RichText, Sense, TextStyle, Vec2, load
 
 pub(super) const HEADER_H: f32 = 48.0;
 const HUD_TEXT: f32 = 16.0;
-const HUD_ICON: f32 = 20.0;
+const HUD_ICON: f32 = 18.0;
 
 impl App {
     pub(super) fn draw_header(&mut self, ui: &mut egui::Ui, now: f64) {

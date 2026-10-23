@@ -10,8 +10,8 @@ mod theme;
 pub use hud::{COPIED_TIME, Hud, draw_help, draw_notice};
 pub use legend::RoomLegend;
 pub use map::{
-    MapView, door_rect, draw_grid, draw_layer_group, draw_map_opacity, icon_side_px,
-    layer_label_rects, line_thickness, room_icons, room_rect,
+    MapView, door_rect, draw_grid, draw_layer_group, draw_map_opacity, layer_label_rects,
+    line_thickness, room_icons, room_rect,
 };
 pub use picker::{Ghost, Picker, draw_drag_outline, draw_room_list};
 pub use theme::{
@@ -63,8 +63,6 @@ pub struct Frame<'a> {
     pub special: &'a [IconDef],
     /// Dark map canvas when true.
     pub dark: bool,
-    /// Special-room icon size setting, 1 to 10.
-    pub icon_size: u32,
 }
 
 /// World area shown by the camera, with one unit of margin so nothing pops at the edges.
@@ -128,7 +126,6 @@ pub fn draw_layers(
             &view,
             icons,
             layer.opacity,
-            f.icon_size,
         );
     }
     if let Some(g) = &f.ghost {

@@ -1,6 +1,7 @@
 //! Special-room icon definitions and their storage in the app folder.
 
 use crate::color::{parse_hex, to_hex};
+use crate::settings::{self, DEFAULT_ICON_SIZE};
 use crate::storage;
 use crate::text::{files, hud as labels, icons as ids, status};
 use egui::Color32;
@@ -62,6 +63,8 @@ pub struct IconDef {
     pub border: Color32,
     /// Path relative to the app dir, e.g. `assets/icons/boss.svg`.
     pub file: String,
+    /// Drawn size on the map, 1 to 10. Cell share is `size / 10`.
+    pub size: u32,
 }
 
 impl IconDef {
@@ -84,6 +87,12 @@ struct Entry {
     fill: String,
     border: String,
     file: String,
+    #[serde(default = "default_entry_size")]
+    size: u32,
+}
+
+fn default_entry_size() -> u32 {
+    DEFAULT_ICON_SIZE
 }
 
 impl From<&IconDef> for Entry {
@@ -94,6 +103,7 @@ impl From<&IconDef> for Entry {
             fill: to_hex(d.fill),
             border: to_hex(d.border),
             file: d.file.clone(),
+            size: settings::clamp_icon_size(d.size),
         }
     }
 }
@@ -110,6 +120,7 @@ fn from_entry(entry: Entry) -> Option<IconDef> {
         fill,
         border,
         file: entry.file,
+        size: settings::clamp_icon_size(entry.size),
     })
 }
 
@@ -140,6 +151,7 @@ pub fn default_icons() -> Vec<IconDef> {
                 fill,
                 border,
                 file,
+                size: DEFAULT_ICON_SIZE,
             }
         })
         .collect()
@@ -198,6 +210,13 @@ pub fn save(icons: &[IconDef]) -> Result<PathBuf, Box<dyn Error>> {
 /// Looks up an icon by id.
 pub fn find<'a>(icons: &'a [IconDef], id: &str) -> Option<&'a IconDef> {
     icons.iter().find(|d| d.id == id)
+}
+
+/// Clamped map size for an icon id, or the default when missing.
+pub fn size_of(icons: &[IconDef], id: &str) -> u32 {
+    find(icons, id)
+        .map(|d| settings::clamp_icon_size(d.size))
+        .unwrap_or(DEFAULT_ICON_SIZE)
 }
 
 /// Allowed image extensions for import.
@@ -273,5 +292,6 @@ pub fn new_blank(existing: &[IconDef]) -> IconDef {
         fill: Color32::from_rgb(128, 128, 128),
         border: Color32::from_rgb(200, 200, 200),
         file: default_file(&id),
+        size: DEFAULT_ICON_SIZE,
     }
 }

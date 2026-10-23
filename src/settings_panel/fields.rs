@@ -1,9 +1,9 @@
 //! Settings fields kept as raw text, and their validation.
 
 use crate::settings::{
-    DEFAULT_AUTOSAVE_SECS, DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_ICON_SIZE,
-    DEFAULT_MAX_ROOMS, DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, MAX_AUTOSAVE_SECS,
-    MIN_AUTOSAVE_SECS, Settings, clamp_icon_size,
+    DEFAULT_AUTOSAVE_SECS, DEFAULT_BOSS_SIZES, DEFAULT_CORRIDOR_SIZES, DEFAULT_MAX_ROOMS,
+    DEFAULT_MIN_ROOMS, DEFAULT_ROOM_SIZES, DEFAULT_VIEWPORT, MAX_AUTOSAVE_SECS, MIN_AUTOSAVE_SECS,
+    Settings,
 };
 use crate::world::Sizes;
 
@@ -33,8 +33,6 @@ pub struct Fields {
     pub autosave_secs: String,
     /// Dark UI theme. Edited by the header switch, not the settings panel.
     pub dark: bool,
-    /// Special-room icon size on the map, 1 to 10.
-    pub icon_size: u32,
 }
 
 /// Width and height field texts for each size.
@@ -79,13 +77,7 @@ impl Fields {
             autosave: settings.autosave,
             autosave_secs: settings.autosave_secs.to_string(),
             dark: settings.dark,
-            icon_size: clamp_icon_size(settings.icon_size),
         }
-    }
-
-    /// Special-room icon size, clamped to 1..=10.
-    pub fn icon_size(&self) -> u32 {
-        clamp_icon_size(self.icon_size)
     }
 
     /// Clamped between 1 and `MAX_MIN_ROOMS`.
@@ -155,7 +147,6 @@ impl Fields {
             autosave: self.autosave,
             autosave_secs: self.autosave_secs(),
             dark: self.dark,
-            icon_size: self.icon_size(),
         }
     }
 }
@@ -179,8 +170,6 @@ mod tests {
         assert_eq!(settings.autosave, defaults.autosave);
         assert_eq!(settings.autosave_secs, defaults.autosave_secs);
         assert_eq!(settings.dark, defaults.dark);
-        assert_eq!(settings.icon_size, defaults.icon_size);
-        assert_eq!(settings.icon_size, DEFAULT_ICON_SIZE);
     }
 
     #[test]

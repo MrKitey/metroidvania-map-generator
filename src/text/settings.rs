@@ -28,7 +28,7 @@ pub const SCREEN_SIZE: &str = "Screen size (px)";
 pub const MAX_ROOMS_LABEL: &str = "Max rooms per biome (0 = no limit)";
 pub const AUTOSAVE: &str = "Autosave";
 pub const AUTOSAVE_DELAY: &str = "Autosave delay (s)";
-pub const ICON_SIZE: &str = "Special room icon size";
+pub const ICON_SIZE: &str = "Size";
 
 pub fn min_rooms_label(max: impl Display) -> String {
     format!("Min rooms per biome (1 to {max})")
