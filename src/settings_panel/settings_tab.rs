@@ -2,7 +2,7 @@
 
 use super::SettingsAction;
 use super::fields::{Fields, MAX_MIN_ROOMS};
-use crate::settings;
+use crate::settings::{self, MAX_ICON_SIZE, MIN_ICON_SIZE};
 use crate::text::{settings as text, status};
 
 pub fn draw(
@@ -86,6 +86,18 @@ pub fn draw(
             changed = true;
         }
     });
+    ui.separator();
+
+    if ui
+        .add(
+            egui::Slider::new(&mut fields.icon_size, MIN_ICON_SIZE..=MAX_ICON_SIZE)
+                .integer()
+                .text(text::ICON_SIZE),
+        )
+        .changed()
+    {
+        changed = true;
+    }
     ui.separator();
 
     ui.horizontal(|ui| {

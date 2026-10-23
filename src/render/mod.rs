@@ -63,6 +63,8 @@ pub struct Frame<'a> {
     pub special: &'a [IconDef],
     /// Dark map canvas when true.
     pub dark: bool,
+    /// Special-room icon size setting, 1 to 10.
+    pub icon_size: u32,
 }
 
 /// World area shown by the camera, with one unit of margin so nothing pops at the edges.
@@ -126,6 +128,7 @@ pub fn draw_layers(
             &view,
             icons,
             layer.opacity,
+            f.icon_size,
         );
     }
     if let Some(g) = &f.ghost {

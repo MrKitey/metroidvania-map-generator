@@ -5,12 +5,11 @@ use crate::biome::Biome;
 use crate::icon_lib::IconDef;
 use crate::icons::{self, Icons};
 use crate::layout::Layout;
+use crate::settings;
 use crate::view::View;
 use crate::world::{Door, Room, World};
 use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2, pos2, vec2};
 
-/// Share of a cell taken by an icon.
-const ICON_SHARE: f32 = 0.7;
 /// Smallest icon, in points.
 const MIN_ICON_PX: f32 = 12.0;
 /// Size of two icons side by side, as a share of one.
@@ -56,8 +55,10 @@ pub fn door_rect(d: &Door, layout: &Layout) -> Rect {
 }
 
 /// Side of an icon in points, at `scale` points per world unit.
-pub fn icon_side_px(layout: &Layout, scale: f32) -> f32 {
-    (layout.cw.min(layout.ch) * ICON_SHARE * scale).max(MIN_ICON_PX)
+/// `icon_size` is the 1..=10 setting; cell share is `icon_size / 10`.
+pub fn icon_side_px(layout: &Layout, scale: f32, icon_size: u32) -> f32 {
+    let share = settings::icon_share(icon_size);
+    (layout.cw.min(layout.ch) * share * scale).max(MIN_ICON_PX)
 }
 
 /// Icons of a room, left to right, as (id, top-left corner, side) in world units.
@@ -147,6 +148,7 @@ pub fn draw_map_opacity(
     map_view: &MapView,
     icons: &mut Icons,
     opacity: f32,
+    icon_size: u32,
 ) {
     let (view, map, scale) = (map_view.view, map_view.map, map_view.scale);
     let t = line_thickness(layout) * scale;
@@ -202,7 +204,7 @@ pub fn draw_map_opacity(
     }
 
     // Icons are rasterized at their size in pixels, so they stay sharp at any zoom.
-    let side_px = icon_side_px(layout, scale);
+    let side_px = icon_side_px(layout, scale, icon_size);
     let px = (side_px * painter.ctx().pixels_per_point()).ceil() as u32;
     let side = side_px / scale;
     let tint = with_opacity(Color32::WHITE, opacity);

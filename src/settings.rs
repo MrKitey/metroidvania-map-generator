@@ -32,6 +32,10 @@ pub const DEFAULT_AUTOSAVE: bool = true;
 pub const DEFAULT_AUTOSAVE_SECS: u64 = 30;
 pub const MIN_AUTOSAVE_SECS: u64 = 5;
 pub const MAX_AUTOSAVE_SECS: u64 = 3600;
+/// Special-room icon size on the map. Share of a cell is `icon_size / 10`.
+pub const DEFAULT_ICON_SIZE: u32 = 7;
+pub const MIN_ICON_SIZE: u32 = 1;
+pub const MAX_ICON_SIZE: u32 = 10;
 
 /// Values are stored as read. The settings panel validates them when parsing its fields.
 /// Fields missing from the file take their default value.
@@ -56,6 +60,8 @@ pub struct Settings {
     pub autosave_secs: u64,
     /// Dark UI theme when true. Kept in settings.json only.
     pub dark: bool,
+    /// Special-room icon size, 1 to 10. Kept in settings.json only.
+    pub icon_size: u32,
 }
 
 impl Default for Settings {
@@ -70,8 +76,19 @@ impl Default for Settings {
             autosave: DEFAULT_AUTOSAVE,
             autosave_secs: DEFAULT_AUTOSAVE_SECS,
             dark: true,
+            icon_size: DEFAULT_ICON_SIZE,
         }
     }
+}
+
+/// Clamped icon size used for drawing and export.
+pub fn clamp_icon_size(size: u32) -> u32 {
+    size.clamp(MIN_ICON_SIZE, MAX_ICON_SIZE)
+}
+
+/// Cell share used by map icons for a given size setting.
+pub fn icon_share(size: u32) -> f32 {
+    clamp_icon_size(size) as f32 / 10.0
 }
 
 /// Saved settings, or the defaults if the file is missing or invalid.

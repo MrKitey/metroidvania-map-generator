@@ -199,6 +199,7 @@ impl App {
             paint_biome: self.interact.paint_biome,
             special: &self.special,
             dark: self.dark,
+            icon_size: self.settings.icon_size(),
         };
         render::draw_layers(
             ui,

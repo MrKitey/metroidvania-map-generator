@@ -50,6 +50,11 @@ impl Settings {
         self.fields.viewport()
     }
 
+    /// Special-room icon size on the map, 1 to 10.
+    pub fn icon_size(&self) -> u32 {
+        self.fields.icon_size()
+    }
+
     /// All allowed room sizes, ready for the generator.
     pub fn sizes(&self) -> Sizes {
         self.fields.room_sizes()
@@ -88,11 +93,13 @@ impl Settings {
     }
 
     /// Replaces the generation fields after a project load. The panel stays as it was.
-    /// Keeps the current UI theme, which is not part of a project file.
+    /// Keeps theme and icon size, which are not part of a project file.
     pub fn apply_loaded(&mut self, seed: u64, saved: &Saved) {
         let dark = self.fields.dark;
+        let icon_size = self.fields.icon_size;
         self.fields = Fields::new(saved);
         self.fields.dark = dark;
+        self.fields.icon_size = icon_size;
         self.set_seed(seed);
     }
 
