@@ -107,6 +107,7 @@ pub struct App {
     dark: bool,
     theme_sun: TextureHandle,
     theme_night: TextureHandle,
+    layer_icons: layers_panel::LayerIcons,
 }
 
 impl App {
@@ -137,6 +138,7 @@ impl App {
             icons::UI_ICON_PX,
         )
         .expect("night.svg");
+        let layer_icons = layers_panel::LayerIcons::load(&cc.egui_ctx);
         let mut app = App {
             cells: START_CELLS,
             seed,
@@ -163,6 +165,7 @@ impl App {
             dark: loaded.dark,
             theme_sun,
             theme_night,
+            layer_icons,
         };
         crate::project::register_mime();
         app.open_startup();
@@ -388,6 +391,7 @@ impl eframe::App for App {
                 self.seed,
                 self.cells,
                 &self.biomes,
+                &self.layer_icons,
             );
             if action.changed {
                 self.interact.clear();

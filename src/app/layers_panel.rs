@@ -2,9 +2,74 @@
 
 use super::{UndoEntry, remember};
 use crate::biome::Biome;
+use crate::icons::{self, UI_ICON_PX};
 use crate::layer::LayerStack;
 use crate::text::hud as t;
-use egui::{Color32, Context, RichText, Sense, vec2};
+use egui::{
+    Button, Color32, Context, Image, Response, RichText, Sense, TextureHandle, Ui, Vec2, vec2,
+    load::SizedTexture,
+};
+
+const ICON_SIZE: f32 = 14.0;
+
+/// UI textures for layer row actions.
+pub struct LayerIcons {
+    eye: TextureHandle,
+    eye_off: TextureHandle,
+    lock: TextureHandle,
+    lock_open: TextureHandle,
+    duplicate: TextureHandle,
+    delete: TextureHandle,
+}
+
+impl LayerIcons {
+    pub fn load(ctx: &Context) -> LayerIcons {
+        LayerIcons {
+            eye: load_ui_icon(ctx, "layer-eye", include_bytes!("../../assets/icons/eye.svg")),
+            eye_off: load_ui_icon(
+                ctx,
+                "layer-eye-off",
+                include_bytes!("../../assets/icons/eye-off.svg"),
+            ),
+            lock: load_ui_icon(ctx, "layer-lock", include_bytes!("../../assets/icons/lock.svg")),
+            lock_open: load_ui_icon(
+                ctx,
+                "layer-lock-open",
+                include_bytes!("../../assets/icons/lock-open.svg"),
+            ),
+            duplicate: load_ui_icon(
+                ctx,
+                "layer-duplicate",
+                include_bytes!("../../assets/icons/duplicate.svg"),
+            ),
+            delete: load_ui_icon(
+                ctx,
+                "layer-delete",
+                include_bytes!("../../assets/icons/delete.svg"),
+            ),
+        }
+    }
+}
+
+/// Rasterizes a Lucide SVG as white so egui tint follows the theme text color.
+fn load_ui_icon(ctx: &Context, name: &str, bytes: &[u8]) -> TextureHandle {
+    let svg = std::str::from_utf8(bytes)
+        .expect("utf8 svg")
+        .replace("currentColor", "white");
+    icons::texture_from_svg(ctx, name, svg.as_bytes(), UI_ICON_PX).expect(name)
+}
+
+fn layer_icon_button(ui: &mut Ui, tex: &TextureHandle, tip: &str) -> Response {
+    let image = SizedTexture::new(tex.id(), Vec2::splat(ICON_SIZE));
+    let button = Button::image(image).image_tint_follows_text_color(true);
+    ui.add(button).on_hover_text(tip)
+}
+
+fn layer_delete_button(ui: &mut Ui, tex: &TextureHandle) -> Response {
+    let image = Image::new(SizedTexture::new(tex.id(), Vec2::splat(ICON_SIZE)));
+    let button = Button::image(image).fill(Color32::from_rgb(180, 50, 50));
+    ui.add(button).on_hover_text(t::LAYER_DELETE)
+}
 
 /// Result of one Layers window frame.
 pub struct LayersAction {
@@ -20,6 +85,7 @@ pub fn draw_layers_window(
     seed: u64,
     cells: u32,
     biomes: &[Biome],
+    icons: &LayerIcons,
 ) -> LayersAction {
     let mut action = LayersAction { changed: false };
     let mut delete_confirm: Option<usize> = None;
@@ -71,22 +137,22 @@ pub fn draw_layers_window(
                                 action.changed = true;
                             }
 
-                            let vis = if layer.visible { "Vis" } else { "Hid" };
-                            if ui
-                                .small_button(vis)
-                                .on_hover_text(t::LAYER_VISIBILITY)
-                                .clicked()
-                            {
+                            let vis = if layer.visible {
+                                &icons.eye
+                            } else {
+                                &icons.eye_off
+                            };
+                            if layer_icon_button(ui, vis, t::LAYER_VISIBILITY).clicked() {
                                 layer.visible = !layer.visible;
                                 action.changed = true;
                             }
 
-                            let lock = if layer.locked { "Lock" } else { "Edit" };
-                            if ui
-                                .small_button(lock)
-                                .on_hover_text(t::LAYER_LOCK)
-                                .clicked()
-                            {
+                            let lock = if layer.locked {
+                                &icons.lock
+                            } else {
+                                &icons.lock_open
+                            };
+                            if layer_icon_button(ui, lock, t::LAYER_LOCK).clicked() {
                                 layer.locked = !layer.locked;
                                 action.changed = true;
                             }
@@ -133,21 +199,11 @@ pub fn draw_layers_window(
                             });
                         }
 
-                        if ui
-                            .small_button("Dup")
-                            .on_hover_text(t::LAYER_DUPLICATE)
-                            .clicked()
-                        {
+                        if layer_icon_button(ui, &icons.duplicate, t::LAYER_DUPLICATE).clicked() {
                             to_duplicate = Some(i);
                         }
-                        if i != 0 {
-                            let del = egui::Button::new(
-                                RichText::new("Del").color(Color32::WHITE),
-                            )
-                            .fill(Color32::from_rgb(180, 50, 50));
-                            if ui.add(del).on_hover_text(t::LAYER_DELETE).clicked() {
-                                to_delete = Some(i);
-                            }
+                        if i != 0 && layer_delete_button(ui, &icons.delete).clicked() {
+                            to_delete = Some(i);
                         }
 
                         if !is_active
