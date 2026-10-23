@@ -1,6 +1,7 @@
-//! Saved project archive: zip with metadata, thumbnail, biomes and rooms.
+//! Saved project archive: zip with metadata, thumbnail, biomes and layers.
 
 use crate::biome::{self, Biome, Entry};
+use crate::layer::{LayerStack, SavedLayer};
 use crate::settings::{self, Settings};
 use crate::text::{self, files, status};
 use crate::world::{Door, MapError, Room, World};
@@ -12,7 +13,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
+const VERSION_V2: u32 = 2;
 
 /// Generation settings stored in a project. Autosave is left out on purpose.
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -66,12 +68,19 @@ struct ProjectMeta {
     settings: FileSettings,
 }
 
-/// Rooms written to `rooms.json`.
+/// Rooms written to `rooms.json` (v2).
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct RoomsFile {
     rooms: Vec<Room>,
     doors: Vec<Door>,
     used_biomes: Vec<usize>,
+}
+
+/// Layers written to `layers.json` (v3).
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct LayersFile {
+    active: usize,
+    layers: Vec<SavedLayer>,
 }
 
 /// One saved project. Compared each frame to tell whether the map still matches the file.
@@ -86,9 +95,7 @@ pub struct ProjectFile {
     created_at: String,
     settings: FileSettings,
     biomes: Vec<Entry>,
-    used_biomes: Vec<usize>,
-    rooms: Vec<Room>,
-    doors: Vec<Door>,
+    layers: LayersFile,
 }
 
 impl ProjectFile {
@@ -101,7 +108,7 @@ impl ProjectFile {
         created_at: &str,
         settings: &Settings,
         biomes: &[Biome],
-        world: &World,
+        layers: &LayerStack,
     ) -> ProjectFile {
         ProjectFile {
             version: VERSION,
@@ -112,9 +119,10 @@ impl ProjectFile {
             created_at: created_at.to_owned(),
             settings: FileSettings::from_settings(settings),
             biomes: biomes.iter().map(Entry::from).collect(),
-            used_biomes: world.biomes.clone(),
-            rooms: world.rooms.clone(),
-            doors: world.doors.clone(),
+            layers: LayersFile {
+                active: layers.active(),
+                layers: layers.to_saved(),
+            },
         }
     }
 
@@ -134,7 +142,7 @@ pub struct Loaded {
     /// Generation settings. Autosave fields are the defaults, not the file's.
     pub settings: Settings,
     pub biomes: Vec<Biome>,
-    pub world: World,
+    pub layers: LayerStack,
 }
 
 /// UTC timestamp `YYYY-MM-DDTHH:MM:SSZ`.
@@ -174,16 +182,15 @@ fn civil_from_days(z: i64) -> (i32, u32, u32) {
     (y as i32, m as u32, d as u32)
 }
 
-/// Reads a project zip. Fails when the version, the biomes or the map is unusable.
+/// Reads a project zip. Accepts v3 (`layers.json`) and migrates v2 (`rooms.json`).
 pub fn read(path: &Path) -> Result<Loaded, Box<dyn Error>> {
     let file = File::open(path)?;
     let mut zip = zip::ZipArchive::new(file)?;
     let meta: ProjectMeta = read_json_entry(&mut zip, files::PROJECT_JSON)?;
-    if meta.version != VERSION {
+    if meta.version != VERSION && meta.version != VERSION_V2 {
         return Err(status::BAD_VERSION.into());
     }
     let biomes_raw: Vec<Entry> = read_json_entry(&mut zip, files::PROJECT_BIOMES)?;
-    let rooms: RoomsFile = read_json_entry(&mut zip, files::PROJECT_ROOMS)?;
     // Thumbnail is required in the archive even though the app does not display it yet.
     let _thumb = read_bytes_entry(&mut zip, files::PROJECT_THUMB)?;
 
@@ -194,8 +201,17 @@ pub fn read(path: &Path) -> Result<Loaded, Box<dyn Error>> {
     if biomes.is_empty() {
         return Err(text::biomes::NO_VALID_BIOME.into());
     }
-    let world = World::from_parts(rooms.rooms, rooms.doors, rooms.used_biomes, biomes.len())
-        .map_err(map_error)?;
+
+    let layers = if meta.version == VERSION {
+        let file: LayersFile = read_json_entry(&mut zip, files::PROJECT_LAYERS)?;
+        LayerStack::from_saved(file.active, file.layers, biomes.len()).map_err(map_error)?
+    } else {
+        let rooms: RoomsFile = read_json_entry(&mut zip, files::PROJECT_ROOMS)?;
+        let world = World::from_parts(rooms.rooms, rooms.doors, rooms.used_biomes, biomes.len())
+            .map_err(map_error)?;
+        LayerStack::from_world(world)
+    };
+
     let name = if meta.name.trim().is_empty() {
         meta.seed.to_string()
     } else {
@@ -210,7 +226,7 @@ pub fn read(path: &Path) -> Result<Loaded, Box<dyn Error>> {
         modified_at: meta.modified_at,
         settings: meta.settings.into_settings(),
         biomes,
-        world,
+        layers,
     })
 }
 
@@ -224,7 +240,10 @@ fn read_json_entry<T: serde::de::DeserializeOwned>(
     Ok(serde_json::from_str(&text)?)
 }
 
-fn read_bytes_entry(zip: &mut zip::ZipArchive<File>, name: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+fn read_bytes_entry(
+    zip: &mut zip::ZipArchive<File>,
+    name: &str,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut entry = zip.by_name(name)?;
     let mut bytes = Vec::new();
     entry.read_to_end(&mut bytes)?;
@@ -241,7 +260,7 @@ fn map_error(err: MapError) -> Box<dyn Error> {
     .into()
 }
 
-/// Writes the project as a zip with metadata, thumbnail, biomes and rooms.
+/// Writes the project as a zip with metadata, thumbnail, biomes and layers.
 /// Returns the `modified_at` stamp written into `project.json`.
 pub fn write(path: &Path, file: &ProjectFile, thumbnail: &[u8]) -> Result<String, Box<dyn Error>> {
     if let Some(parent) = path
@@ -262,11 +281,6 @@ pub fn write(path: &Path, file: &ProjectFile, thumbnail: &[u8]) -> Result<String
         modified_at: modified_at.clone(),
         settings: file.settings.clone(),
     };
-    let rooms = RoomsFile {
-        rooms: file.rooms.clone(),
-        doors: file.doors.clone(),
-        used_biomes: file.used_biomes.clone(),
-    };
 
     let mut zip = zip::ZipWriter::new(File::create(path)?);
     let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
@@ -276,8 +290,8 @@ pub fn write(path: &Path, file: &ProjectFile, thumbnail: &[u8]) -> Result<String
     zip.write_all(serde_json::to_string_pretty(&meta)?.as_bytes())?;
     zip.start_file(files::PROJECT_BIOMES, deflated)?;
     zip.write_all(serde_json::to_string_pretty(&file.biomes)?.as_bytes())?;
-    zip.start_file(files::PROJECT_ROOMS, deflated)?;
-    zip.write_all(serde_json::to_string_pretty(&rooms)?.as_bytes())?;
+    zip.start_file(files::PROJECT_LAYERS, deflated)?;
+    zip.write_all(serde_json::to_string_pretty(&file.layers)?.as_bytes())?;
     zip.start_file(files::PROJECT_THUMB, stored)?;
     zip.write_all(thumbnail)?;
     zip.finish()?;
@@ -309,11 +323,6 @@ pub(super) fn write_with_version(
         modified_at: utc_now(),
         settings: file.settings.clone(),
     };
-    let rooms = RoomsFile {
-        rooms: file.rooms.clone(),
-        doors: file.doors.clone(),
-        used_biomes: file.used_biomes.clone(),
-    };
 
     let mut zip = zip::ZipWriter::new(File::create(path)?);
     let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
@@ -323,6 +332,69 @@ pub(super) fn write_with_version(
     zip.write_all(serde_json::to_string_pretty(&meta)?.as_bytes())?;
     zip.start_file(files::PROJECT_BIOMES, deflated)?;
     zip.write_all(serde_json::to_string_pretty(&file.biomes)?.as_bytes())?;
+    if version == VERSION_V2 {
+        let first = file.layers.layers.first();
+        let rooms = RoomsFile {
+            rooms: first.map(|l| l.rooms.clone()).unwrap_or_default(),
+            doors: first.map(|l| l.doors.clone()).unwrap_or_default(),
+            used_biomes: first.map(|l| l.used_biomes.clone()).unwrap_or_default(),
+        };
+        zip.start_file(files::PROJECT_ROOMS, deflated)?;
+        zip.write_all(serde_json::to_string_pretty(&rooms)?.as_bytes())?;
+    } else {
+        zip.start_file(files::PROJECT_LAYERS, deflated)?;
+        zip.write_all(serde_json::to_string_pretty(&file.layers)?.as_bytes())?;
+    }
+    zip.start_file(files::PROJECT_THUMB, stored)?;
+    zip.write_all(thumbnail)?;
+    zip.finish()?;
+    Ok(())
+}
+
+/// Writes a v2-shaped archive for migration tests.
+#[cfg(test)]
+pub(super) fn write_v2(
+    path: &Path,
+    name: &str,
+    seed: u64,
+    cells: u32,
+    grid: bool,
+    created_at: &str,
+    settings: &Settings,
+    biomes: &[Biome],
+    world: &World,
+    thumbnail: &[u8],
+) -> Result<(), Box<dyn Error>> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)?;
+    }
+    let meta = ProjectMeta {
+        version: VERSION_V2,
+        name: name.to_owned(),
+        seed,
+        cells,
+        grid,
+        created_at: created_at.to_owned(),
+        modified_at: utc_now(),
+        settings: FileSettings::from_settings(settings),
+    };
+    let rooms = RoomsFile {
+        rooms: world.rooms.clone(),
+        doors: world.doors.clone(),
+        used_biomes: world.biomes.clone(),
+    };
+    let biomes_entries: Vec<Entry> = biomes.iter().map(Entry::from).collect();
+
+    let mut zip = zip::ZipWriter::new(File::create(path)?);
+    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    zip.start_file(files::PROJECT_JSON, deflated)?;
+    zip.write_all(serde_json::to_string_pretty(&meta)?.as_bytes())?;
+    zip.start_file(files::PROJECT_BIOMES, deflated)?;
+    zip.write_all(serde_json::to_string_pretty(&biomes_entries)?.as_bytes())?;
     zip.start_file(files::PROJECT_ROOMS, deflated)?;
     zip.write_all(serde_json::to_string_pretty(&rooms)?.as_bytes())?;
     zip.start_file(files::PROJECT_THUMB, stored)?;

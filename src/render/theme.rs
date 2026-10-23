@@ -16,11 +16,7 @@ pub const BUTTON_HOVER: Color32 = Color32::from_rgb(55, 55, 75);
 
 /// Map canvas fill for the current UI theme.
 pub fn background(dark: bool) -> Color32 {
-    if dark {
-        BACKGROUND
-    } else {
-        LIGHT_BACKGROUND
-    }
+    if dark { BACKGROUND } else { LIGHT_BACKGROUND }
 }
 
 /// Inner spacing of the buttons, popups and legends.

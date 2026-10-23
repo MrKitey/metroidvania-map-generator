@@ -2,34 +2,46 @@
 
 use super::MapData;
 use crate::biome::Entry;
+use crate::layer::SavedLayer;
 use crate::settings::Settings;
-use crate::world::{Door, Room};
 use serde::Serialize;
 use std::error::Error;
 
-/// Rooms and doors use cell coordinates. `biome` is an index into `biomes`, and the
-/// door ends `a` and `b` are indices into `rooms`.
 #[derive(Serialize)]
 struct MapFile<'a> {
     seed: u64,
     cells: u32,
     settings: &'a Settings,
     biomes: Vec<Entry>,
-    /// Indices into `biomes`, in placement order.
-    used_biomes: &'a [usize],
-    rooms: &'a [Room],
-    doors: &'a [Door],
+    active: usize,
+    layers: Vec<SavedLayer>,
 }
 
 pub fn render(map: &MapData) -> Result<String, Box<dyn Error>> {
+    let layers = if let Some(i) = map.only_layer {
+        map.layers
+            .to_saved()
+            .into_iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx == i)
+            .map(|(_, l)| l)
+            .collect()
+    } else {
+        map.layers
+            .to_saved()
+            .into_iter()
+            .zip(map.layers.layers())
+            .filter(|(_, live)| live.visible)
+            .map(|(saved, _)| saved)
+            .collect()
+    };
     let file = MapFile {
         seed: map.seed,
         cells: map.cells,
         settings: map.settings,
         biomes: map.biomes.iter().map(Entry::from).collect(),
-        used_biomes: &map.world.biomes,
-        rooms: &map.world.rooms,
-        doors: &map.world.doors,
+        active: map.only_layer.unwrap_or(map.layers.active()),
+        layers,
     };
     Ok(serde_json::to_string_pretty(&file)?)
 }

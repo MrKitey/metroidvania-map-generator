@@ -2,22 +2,20 @@
 
 use crate::icon_lib::{self, IconDef};
 use crate::icons::Icons;
-use crate::text::{editor as text, files, status};
+use crate::settings::{MAX_ICON_SIZE, MIN_ICON_SIZE, clamp_icon_size};
+use crate::text::{files, settings as text, status};
 use crate::world::World;
 use egui::{Color32, Sense};
 use std::path::PathBuf;
 
 pub struct IconsTab {
     status: String,
-    /// Index that should receive the next dropped image, if any.
-    drop_target: Option<usize>,
 }
 
 impl IconsTab {
     pub fn new() -> IconsTab {
         IconsTab {
             status: String::new(),
-            drop_target: None,
         }
     }
 
@@ -63,11 +61,8 @@ impl IconsTab {
                                 changed = true;
                             }
                             ui.label(text::BORDER);
-                            let mut rgb = [
-                                list[i].border.r(),
-                                list[i].border.g(),
-                                list[i].border.b(),
-                            ];
+                            let mut rgb =
+                                [list[i].border.r(), list[i].border.g(), list[i].border.b()];
                             if ui.color_edit_button_srgb(&mut rgb).changed() {
                                 list[i].border = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
                                 changed = true;
@@ -95,21 +90,19 @@ impl IconsTab {
                                 }
                             }
                         });
-
-                        let drop_zone = ui
-                            .add_sized(
-                                [ui.available_width(), 36.0],
-                                egui::Label::new(text::DROP_IMAGE).sense(Sense::hover()),
+                        if ui
+                            .add(
+                                egui::Slider::new(
+                                    &mut list[i].size,
+                                    MIN_ICON_SIZE..=MAX_ICON_SIZE,
+                                )
+                                .integer()
+                                .text(text::ICON_SIZE),
                             )
-                            .rect;
-                        if ui.rect_contains_pointer(drop_zone) {
-                            self.drop_target = Some(i);
-                            ui.painter().rect_stroke(
-                                drop_zone,
-                                4.0,
-                                egui::Stroke::new(1.0, Color32::LIGHT_GRAY),
-                                egui::StrokeKind::Inside,
-                            );
+                            .changed()
+                        {
+                            list[i].size = clamp_icon_size(list[i].size);
+                            changed = true;
                         }
 
                         if ui
@@ -171,11 +164,10 @@ impl IconsTab {
         let Some(path) = dropped.iter().find(|p| icon_lib::is_image_path(p)) else {
             return false;
         };
-        let target = self.drop_target.unwrap_or(list.len().saturating_sub(1));
         if list.is_empty() {
             list.push(icon_lib::new_blank(list));
         }
-        let idx = target.min(list.len() - 1);
+        let idx = list.len() - 1;
         match apply_image(&mut list[idx], path) {
             Ok(()) => {
                 icons.reload(&list[idx]);

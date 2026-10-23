@@ -131,13 +131,25 @@ fn each_used_biome_has_the_minimum_rooms() {
 }
 
 #[test]
+fn place_manual_on_empty_world_seeds_biome_zero() {
+    let mut world = World::default();
+    assert!(world.biomes.is_empty());
+    let idx = world
+        .place_manual((0, 0), (2, 2), RoomKind::Normal, None, None)
+        .unwrap();
+    assert_eq!(idx, 0);
+    assert_eq!(world.biomes, vec![0]);
+    assert_eq!(world.rooms[0].biome, 0);
+}
+
+#[test]
 fn manual_room_gets_a_door_to_its_neighbor() {
     let mut world = generate(768, 1);
-    let (_, _, max_x, _) = world.bounds();
+    let (_, _, max_x, _) = world.bounds_opt().unwrap();
     // Far from the map: no neighbor, no door.
     let doors = world.doors.len();
     assert!(world.can_place(max_x + 5, 0, 1, 1));
-    world.place_manual((max_x + 5, 0), (1, 1), RoomKind::Normal, None);
+    world.place_manual((max_x + 5, 0), (1, 1), RoomKind::Normal, None, None);
     assert_eq!(world.doors.len(), doors);
     // Against a room: at least one door.
     let spot = world
@@ -146,13 +158,13 @@ fn manual_room_gets_a_door_to_its_neighbor() {
         .map(|r| (r.x + r.w as i32, r.y))
         .find(|&(x, y)| world.can_place(x, y, 1, 1))
         .unwrap();
-    world.place_manual(spot, (1, 1), RoomKind::Normal, None);
+    world.place_manual(spot, (1, 1), RoomKind::Normal, None, None);
     assert!(world.doors.len() > doors);
     // Taken spot.
     assert!(!world.can_place(0, 0, 1, 1));
     assert!(
         world
-            .place_manual((0, 0), (1, 1), RoomKind::Normal, None)
+            .place_manual((0, 0), (1, 1), RoomKind::Normal, None, None)
             .is_none()
     );
 }
@@ -189,7 +201,7 @@ fn moving_a_room_rebuilds_its_doors() {
     let mut world = generate(768, 1);
     let idx = world.rooms.len() - 1;
     let (w, h) = (world.rooms[idx].w, world.rooms[idx].h);
-    let (_, _, max_x, _) = world.bounds();
+    let (_, _, max_x, _) = world.bounds_opt().unwrap();
     // Taken spot: nothing changes.
     let (ox, oy) = (world.rooms[idx].x, world.rooms[idx].y);
     let doors = world.doors.len();
@@ -210,12 +222,12 @@ fn moving_a_room_rebuilds_its_doors() {
 #[test]
 fn moving_rooms_together_keeps_one_door() {
     let mut world = generate(768, 1);
-    let (_, _, max_x, _) = world.bounds();
+    let (_, _, max_x, _) = world.bounds_opt().unwrap();
     let a = world
-        .place_manual((max_x + 5, 0), (2, 2), RoomKind::Normal, None)
+        .place_manual((max_x + 5, 0), (2, 2), RoomKind::Normal, None, None)
         .unwrap();
     let b = world
-        .place_manual((max_x + 7, 0), (2, 2), RoomKind::Normal, None)
+        .place_manual((max_x + 7, 0), (2, 2), RoomKind::Normal, None, None)
         .unwrap();
     let (ax, ay) = (world.rooms[a].x, world.rooms[a].y);
     let (bx, by) = (world.rooms[b].x, world.rooms[b].y);
@@ -322,16 +334,16 @@ fn removing_a_room_frees_its_cells_and_keeps_the_last_one() {
         let pair = [before, after];
         assert!(pair.contains(&Some(d.a)) && pair.contains(&Some(d.b)));
     }
-    while world.rooms.len() > 1 {
+    while !world.rooms.is_empty() {
         assert!(world.remove_room(0));
     }
     assert!(!world.remove_room(0));
-    assert_eq!(world.rooms.len(), 1);
+    assert!(world.rooms.is_empty());
     assert!(world.doors.is_empty());
 }
 
 #[test]
-fn remove_rooms_deletes_a_batch_and_keeps_one() {
+fn remove_rooms_deletes_a_batch() {
     let mut world = generate(768, 1);
     assert!(world.rooms.len() > 3);
     let before = world.rooms.len();
@@ -339,8 +351,8 @@ fn remove_rooms_deletes_a_batch_and_keeps_one() {
     assert_eq!(world.rooms.len(), before - 2);
     let len = world.rooms.len();
     let all: Vec<usize> = (0..len).collect();
-    assert_eq!(world.remove_rooms(&all), len - 1);
-    assert_eq!(world.rooms.len(), 1);
+    assert_eq!(world.remove_rooms(&all), len);
+    assert!(world.rooms.is_empty());
     assert_eq!(world.remove_rooms(&[0]), 0);
 }
 

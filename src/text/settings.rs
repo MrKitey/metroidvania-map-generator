@@ -1,10 +1,9 @@
-//! Labels and buttons of the editor panel. Room names come from `rooms`.
+//! Labels and buttons of the settings panel. Room names come from `rooms`.
 
 use std::fmt::Display;
 
-pub const WINDOW_TITLE: &str = "Editor";
-pub const TAB_SETTINGS: &str = "Settings";
-pub const TAB_SPECIAL_ROOM: &str = "Special Room";
+pub const WINDOW_TITLE: &str = "Settings";
+pub const TAB_SPECIAL_ROOM: &str = "Special rooms";
 
 pub const USE_SEED: &str = "Use seed";
 pub const GENERATE: &str = "Generate";
@@ -14,7 +13,6 @@ pub const DELETE: &str = "Delete";
 pub const ADD_SIZE: &str = "Add size";
 pub const RESET: &str = "Reset";
 pub const CHOOSE_FILE: &str = "Choose file";
-pub const DROP_IMAGE: &str = "Drop image here (png, jpg, svg)";
 
 pub const NAME: &str = "Name";
 pub const LABEL: &str = "Label";
@@ -30,6 +28,7 @@ pub const SCREEN_SIZE: &str = "Screen size (px)";
 pub const MAX_ROOMS_LABEL: &str = "Max rooms per biome (0 = no limit)";
 pub const AUTOSAVE: &str = "Autosave";
 pub const AUTOSAVE_DELAY: &str = "Autosave delay (s)";
+pub const ICON_SIZE: &str = "Size";
 
 pub fn min_rooms_label(max: impl Display) -> String {
     format!("Min rooms per biome (1 to {max})")

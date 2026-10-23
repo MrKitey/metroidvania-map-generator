@@ -1,6 +1,7 @@
-use super::file::{ProjectFile, read, read_meta, utc_now, write, write_with_version};
+use super::file::{ProjectFile, read, read_meta, utc_now, write, write_v2, write_with_version};
 use super::io::{self, file_name, forget, read_recent, remember};
 use crate::biome;
+use crate::layer::LayerStack;
 use crate::settings::Settings;
 use crate::text::{files, status};
 use crate::world::{Door, Marker, Room, RoomKind, World};
@@ -26,7 +27,7 @@ fn empty_thumb() -> Vec<u8> {
     ]
 }
 
-fn sample() -> (ProjectFile, World) {
+fn sample() -> (ProjectFile, LayerStack) {
     let world = World::from_parts(
         vec![Room {
             x: 0,
@@ -49,6 +50,7 @@ fn sample() -> (ProjectFile, World) {
         1,
     )
     .unwrap();
+    let layers = LayerStack::from_world(world);
     let biomes = biome::default_biomes();
     let file = ProjectFile::capture(
         "Castle",
@@ -58,20 +60,20 @@ fn sample() -> (ProjectFile, World) {
         "2024-01-02T03:04:05Z",
         &Settings::default(),
         &biomes,
-        &world,
+        &layers,
     );
-    (file, world)
+    (file, layers)
 }
 
 #[test]
 fn project_round_trip() {
     let dir = temp_dir("round");
-    let (file, world) = sample();
+    let (file, layers) = sample();
     let path = dir.join("castle.mmg");
     write(&path, &file, &empty_thumb()).unwrap();
 
     let meta = read_meta(&path).unwrap();
-    assert_eq!(meta["version"], 2);
+    assert_eq!(meta["version"], 3);
     assert_eq!(meta["name"], "Castle");
     assert_eq!(meta["created_at"], "2024-01-02T03:04:05Z");
     assert!(meta.get("modified_at").is_some());
@@ -82,7 +84,7 @@ fn project_round_trip() {
     for name in [
         files::PROJECT_JSON,
         files::PROJECT_BIOMES,
-        files::PROJECT_ROOMS,
+        files::PROJECT_LAYERS,
         files::PROJECT_THUMB,
     ] {
         assert!(zip.by_name(name).is_ok(), "missing {name}");
@@ -101,13 +103,55 @@ fn project_round_trip() {
     assert!(!loaded.grid);
     assert_eq!(loaded.created_at, "2024-01-02T03:04:05Z");
     assert!(!loaded.modified_at.is_empty());
-    assert_eq!(loaded.world.rooms, world.rooms);
-    assert_eq!(loaded.world.doors, world.doors);
-    assert_eq!(loaded.world.biomes, world.biomes);
-    assert_eq!(loaded.world.room_at(0, 0), Some(0));
-    assert_eq!(loaded.world.room_at(3, 3), None);
+    let world = layers.active_world();
+    assert_eq!(loaded.layers.active_world().rooms, world.rooms);
+    assert_eq!(loaded.layers.active_world().doors, world.doors);
+    assert_eq!(loaded.layers.active_world().biomes, world.biomes);
+    assert_eq!(loaded.layers.active_world().room_at(0, 0), Some(0));
+    assert_eq!(loaded.layers.active_world().room_at(3, 3), None);
     assert_eq!(loaded.settings.viewport, Settings::default().viewport);
     assert!(loaded.settings.autosave);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn v2_project_migrates_to_layer_stack() {
+    let dir = temp_dir("v2mig");
+    let world = World::from_parts(
+        vec![Room {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            biome: 0,
+            kind: RoomKind::Normal,
+            marker: None,
+            icon: None,
+        }],
+        vec![],
+        vec![0],
+        1,
+    )
+    .unwrap();
+    let biomes = biome::default_biomes();
+    let path = dir.join("old.mmg");
+    write_v2(
+        &path,
+        "Old",
+        9,
+        256,
+        true,
+        "2024-01-02T03:04:05Z",
+        &Settings::default(),
+        &biomes,
+        &world,
+        &empty_thumb(),
+    )
+    .unwrap();
+    let loaded = read(&path).unwrap();
+    assert_eq!(loaded.layers.len(), 1);
+    assert_eq!(loaded.layers.active_world().rooms.len(), 1);
+    assert_eq!(loaded.name, "Old");
     let _ = fs::remove_dir_all(&dir);
 }
 

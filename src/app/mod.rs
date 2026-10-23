@@ -3,20 +3,21 @@
 
 mod header;
 mod interact;
+mod layers_panel;
 mod map;
 mod session;
+mod tools_panel;
 
 use crate::biome::{self, Biome};
 use crate::biomes::BiomesTab;
-use crate::common::EditorAction;
-use crate::editor::{self, Editor};
+use crate::common::SettingsAction;
 use crate::icon_lib::{self, IconDef};
 use crate::icons::{self, Icons};
-use crate::layout::Layout;
+use crate::layer::LayerStack;
 use crate::platform::WaylandDrop;
 use crate::render::{self, COPIED_TIME};
 use crate::settings;
-use crate::text;
+use crate::settings_panel::{self, Settings};
 use crate::view::View;
 use crate::world::{Params, World, time_seed};
 use egui::{Key, TextureHandle, ViewportCommand};
@@ -33,7 +34,7 @@ const UNDO_LIMIT: usize = 50;
 
 /// Snapshot of the map and the values regen may change.
 pub(super) struct UndoEntry {
-    world: World,
+    layers: LayerStack,
     seed: u64,
     cells: u32,
     biomes: Vec<Biome>,
@@ -42,13 +43,13 @@ pub(super) struct UndoEntry {
 /// Pushes a snapshot. Drops the oldest entry past `UNDO_LIMIT`.
 pub(super) fn remember(
     undo: &mut Vec<UndoEntry>,
-    world: &World,
+    layers: &LayerStack,
     seed: u64,
     cells: u32,
     biomes: &[Biome],
 ) {
     undo.push(UndoEntry {
-        world: world.clone(),
+        layers: layers.clone(),
         seed,
         cells,
         biomes: biomes.to_vec(),
@@ -58,16 +59,16 @@ pub(super) fn remember(
     }
 }
 
-/// Builds a world from the biomes and the editor settings.
-fn build_world(cells: u32, seed: u64, biomes: &[Biome], editor: &Editor) -> World {
+/// Builds a world from the biomes and the settings.
+fn build_world(cells: u32, seed: u64, biomes: &[Biome], settings: &Settings) -> World {
     let extras: Vec<_> = biomes.iter().map(Biome::extras).collect();
     World::generate(&Params {
         cells,
         seed,
         extras: &extras,
-        min_rooms: editor.min_rooms(),
-        max_rooms: editor.max_rooms(),
-        sizes: &editor.sizes(),
+        min_rooms: settings.min_rooms(),
+        max_rooms: settings.max_rooms(),
+        sizes: &settings.sizes(),
     })
 }
 
@@ -76,8 +77,8 @@ pub struct App {
     seed: u64,
     biomes: Vec<Biome>,
     special: Vec<IconDef>,
-    editor: Editor,
-    world: World,
+    settings: Settings,
+    layers: LayerStack,
     view: View,
     icons: Icons,
     legend_icons: Icons,
@@ -86,12 +87,12 @@ pub struct App {
     /// Time of the last seed copy, used to show the "copied" feedback.
     copied_at: f64,
     help_open: bool,
-    /// Room list panel on the left.
-    rooms_open: bool,
-    /// Biomes panel.
-    biomes_open: bool,
+    /// Rooms, biomes, layers and special rooms.
+    tools: tools_panel::Tools,
     biomes_tab: BiomesTab,
     grid: bool,
+    /// Layer group fill, border and name labels on the map.
+    layer_frames: bool,
     session: Session,
     interact: Interaction,
     /// File drops on Wayland, where winit does not report them.
@@ -101,6 +102,8 @@ pub struct App {
     dark: bool,
     theme_sun: TextureHandle,
     theme_night: TextureHandle,
+    settings_icon: TextureHandle,
+    layer_icons: layers_panel::LayerIcons,
 }
 
 impl App {
@@ -110,8 +113,9 @@ impl App {
         let seed = time_seed();
         let biomes = biome::load();
         let special = icon_lib::load();
-        let editor = Editor::new(seed, &loaded);
-        let world = build_world(START_CELLS, seed, &biomes, &editor);
+        let settings = Settings::new(seed, &loaded);
+        let world = build_world(START_CELLS, seed, &biomes, &settings);
+        let layers = LayerStack::from_world(world);
         let mut icons = Icons::new();
         let mut legend_icons = Icons::new();
         icons.sync(&special);
@@ -130,23 +134,34 @@ impl App {
             icons::UI_ICON_PX,
         )
         .expect("night.svg");
+        let settings_svg = std::str::from_utf8(include_bytes!("../../assets/icons/settings.svg"))
+            .expect("utf8 settings.svg")
+            .replace("currentColor", "white");
+        let settings_icon = icons::texture_from_svg(
+            &cc.egui_ctx,
+            "hud-settings",
+            settings_svg.as_bytes(),
+            icons::UI_ICON_PX,
+        )
+        .expect("settings.svg");
+        let layer_icons = layers_panel::LayerIcons::load(&cc.egui_ctx);
         let mut app = App {
             cells: START_CELLS,
             seed,
             biomes,
             special,
-            editor,
-            world,
+            settings,
+            layers,
             view: View::new(),
             icons,
             legend_icons,
             fit: true,
             copied_at: f64::NEG_INFINITY,
             help_open: false,
-            rooms_open: false,
-            biomes_open: false,
+            tools: tools_panel::Tools::new(),
             biomes_tab: BiomesTab::new(),
             grid: true,
+            layer_frames: true,
             session: Session::new(seed.to_string()),
             interact: Interaction::new(),
             wayland_drop: WaylandDrop::start(&cc.egui_ctx, cc),
@@ -154,6 +169,8 @@ impl App {
             dark: loaded.dark,
             theme_sun,
             theme_night,
+            settings_icon,
+            layer_icons,
         };
         crate::project::register_mime();
         app.open_startup();
@@ -163,9 +180,9 @@ impl App {
     /// Flips the UI theme and writes it to settings.json.
     pub(super) fn toggle_theme(&mut self, ctx: &egui::Context) {
         self.dark = !self.dark;
-        self.editor.set_dark(self.dark);
+        self.settings.set_dark(self.dark);
         render::apply_theme(ctx, self.dark);
-        let _ = settings::save(&self.editor.settings());
+        let _ = settings::save(&self.settings.settings());
     }
 
     /// Keeps a project name that is still the previous seed in step with the new one.
@@ -179,7 +196,7 @@ impl App {
     fn push_undo(&mut self) {
         remember(
             &mut self.undo,
-            &self.world,
+            &self.layers,
             self.seed,
             self.cells,
             &self.biomes,
@@ -190,28 +207,35 @@ impl App {
         let Some(prev) = self.undo.pop() else {
             return;
         };
-        self.world = prev.world;
+        self.layers = prev.layers;
         self.cells = prev.cells;
         self.biomes = prev.biomes;
         self.change_seed(prev.seed);
-        self.editor.set_seed(prev.seed);
+        self.settings.set_seed(prev.seed);
         self.interact.clear();
     }
 
-    /// Rebuilds the map from the current seed, cells and biomes.
+    /// Rebuilds the active layer from the current seed, cells and biomes.
     fn regen(&mut self) {
-        self.editor.set_seed(self.seed);
-        self.world = build_world(self.cells, self.seed, &self.biomes, &self.editor);
+        if self.layers.is_active_locked() {
+            return;
+        }
+        self.settings.set_seed(self.seed);
+        *self.layers.active_world_mut() =
+            build_world(self.cells, self.seed, &self.biomes, &self.settings);
         self.interact.clear();
         self.fit = true;
     }
 
-    fn apply_action(&mut self, action: EditorAction) {
+    fn apply_action(&mut self, action: SettingsAction) {
+        if self.layers.is_active_locked() {
+            return;
+        }
         // Snapshot before the seed changes, so undo restores the previous one.
         self.push_undo();
         match action {
-            EditorAction::UseSeed(seed) => self.change_seed(seed),
-            EditorAction::Regenerate => self.change_seed(time_seed()),
+            SettingsAction::UseSeed(seed) => self.change_seed(seed),
+            SettingsAction::Regenerate => self.change_seed(time_seed()),
         }
         self.regen();
     }
@@ -227,13 +251,15 @@ impl App {
         }
 
         if ctx.input(|i| i.key_pressed(Key::Tab)) {
-            self.editor.open = !self.editor.open;
+            self.settings.open = !self.settings.open;
         }
         if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::L)) {
-            self.rooms_open = !self.rooms_open;
+            self.tools.open = true;
+            self.tools.tab = tools_panel::ToolsTab::Rooms;
         }
         if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::M)) {
-            self.biomes_open = !self.biomes_open;
+            self.tools.open = true;
+            self.tools.tab = tools_panel::ToolsTab::Biomes;
         }
 
         let mut escape = ctx.input(|i| i.key_pressed(Key::Escape));
@@ -253,11 +279,15 @@ impl App {
             self.help_open = false;
             escape = false;
         }
+        if escape && self.tools.open {
+            self.tools.open = false;
+            escape = false;
+        }
         if escape && self.interact.cancel() {
             escape = false;
         }
 
-        if self.editor.open {
+        if self.settings.open {
             return;
         }
         if escape {
@@ -271,6 +301,9 @@ impl App {
         if ctx.input(|i| i.key_pressed(Key::G)) {
             self.grid = !self.grid;
         }
+        if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::F)) {
+            self.layer_frames = !self.layer_frames;
+        }
     }
 }
 
@@ -281,62 +314,23 @@ impl eframe::App for App {
         self.session.take_pending(now);
         self.handle_keys(&ctx, now);
 
-        if self.editor.open {
-            let mut action = None;
-            egui::Panel::right("editor")
-                .default_size(editor::PANEL_W)
+        let mut picker = None;
+        if self.tools.open {
+            egui::Panel::left("tools")
+                .default_size(settings_panel::PANEL_W)
                 .min_size(280.0)
                 .show(ui, |ui| {
-                    action = self.editor.draw(
-                        ui,
-                        &mut self.special,
-                        &mut self.world,
-                        &mut self.icons,
-                        &mut self.legend_icons,
-                    );
+                    picker = self.draw_tools_body(ui);
                 });
-            if let Some(action) = action {
-                self.apply_action(action);
-            }
         }
 
-        let mut room_list = None;
-        if self.rooms_open {
-            let sizes = self.editor.sizes();
-            let layout = Layout::new(self.editor.viewport());
-            let mut started = None;
-            let mut sizes_changed = false;
-            egui::Panel::left("rooms")
-                .default_size(editor::PANEL_W)
-                .min_size(280.0)
-                .show(ui, |ui| {
-                    ui.heading(text::rooms::ROOMS);
-                    ui.separator();
-                    let (rooms, bosses, corridors) = self.editor.size_lists_mut();
-                    let (picker, drag, changed) =
-                        render::draw_room_list(ui, &sizes, &layout, rooms, bosses, corridors);
-                    sizes_changed = changed;
-                    started = drag;
-                    room_list = Some(picker);
-                });
-            if sizes_changed {
-                self.editor.save_settings();
-            }
-            if let Some((choice, size)) = started {
-                self.interact.placing = Some(choice);
-                self.interact.placing_size = size;
-            }
-        }
-
-        if self.biomes_open {
+        if self.settings.open {
             let mut action = None;
-            egui::Panel::right("biomes")
-                .default_size(editor::PANEL_W)
+            egui::Panel::right("settings")
+                .default_size(settings_panel::PANEL_W)
                 .min_size(280.0)
                 .show(ui, |ui| {
-                    ui.heading(text::hud::BIOMES);
-                    ui.separator();
-                    action = self.biomes_tab.draw(ui, &mut self.biomes, &mut self.world);
+                    action = self.settings.draw(ui);
                 });
             if let Some(action) = action {
                 self.apply_action(action);
@@ -354,12 +348,14 @@ impl eframe::App for App {
         if self.help_open {
             render::draw_help(&ctx, &mut self.help_open);
         }
-
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(render::background(self.dark)))
             .show(ui, |ui| {
-                self.draw_map_panel(ui, now, room_list.as_ref());
+                self.draw_map_panel(ui, now, picker.as_ref());
             });
+        if let Some(notice) = self.session.notice_text(now) {
+            render::draw_notice(&ctx, &notice, self.dark);
+        }
 
         self.handle_dropped(&ctx, now);
         let wayland_paths = self

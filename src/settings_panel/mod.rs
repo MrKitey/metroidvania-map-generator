@@ -1,27 +1,21 @@
-//! Side panel to edit generation settings and special-room icons.
+//! Side panel to edit generation settings. Special rooms live in the Tools panel.
 
 mod fields;
 mod icons_tab;
 mod settings_tab;
 mod widgets;
 
-use crate::common::EditorAction;
-use crate::icon_lib::IconDef;
-use crate::icons::Icons;
-use crate::settings::{self, Settings};
+use crate::common::SettingsAction;
+use crate::settings::{self, Settings as Saved};
 use crate::text::{self, status};
-use crate::world::{Sizes, World};
+use crate::world::Sizes;
 use fields::Fields;
 pub use fields::{MAX_ROOM_SIDE, SizeFields};
 pub use icons_tab::IconsTab;
 pub use widgets::{PANEL_W, size_list};
 
-const TAB_SETTINGS: usize = 0;
-const TAB_SPECIAL: usize = 1;
-
-pub struct Editor {
+pub struct Settings {
     pub open: bool,
-    tab: usize,
     fields: Fields,
     /// Shows the current seed, can be edited and applied with "Use seed".
     seed: String,
@@ -30,20 +24,15 @@ pub struct Editor {
     pub icons_tab: IconsTab,
 }
 
-impl Editor {
-    pub fn new(seed: u64, settings: &Settings) -> Editor {
-        Editor {
+impl Settings {
+    pub fn new(seed: u64, saved: &Saved) -> Settings {
+        Settings {
             open: false,
-            tab: TAB_SETTINGS,
-            fields: Fields::new(settings),
+            fields: Fields::new(saved),
             seed: seed.to_string(),
             status: String::new(),
             icons_tab: IconsTab::new(),
         }
-    }
-
-    pub fn special_tab_open(&self) -> bool {
-        self.open && self.tab == TAB_SPECIAL
     }
 
     /// Normal rooms per biome, at least 1.
@@ -89,7 +78,7 @@ impl Editor {
     }
 
     /// Current field values, validated, in the format saved to disk.
-    pub fn settings(&self) -> Settings {
+    pub fn settings(&self) -> Saved {
         self.fields.settings()
     }
 
@@ -99,46 +88,25 @@ impl Editor {
     }
 
     /// Replaces the generation fields after a project load. The panel stays as it was.
-    /// Keeps the current UI theme, which is not part of a project file.
-    pub fn apply_loaded(&mut self, seed: u64, settings: &Settings) {
+    /// Keeps the theme, which is not part of a project file.
+    pub fn apply_loaded(&mut self, seed: u64, saved: &Saved) {
         let dark = self.fields.dark;
-        self.fields = Fields::new(settings);
+        self.fields = Fields::new(saved);
         self.fields.dark = dark;
         self.set_seed(seed);
     }
 
     /// Draws the panel and returns what the user asked for, if anything.
-    pub fn draw(
-        &mut self,
-        ui: &mut egui::Ui,
-        special: &mut Vec<IconDef>,
-        world: &mut World,
-        icons: &mut Icons,
-        legend_icons: &mut Icons,
-    ) -> Option<EditorAction> {
-        ui.heading(text::editor::WINDOW_TITLE);
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.tab, TAB_SETTINGS, text::editor::TAB_SETTINGS);
-            ui.selectable_value(
-                &mut self.tab,
-                TAB_SPECIAL,
-                text::editor::TAB_SPECIAL_ROOM,
-            );
-        });
+    pub fn draw(&mut self, ui: &mut egui::Ui) -> Option<SettingsAction> {
+        ui.add_space(8.0);
+        ui.heading(text::settings::WINDOW_TITLE);
         ui.separator();
 
         let mut action = None;
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
-            .show(ui, |ui| match self.tab {
-                TAB_SPECIAL => {
-                    self.icons_tab
-                        .draw(ui, special, world, icons, legend_icons);
-                }
-                _ => {
-                    action =
-                        settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status);
-                }
+            .show(ui, |ui| {
+                action = settings_tab::draw(ui, &mut self.fields, &mut self.seed, &mut self.status);
             });
         action
     }

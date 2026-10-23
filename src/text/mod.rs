@@ -6,9 +6,9 @@
 
 pub mod app;
 pub mod biomes;
-pub mod editor;
 pub mod files;
 pub mod hud;
 pub mod icons;
 pub mod rooms;
+pub mod settings;
 pub mod status;

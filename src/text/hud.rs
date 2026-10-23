@@ -13,18 +13,19 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Drag from Rooms", "Place a room"),
     ("Left drag empty", "Select rooms"),
     ("Left drag", "Move room or group"),
-    ("Click biome", "Select its rooms"),
+    ("Click biome", "Biome paint brush"),
     ("Del / Backspace", "Delete room(s)"),
     ("Drag legend icon", "Set room type"),
     ("C", "Recenter"),
     ("G", "Grid"),
+    ("F", "Layer frames"),
     ("B", "Boss room"),
     ("S", "Save room"),
     ("H", "Secret room"),
     ("P", "Portal room"),
-    ("L", "Rooms"),
-    ("M", "Biomes"),
-    ("Tab", "Editor"),
+    ("L", "Tools: Rooms"),
+    ("M", "Tools: Biomes"),
+    ("Tab", "Settings"),
     ("Esc", "Quit"),
 ];
 /// Glyph on the shortcuts button.
@@ -33,8 +34,10 @@ pub const HELP_BUTTON: &str = "?";
 pub const THEME_TO_LIGHT: &str = "Light mode";
 /// Hover text when the UI is light: click to go dark.
 pub const THEME_TO_DARK: &str = "Dark mode";
-/// Label of the editor button.
-pub const EDITOR: &str = "Editor";
+/// Label of the settings button.
+pub const SETTINGS: &str = "Settings";
+/// Label of the tools button and panel.
+pub const TOOLS: &str = "Tools";
 /// Label of the regenerate-map button.
 pub const REGENERATE: &str = "Regenerate Map";
 /// Label of the export button.
@@ -44,6 +47,16 @@ pub const LOAD: &str = "Load";
 pub const RECENT: &str = "Recent";
 pub const SAVE: &str = "Save";
 pub const BIOMES: &str = "Biomes";
+pub const LAYERS: &str = "Layers";
+pub const LAYER_FRAMES: &str = "Frames";
+pub const LAYER_ADD: &str = "+ Add layer";
+pub const LAYER_VISIBILITY: &str = "Visibility";
+pub const LAYER_LOCK: &str = "Lock";
+pub const LAYER_DUPLICATE: &str = "Duplicate";
+pub const LAYER_DELETE: &str = "Delete";
+pub const LAYER_SET_ACTIVE: &str = "Set active";
+pub const LAYER_DELETE_TITLE: &str = "Delete layer";
+pub const LAYER_DELETE_CONFIRM: &str = "This layer has rooms. Delete it anyway?";
 /// Shown when the recent list has no path.
 pub const NO_RECENT: &str = "None";
 

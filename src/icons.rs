@@ -30,10 +30,7 @@ pub fn room_icon_ids(r: &Room) -> Vec<String> {
         Some(Marker::Save) => Some(ids::SAVE),
         None => None,
     };
-    kind.into_iter()
-        .chain(marker)
-        .map(str::to_owned)
-        .collect()
+    kind.into_iter().chain(marker).map(str::to_owned).collect()
 }
 
 enum Source {
