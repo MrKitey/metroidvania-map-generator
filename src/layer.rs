@@ -183,9 +183,6 @@ impl LayerStack {
         layer.world = src.world.clone();
         let insert_at = idx + 1;
         self.layers.insert(insert_at, layer);
-        if self.active > idx {
-            self.active += 1;
-        }
         self.active = insert_at;
         Some(insert_at)
     }

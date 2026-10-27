@@ -37,7 +37,7 @@ pub fn room_icon_ids(r: &Room) -> impl Iterator<Item = &str> {
 }
 
 enum Source {
-    Svg(usvg::Tree),
+    Svg(Box<usvg::Tree>),
     Raster(image::RgbaImage),
 }
 
@@ -56,7 +56,7 @@ impl Icon {
             .to_ascii_lowercase();
         let source = if ext == "svg" {
             let tree = usvg::Tree::from_data(bytes, &usvg::Options::default()).ok()?;
-            Source::Svg(tree)
+            Source::Svg(Box::new(tree))
         } else {
             Source::Raster(image::load_from_memory(bytes).ok()?.to_rgba8())
         };

@@ -1,7 +1,7 @@
 //! Map panel: camera, pointer for this frame, and the draw call.
 
-use super::App;
 use super::interact::Pointer;
+use super::{App, History};
 use crate::layout::Layout;
 use crate::render::{self, Frame, Hud, Picker, RoomLegend};
 use egui::{PointerButton, Pos2, Sense};
@@ -40,6 +40,12 @@ impl App {
         let copied = now - self.copied_at < render::COPIED_TIME;
         let hud = Hud::new(&ctx, self.seed, copied, self.layers.room_count(), map_rect);
         let legend = RoomLegend::new(&ctx, &self.biomes, &self.special, map_rect);
+        let mut history = History {
+            undo: &mut self.undo,
+            seed: self.seed,
+            cells: self.cells,
+            biomes: &self.biomes,
+        };
         let mut pointer = Pointer {
             pos: pointer_pos,
             left: ctx.input(|i| i.pointer.button_pressed(PointerButton::Primary)),
@@ -83,102 +89,57 @@ impl App {
             &mut pointer,
             &layout,
             map_rect,
-            &mut self.undo,
-            self.seed,
-            self.cells,
-            &self.biomes,
+            &mut history,
         );
-        if ghost.is_none() {
-            if let Some(choice) = self.interact.placing {
-                render::draw_drag_outline(&ctx, choice, self.interact.placing_size);
-            }
+        if ghost.is_none()
+            && let Some(choice) = self.interact.placing
+        {
+            render::draw_drag_outline(&ctx, choice, self.interact.placing_size);
         }
 
+        // Cell under the cursor: hover target, and where dragged rooms are anchored.
+        let cell = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
         let mut hovered =
             if pointer.on_map() && !pointer.consumed && self.interact.placing.is_none() {
-                let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
-                self.layers.room_at(x, y)
+                self.layers.room_at(cell.0, cell.1)
             } else {
                 None
             };
         // A text field typing a letter or Backspace must not edit the room under the cursor.
         let blocked = self.settings.open || self.session.renaming || ctx.text_edit_focused();
         if let Some(hit) = hovered {
-            self.interact.room_shortcuts(
-                &ctx,
-                &mut self.layers,
-                blocked,
-                hit,
-                &mut self.undo,
-                self.seed,
-                self.cells,
-                &self.biomes,
-            );
+            self.interact
+                .room_shortcuts(&ctx, &mut self.layers, blocked, hit, &mut history);
         }
-        if self.interact.delete_shortcut(
-            &ctx,
-            &mut self.layers,
-            blocked,
-            hovered,
-            &mut self.undo,
-            self.seed,
-            self.cells,
-            &self.biomes,
-        ) > 0
+        if self
+            .interact
+            .delete_shortcut(&ctx, &mut self.layers, blocked, hovered, &mut history)
+            > 0
             && pointer.on_map()
             && !pointer.consumed
             && self.interact.placing.is_none()
         {
-            let (x, y) = layout.cell_at(self.view.screen_to_world(pointer.pos, map_rect));
-            hovered = self.layers.room_at(x, y);
+            hovered = self.layers.room_at(cell.0, cell.1);
         }
-        self.interact.update_biome_paint(
-            &pointer,
-            hovered,
-            &mut self.layers,
-            &mut self.undo,
-            self.seed,
-            self.cells,
-            &self.biomes,
-        );
+        self.interact
+            .update_biome_paint(&pointer, hovered, &mut self.layers, &mut history);
         self.interact
             .update_selection(&pointer, &self.view, &self.layers, &layout, map_rect);
-        let mut move_ghosts = self.interact.update_layer_moving(
-            &pointer,
-            &mut self.layers,
-            &self.view,
-            &layout,
-            map_rect,
-            &mut self.undo,
-            self.seed,
-            self.cells,
-            &self.biomes,
-        );
+        let mut move_ghosts =
+            self.interact
+                .update_layer_moving(&pointer, &mut self.layers, cell, &mut history);
         if move_ghosts.is_empty() {
             move_ghosts = self.interact.update_moving(
                 &pointer,
                 hovered,
                 &mut self.layers,
-                &self.view,
-                &layout,
-                map_rect,
-                &mut self.undo,
-                self.seed,
-                self.cells,
-                &self.biomes,
+                cell,
+                &mut history,
             );
         }
         let select_rect = self.interact.select_rect(pointer.pos);
-        self.interact.update_icon_drag(
-            &pointer,
-            &legend,
-            &mut self.layers,
-            hovered,
-            &mut self.undo,
-            self.seed,
-            self.cells,
-            &self.biomes,
-        );
+        self.interact
+            .update_icon_drag(&pointer, &legend, &mut self.layers, hovered, &mut history);
         self.interact
             .update_cursor(&ctx, &pointer, rooms, ghost.as_ref(), &move_ghosts, hovered);
 

@@ -6,7 +6,7 @@ use crate::settings::{MAX_ICON_SIZE, MIN_ICON_SIZE, clamp_icon_size};
 use crate::text::{files, settings as text, status};
 use crate::world::World;
 use egui::{Color32, Sense};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct IconsTab {
     status: String,
@@ -183,7 +183,7 @@ impl IconsTab {
     }
 }
 
-fn apply_image(def: &mut IconDef, src: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn apply_image(def: &mut IconDef, src: &Path) -> Result<(), Box<dyn std::error::Error>> {
     def.file = icon_lib::import_file(&def.id, src)?;
     Ok(())
 }

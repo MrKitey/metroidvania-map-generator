@@ -358,19 +358,18 @@ impl super::App {
         if dropped.is_empty() {
             return;
         }
-        if self.tools.special_open() {
-            let paths: Vec<_> = dropped.iter().cloned().collect();
-            if self.settings.icons_tab.handle_drops(
-                &paths,
+        if self.tools.special_open()
+            && self.settings.icons_tab.handle_drops(
+                &dropped,
                 &mut self.special,
                 &mut self.icons,
                 &mut self.legend_icons,
-            ) {
-                if let Some(msg) = self.settings.icons_tab.take_status() {
-                    self.session.set_notice(msg, now);
-                }
-                return;
+            )
+        {
+            if let Some(msg) = self.settings.icons_tab.take_status() {
+                self.session.set_notice(msg, now);
             }
+            return;
         }
         let Some(path) = dropped.into_iter().find(|path| project::is_mmg(path)) else {
             self.session.set_notice(status::NOT_MMG.to_owned(), now);

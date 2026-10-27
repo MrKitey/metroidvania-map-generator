@@ -27,6 +27,8 @@ pub struct MapView<'a> {
     pub hovered: Option<usize>,
     /// Rooms kept highlighted after a selection rectangle, sorted.
     pub selected: &'a [usize],
+    /// Layer opacity multiplier, 0..=1.
+    pub opacity: f32,
 }
 
 /// Border and door thickness, in world units.
@@ -160,9 +162,9 @@ pub fn draw_map_opacity(
     layout: &Layout,
     map_view: &MapView,
     icons: &mut Icons,
-    opacity: f32,
 ) {
     let (view, map, scale) = (map_view.view, map_view.map, map_view.scale);
+    let opacity = map_view.opacity;
     let t = line_thickness(layout) * scale;
     let shown = |rect: Rect| map_view.visible.is_none_or(|v| v.intersects(rect));
     let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));

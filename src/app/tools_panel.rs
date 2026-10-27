@@ -81,13 +81,16 @@ impl App {
                 None
             }
             ToolsTab::Layers => {
+                let mut history = super::History {
+                    undo: &mut self.undo,
+                    seed: self.seed,
+                    cells: self.cells,
+                    biomes: &self.biomes,
+                };
                 let action = super::layers_panel::draw_layers(
                     ui,
                     &mut self.layers,
-                    &mut self.undo,
-                    self.seed,
-                    self.cells,
-                    &self.biomes,
+                    &mut history,
                     &self.layer_icons,
                 );
                 if action.changed {

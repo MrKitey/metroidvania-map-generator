@@ -1,7 +1,6 @@
 //! Layers tab: CRUD, reorder, visibility, lock, opacity.
 
-use super::{UndoEntry, remember};
-use crate::biome::Biome;
+use super::History;
 use crate::icons::{self, UI_ICON_PX};
 use crate::layer::LayerStack;
 use crate::text::hud as t;
@@ -88,10 +87,7 @@ pub struct LayersAction {
 pub fn draw_layers(
     ui: &mut Ui,
     layers: &mut LayerStack,
-    undo: &mut Vec<UndoEntry>,
-    seed: u64,
-    cells: u32,
-    biomes: &[Biome],
+    history: &mut History,
     icons: &LayerIcons,
 ) -> LayersAction {
     let mut action = LayersAction { changed: false };
@@ -225,12 +221,12 @@ pub fn draw_layers(
         }
 
         if let Some((from, to)) = reorder {
-            remember(undo, layers, seed, cells, biomes);
+            history.remember(layers);
             layers.reorder(from, to);
             action.changed = true;
         }
         if let Some(idx) = to_duplicate {
-            remember(undo, layers, seed, cells, biomes);
+            history.remember(layers);
             layers.duplicate(idx);
             action.changed = true;
         }
@@ -243,16 +239,16 @@ pub fn draw_layers(
             if has_rooms {
                 delete_confirm = Some(idx);
             } else {
-                remember(undo, layers, seed, cells, biomes);
+                history.remember(layers);
                 if layers.remove(idx) {
                     action.changed = true;
                 } else {
-                    undo.pop();
+                    history.forget();
                 }
             }
         }
         if add {
-            remember(undo, layers, seed, cells, biomes);
+            history.remember(layers);
             layers.add_empty();
             action.changed = true;
         }
@@ -266,11 +262,11 @@ pub fn draw_layers(
             .show()
             == rfd::MessageDialogResult::Yes;
         if confirmed {
-            remember(undo, layers, seed, cells, biomes);
+            history.remember(layers);
             if layers.remove(idx) {
                 action.changed = true;
             } else {
-                undo.pop();
+                history.forget();
             }
         }
     }

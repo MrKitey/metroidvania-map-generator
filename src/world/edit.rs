@@ -173,6 +173,7 @@ impl World {
     }
 
     /// True if room `idx` can have its top-left cell at (x, y). Its own cells count as free.
+    #[cfg(test)]
     pub fn can_move(&self, idx: usize, x: i32, y: i32) -> bool {
         self.can_move_rooms(&[(idx, x, y)])
     }
@@ -211,6 +212,7 @@ impl World {
     /// gets one door per touching room like `place_manual`, and the biome of the first
     /// touching room. With no neighbor it keeps its biome. Its kind is kept.
     /// Returns false, and changes nothing, if the spot is taken.
+    #[cfg(test)]
     pub fn move_room(&mut self, idx: usize, x: i32, y: i32) -> bool {
         self.move_rooms(&[(idx, x, y)])
     }
@@ -284,10 +286,8 @@ impl World {
         if removed == 0 {
             return 0;
         }
-        let mut next = 0;
-        for slot in remap.iter_mut().flatten() {
-            *slot = next;
-            next += 1;
+        for (slot, n) in remap.iter_mut().flatten().zip(0..) {
+            *slot = n;
         }
         let mut i = 0;
         self.rooms.retain(|_| {

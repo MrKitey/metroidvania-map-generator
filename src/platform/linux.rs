@@ -296,11 +296,7 @@ impl Dispatch<WlDataDevice, ()> for DropState {
                     drag.offer.destroy();
                 }
             }
-            wl_data_device::Event::Selection { id } => {
-                if let Some(offer) = id {
-                    offer.destroy();
-                }
-            }
+            wl_data_device::Event::Selection { id: Some(offer) } => offer.destroy(),
             _ => {}
         }
     }

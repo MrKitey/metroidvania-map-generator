@@ -24,6 +24,7 @@ use egui::{Key, TextureHandle, ViewportCommand};
 use header::HEADER_H;
 use interact::Interaction;
 use session::Session;
+use std::collections::VecDeque;
 use std::time::Duration;
 
 /// Map size limits, as a number of room cells.
@@ -40,22 +41,31 @@ pub(super) struct UndoEntry {
     biomes: Vec<Biome>,
 }
 
-/// Pushes a snapshot. Drops the oldest entry past `UNDO_LIMIT`.
-pub(super) fn remember(
-    undo: &mut Vec<UndoEntry>,
-    layers: &LayerStack,
+/// Undo stack, with the values a snapshot needs besides the layers.
+pub(super) struct History<'a> {
+    undo: &'a mut VecDeque<UndoEntry>,
     seed: u64,
     cells: u32,
-    biomes: &[Biome],
-) {
-    undo.push(UndoEntry {
-        layers: layers.clone(),
-        seed,
-        cells,
-        biomes: biomes.to_vec(),
-    });
-    if undo.len() > UNDO_LIMIT {
-        undo.remove(0);
+    biomes: &'a [Biome],
+}
+
+impl History<'_> {
+    /// Pushes a snapshot. Drops the oldest entry past `UNDO_LIMIT`.
+    pub(super) fn remember(&mut self, layers: &LayerStack) {
+        self.undo.push_back(UndoEntry {
+            layers: layers.clone(),
+            seed: self.seed,
+            cells: self.cells,
+            biomes: self.biomes.to_vec(),
+        });
+        if self.undo.len() > UNDO_LIMIT {
+            self.undo.pop_front();
+        }
+    }
+
+    /// Drops the last snapshot, after an edit that changed nothing.
+    pub(super) fn forget(&mut self) {
+        self.undo.pop_back();
     }
 }
 
@@ -97,7 +107,7 @@ pub struct App {
     interact: Interaction,
     /// File drops on Wayland, where winit does not report them.
     wayland_drop: Option<WaylandDrop>,
-    undo: Vec<UndoEntry>,
+    undo: VecDeque<UndoEntry>,
     /// Dark UI theme when true.
     dark: bool,
     theme_sun: TextureHandle,
@@ -165,7 +175,7 @@ impl App {
             session: Session::new(seed.to_string()),
             interact: Interaction::new(),
             wayland_drop: WaylandDrop::start(&cc.egui_ctx, cc),
-            undo: Vec::new(),
+            undo: VecDeque::new(),
             dark: loaded.dark,
             theme_sun,
             theme_night,
@@ -194,17 +204,17 @@ impl App {
     }
 
     fn push_undo(&mut self) {
-        remember(
-            &mut self.undo,
-            &self.layers,
-            self.seed,
-            self.cells,
-            &self.biomes,
-        );
+        History {
+            undo: &mut self.undo,
+            seed: self.seed,
+            cells: self.cells,
+            biomes: &self.biomes,
+        }
+        .remember(&self.layers);
     }
 
     fn undo_edit(&mut self) {
-        let Some(prev) = self.undo.pop() else {
+        let Some(prev) = self.undo.pop_back() else {
             return;
         };
         self.layers = prev.layers;

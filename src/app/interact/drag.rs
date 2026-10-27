@@ -1,14 +1,11 @@
 //! Dragging placed rooms, whole layers, and the cursor that follows the gesture.
 
-use super::super::{UndoEntry, remember};
+use super::super::History;
 use super::{Interaction, Moving, Pointer};
-use crate::biome::Biome;
 use crate::layer::LayerStack;
-use crate::layout::Layout;
 use crate::render::{Ghost, Picker};
-use crate::view::View;
 use crate::world::{Choice, Pick};
-use egui::{Context, CursorIcon, Rect};
+use egui::{Context, CursorIcon};
 
 impl Interaction {
     /// Drags placed rooms with the left button. A selected room drags the whole
@@ -20,18 +17,12 @@ impl Interaction {
         p: &Pointer,
         hovered: Option<(usize, usize)>,
         layers: &mut LayerStack,
-        view: &View,
-        layout: &Layout,
-        map: Rect,
-        undo: &mut Vec<UndoEntry>,
-        seed: u64,
-        cells: u32,
-        biomes: &[Biome],
+        cell: (i32, i32),
+        history: &mut History,
     ) -> Vec<Ghost> {
         if self.moving_layer.is_some() {
             return Vec::new();
         }
-        let cell = layout.cell_at(view.screen_to_world(p.pos, map));
         let Some(m) = &self.moving else {
             if self.paint_biome.is_some() {
                 return Vec::new();
@@ -76,49 +67,11 @@ impl Interaction {
             self.moving = None;
             return Vec::new();
         }
-        let world = layers.active_world();
-        if p.left_down {
-            let free = match moves.as_slice() {
-                [(idx, x, y)] => world.can_move(*idx, *x, *y),
-                _ => world.can_move_rooms(&moves),
-            };
-            return moves
-                .into_iter()
-                .map(|(idx, x, y)| {
-                    let r = &world.rooms[idx];
-                    Ghost {
-                        x,
-                        y,
-                        choice: Choice {
-                            pick: Pick::Room,
-                            w: r.w,
-                            h: r.h,
-                        },
-                        free,
-                    }
-                })
-                .collect();
-        }
-        if p.on_map() && delta != (0, 0) {
-            let free = match moves.as_slice() {
-                [(idx, x, y)] => world.can_move(*idx, *x, *y),
-                _ => world.can_move_rooms(&moves),
-            };
-            if free {
-                remember(undo, layers, seed, cells, biomes);
-                let world = layers.active_world_mut();
-                match moves.as_slice() {
-                    [(idx, x, y)] => {
-                        world.move_room(*idx, *x, *y);
-                    }
-                    _ => {
-                        world.move_rooms(&moves);
-                    }
-                }
-            }
-        }
-        self.moving = None;
-        Vec::new()
+        let active = layers.active();
+        drag_rooms(p, layers, active, &moves, delta, history).unwrap_or_else(|| {
+            self.moving = None;
+            Vec::new()
+        })
     }
 
     /// Drags every room of a layer when the name label was grabbed.
@@ -126,15 +79,9 @@ impl Interaction {
         &mut self,
         p: &Pointer,
         layers: &mut LayerStack,
-        view: &View,
-        layout: &Layout,
-        map: Rect,
-        undo: &mut Vec<UndoEntry>,
-        seed: u64,
-        cells: u32,
-        biomes: &[Biome],
+        cell: (i32, i32),
+        history: &mut History,
     ) -> Vec<Ghost> {
-        let cell = layout.cell_at(view.screen_to_world(p.pos, map));
         let Some(m) = &self.moving_layer else {
             return Vec::new();
         };
@@ -152,35 +99,10 @@ impl Interaction {
             self.moving_layer = None;
             return Vec::new();
         }
-        let world = &layers.layers()[layer_idx].world;
-        if p.left_down {
-            let free = world.can_move_rooms(&moves);
-            return moves
-                .into_iter()
-                .map(|(idx, x, y)| {
-                    let r = &world.rooms[idx];
-                    Ghost {
-                        x,
-                        y,
-                        choice: Choice {
-                            pick: Pick::Room,
-                            w: r.w,
-                            h: r.h,
-                        },
-                        free,
-                    }
-                })
-                .collect();
-        }
-        if p.on_map() && delta != (0, 0) {
-            let free = world.can_move_rooms(&moves);
-            if free {
-                remember(undo, layers, seed, cells, biomes);
-                layers.layers_mut()[layer_idx].world.move_rooms(&moves);
-            }
-        }
-        self.moving_layer = None;
-        Vec::new()
+        drag_rooms(p, layers, layer_idx, &moves, delta, history).unwrap_or_else(|| {
+            self.moving_layer = None;
+            Vec::new()
+        })
     }
 
     pub(in super::super) fn update_cursor(
@@ -218,9 +140,10 @@ impl Interaction {
             }
         } else if self.panning {
             CursorIcon::Move
-        } else if picker.is_some_and(|ui| ui.items.iter().any(|(_, r)| r.contains(p.pos))) {
-            CursorIcon::PointingHand
-        } else if p.over_seed || p.over_legend {
+        } else if p.over_seed
+            || p.over_legend
+            || picker.is_some_and(|ui| ui.items.iter().any(|(_, r)| r.contains(p.pos)))
+        {
             CursorIcon::PointingHand
         } else if hovered.is_some() {
             CursorIcon::Grab
@@ -232,4 +155,44 @@ impl Interaction {
         };
         ctx.set_cursor_icon(icon);
     }
+}
+
+/// Rooms of `layer` moved by `delta`, as (index, new top-left) in `moves`.
+/// While the button is held, returns their ghosts, red when the spot is taken.
+/// On release over the map, moves them if they fit, after an undo snapshot,
+/// and returns None so the caller ends the gesture.
+fn drag_rooms(
+    p: &Pointer,
+    layers: &mut LayerStack,
+    layer: usize,
+    moves: &[(usize, i32, i32)],
+    delta: (i32, i32),
+    history: &mut History,
+) -> Option<Vec<Ghost>> {
+    let world = &layers.layers()[layer].world;
+    if p.left_down {
+        let free = world.can_move_rooms(moves);
+        let ghosts = moves
+            .iter()
+            .map(|&(idx, x, y)| {
+                let r = &world.rooms[idx];
+                Ghost {
+                    x,
+                    y,
+                    choice: Choice {
+                        pick: Pick::Room,
+                        w: r.w,
+                        h: r.h,
+                    },
+                    free,
+                }
+            })
+            .collect();
+        return Some(ghosts);
+    }
+    if p.on_map() && delta != (0, 0) && world.can_move_rooms(moves) {
+        history.remember(layers);
+        layers.layers_mut()[layer].world.move_rooms(moves);
+    }
+    None
 }

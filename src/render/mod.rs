@@ -114,6 +114,7 @@ pub fn draw_layers(
             visible: Some(area),
             hovered,
             selected,
+            opacity: layer.opacity,
         };
         draw_map_opacity(
             &painter,
@@ -123,7 +124,6 @@ pub fn draw_layers(
             f.layout,
             &view,
             icons,
-            layer.opacity,
         );
     }
     if let Some(g) = &f.ghost {
