@@ -3,9 +3,7 @@
 use super::{MapData, PX_PER_UNIT};
 use crate::color::to_hex;
 use crate::icons::{self, room_icon_ids};
-use crate::render::{
-    door_color, door_rect, line_thickness, room_border, room_fill, room_icons, room_rect,
-};
+use crate::render::{door_color, door_rect, line_thickness, room_icons, room_rect, room_style};
 use crate::world::World;
 use std::collections::HashSet;
 use std::fmt::Write;
@@ -44,7 +42,7 @@ pub fn render(map: &MapData) -> String {
 
     svg.push_str("<defs>\n");
     for def in special {
-        if !used.contains(&def.id) {
+        if !used.contains(def.id.as_str()) {
             continue;
         }
         if let Some(def_svg) = icons::export_svg_def(def) {
@@ -72,7 +70,7 @@ fn append_world(
     thick: f32,
 ) {
     for r in &world.rooms {
-        let (border, is_thick) = room_border(r, biomes, special);
+        let (fill, border, is_thick) = room_style(r, biomes, special);
         let thickness = if is_thick { thick } else { t };
         let half = thickness / 2.0;
         let rect = room_rect(r, layout);
@@ -83,7 +81,7 @@ fn append_world(
             rect.min.y + half,
             rect.width() - thickness,
             rect.height() - thickness,
-            to_hex(room_fill(r, biomes, special)),
+            to_hex(fill),
             to_hex(border),
             thickness,
         );

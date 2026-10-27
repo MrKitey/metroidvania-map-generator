@@ -15,11 +15,9 @@ const MAX_PX: u32 = 512;
 /// Pixel size of the theme switch icons in the header.
 pub const UI_ICON_PX: u32 = 48;
 
-/// Effective icon id(s) of a room for display.
-pub fn room_icon_ids(r: &Room) -> Vec<String> {
-    if let Some(id) = &r.icon {
-        return vec![id.clone()];
-    }
+/// Effective icon id(s) of a room for display, at most two. A custom icon hides the
+/// kind and marker icons.
+pub fn room_icon_ids(r: &Room) -> impl Iterator<Item = &str> {
     let kind = match r.kind {
         RoomKind::Secret => Some(ids::SECRET),
         RoomKind::Portal => Some(ids::PORTAL),
@@ -30,11 +28,16 @@ pub fn room_icon_ids(r: &Room) -> Vec<String> {
         Some(Marker::Save) => Some(ids::SAVE),
         None => None,
     };
-    kind.into_iter().chain(marker).map(str::to_owned).collect()
+    let (kind, marker) = if r.icon.is_some() {
+        (None, None)
+    } else {
+        (kind, marker)
+    };
+    r.icon.as_deref().into_iter().chain(kind).chain(marker)
 }
 
 enum Source {
-    Svg(usvg::Tree),
+    Svg(Box<usvg::Tree>),
     Raster(image::RgbaImage),
 }
 
@@ -53,7 +56,7 @@ impl Icon {
             .to_ascii_lowercase();
         let source = if ext == "svg" {
             let tree = usvg::Tree::from_data(bytes, &usvg::Options::default()).ok()?;
-            Source::Svg(tree)
+            Source::Svg(Box::new(tree))
         } else {
             Source::Raster(image::load_from_memory(bytes).ok()?.to_rgba8())
         };
@@ -231,5 +234,47 @@ pub fn fallback_colors(id: &str) -> Option<(Color32, Color32)> {
             Color32::from_rgb(0x00, 0xFF, 0xFF),
         )),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn room(kind: RoomKind, marker: Option<Marker>, icon: Option<&str>) -> Room {
+        Room {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            biome: 0,
+            kind,
+            marker,
+            icon: icon.map(str::to_owned),
+        }
+    }
+
+    fn ids_of(r: &Room) -> Vec<&str> {
+        room_icon_ids(r).collect()
+    }
+
+    #[test]
+    fn icon_ids_follow_kind_marker_and_custom_icon() {
+        assert!(ids_of(&room(RoomKind::Normal, None, None)).is_empty());
+        assert!(ids_of(&room(RoomKind::Corridor, None, None)).is_empty());
+        assert_eq!(ids_of(&room(RoomKind::Secret, None, None)), [ids::SECRET]);
+        assert_eq!(ids_of(&room(RoomKind::Portal, None, None)), [ids::PORTAL]);
+        assert_eq!(
+            ids_of(&room(RoomKind::Normal, Some(Marker::Boss), None)),
+            [ids::BOSS]
+        );
+        assert_eq!(
+            ids_of(&room(RoomKind::Secret, Some(Marker::Save), None)),
+            [ids::SECRET, ids::SAVE]
+        );
+        assert_eq!(
+            ids_of(&room(RoomKind::Portal, Some(Marker::Boss), Some("lava"))),
+            ["lava"]
+        );
     }
 }

@@ -63,7 +63,7 @@ pub struct IconDef {
     pub border: Color32,
     /// Path relative to the app dir, e.g. `assets/icons/boss.svg`.
     pub file: String,
-    /// Drawn size on the map, 1 to 10. Cell share is `size / 10`.
+    /// Drawn size on the map, `MIN_ICON_SIZE..=MAX_ICON_SIZE`. Cell share is `size / 10`.
     pub size: u32,
 }
 

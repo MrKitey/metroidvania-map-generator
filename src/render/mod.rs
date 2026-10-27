@@ -14,9 +14,7 @@ pub use map::{
     line_thickness, room_icons, room_rect,
 };
 pub use picker::{Ghost, Picker, draw_drag_outline, draw_room_list};
-pub use theme::{
-    BACKGROUND, BUTTON_BG, BUTTON_HOVER, background, door_color, room_border, room_fill,
-};
+pub use theme::{BACKGROUND, BUTTON_BG, BUTTON_HOVER, background, door_color, room_style};
 
 use crate::biome::Biome;
 use crate::icon_lib::IconDef;
@@ -116,6 +114,7 @@ pub fn draw_layers(
             visible: Some(area),
             hovered,
             selected,
+            opacity: layer.opacity,
         };
         draw_map_opacity(
             &painter,
@@ -125,7 +124,6 @@ pub fn draw_layers(
             f.layout,
             &view,
             icons,
-            layer.opacity,
         );
     }
     if let Some(g) = &f.ghost {

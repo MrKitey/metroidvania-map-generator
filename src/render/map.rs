@@ -1,6 +1,6 @@
 //! Drawing of rooms, doors and icons, in world units converted to the map camera.
 
-use super::theme::{door_color, room_border, room_fill};
+use super::theme::{door_color, room_style};
 use crate::biome::Biome;
 use crate::icon_lib::{self, IconDef};
 use crate::icons::{self, Icons};
@@ -25,8 +25,10 @@ pub struct MapView<'a> {
     /// World area on screen. Rooms and doors outside it are skipped. None draws all.
     pub visible: Option<Rect>,
     pub hovered: Option<usize>,
-    /// Rooms kept highlighted after a selection rectangle.
+    /// Rooms kept highlighted after a selection rectangle, sorted.
     pub selected: &'a [usize],
+    /// Layer opacity multiplier, 0..=1.
+    pub opacity: f32,
 }
 
 /// Border and door thickness, in world units.
@@ -55,7 +57,7 @@ pub fn door_rect(d: &Door, layout: &Layout) -> Rect {
 }
 
 /// Side of an icon in points, at `scale` points per world unit.
-/// `icon_size` is 1..=10; cell share is `icon_size / 10`.
+/// `icon_size` is `MIN_ICON_SIZE..=MAX_ICON_SIZE`; cell share is `icon_size / 10`.
 pub fn icon_side_px(layout: &Layout, scale: f32, icon_size: u32) -> f32 {
     let share = settings::icon_share(icon_size);
     (layout.cw.min(layout.ch) * share * scale).max(MIN_ICON_PX)
@@ -64,36 +66,35 @@ pub fn icon_side_px(layout: &Layout, scale: f32, icon_size: u32) -> f32 {
 /// Icons of a room, left to right, as (id, top-left corner, side) in world units.
 /// A room with a kind icon and a marker shows both, side by side, smaller.
 /// Each id uses its own size from `special`.
-pub fn room_icons(
-    r: &Room,
+pub fn room_icons<'a>(
+    r: &'a Room,
     layout: &Layout,
     special: &[IconDef],
     scale: f32,
-) -> Vec<(String, Vec2, f32)> {
-    let ids = icons::room_icon_ids(r);
-    let both = ids.len() > 1;
-    let sides: Vec<f32> = ids
-        .iter()
-        .map(|id| {
-            let size = icon_lib::size_of(special, id);
-            let side = icon_side_px(layout, scale, size) / scale;
-            if both { side * PAIR_SHARE } else { side }
-        })
-        .collect();
-    let total: f32 = sides.iter().sum();
+) -> impl Iterator<Item = (&'a str, Vec2, f32)> {
+    // A room has at most two icons, so no allocation is needed.
+    let mut ids = [""; 2];
+    let mut count = 0;
+    for id in icons::room_icon_ids(r) {
+        ids[count] = id;
+        count += 1;
+    }
+    let share = if count > 1 { PAIR_SHARE } else { 1.0 };
+    let sides = ids.map(|id| {
+        let size = icon_lib::size_of(special, id);
+        icon_side_px(layout, scale, size) / scale * share
+    });
+    let total: f32 = sides[..count].iter().sum();
     let c = vec2(
         (r.x as f32 + r.w as f32 / 2.0) * layout.cw,
         (r.y as f32 + r.h as f32 / 2.0) * layout.ch,
     );
     let mut x = c.x - total / 2.0;
-    ids.into_iter()
-        .zip(sides)
-        .map(|(id, s)| {
-            let corner = vec2(x, c.y - s / 2.0);
-            x += s;
-            (id, corner, s)
-        })
-        .collect()
+    ids.into_iter().zip(sides).take(count).map(move |(id, s)| {
+        let corner = vec2(x, c.y - s / 2.0);
+        x += s;
+        (id, corner, s)
+    })
 }
 
 /// Grid line color, transparent white.
@@ -161,9 +162,9 @@ pub fn draw_map_opacity(
     layout: &Layout,
     map_view: &MapView,
     icons: &mut Icons,
-    opacity: f32,
 ) {
     let (view, map, scale) = (map_view.view, map_view.map, map_view.scale);
+    let opacity = map_view.opacity;
     let t = line_thickness(layout) * scale;
     let shown = |rect: Rect| map_view.visible.is_none_or(|v| v.intersects(rect));
     let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
@@ -174,20 +175,16 @@ pub fn draw_map_opacity(
             continue;
         }
         let rect = to_screen(view, map, world_rect);
-        let (border, thick) = room_border(r, biomes, special);
+        let (fill, border, thick) = room_style(r, biomes, special);
         let thickness = if thick { t + 1.0 } else { t };
-        painter.rect_filled(
-            rect,
-            0.0,
-            with_opacity(room_fill(r, biomes, special), opacity),
-        );
+        painter.rect_filled(rect, 0.0, with_opacity(fill, opacity));
         painter.rect_stroke(
             rect,
             0.0,
             Stroke::new(thickness, with_opacity(border, opacity)),
             StrokeKind::Middle,
         );
-        if map_view.selected.contains(&i) {
+        if map_view.selected.binary_search(&i).is_ok() {
             painter.rect_filled(
                 rect,
                 0.0,
@@ -226,7 +223,7 @@ pub fn draw_map_opacity(
         for (id, corner, s) in room_icons(r, layout, special, scale) {
             let dest = Rect::from_min_size(view.world_to_screen(corner, map), vec2(s, s) * scale);
             let px = (s * scale * ppp).ceil() as u32;
-            if let Some(tex) = icons.get(painter.ctx(), &id, px) {
+            if let Some(tex) = icons.get(painter.ctx(), id, px) {
                 painter.image(tex.id(), dest, uv, tint);
             }
         }

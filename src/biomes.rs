@@ -141,6 +141,15 @@ impl BiomesTab {
     }
 }
 
+fn count_slider_changed(ui: &mut egui::Ui, label: &str, min: u32, value: &mut u32) -> bool {
+    ui.add(
+        egui::Slider::new(value, min..=MAX_COUNT)
+            .integer()
+            .text(label),
+    )
+    .changed()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,13 +245,4 @@ mod tests {
         renamed.drop_without_applying_deltas();
         assert!(name_still_visible);
     }
-}
-
-fn count_slider_changed(ui: &mut egui::Ui, label: &str, min: u32, value: &mut u32) -> bool {
-    ui.add(
-        egui::Slider::new(value, min..=MAX_COUNT)
-            .integer()
-            .text(label),
-    )
-    .changed()
 }

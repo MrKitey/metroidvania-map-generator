@@ -2,8 +2,7 @@
 
 mod drag;
 
-use super::{UndoEntry, remember};
-use crate::biome::Biome;
+use super::History;
 use crate::layer::LayerStack;
 use crate::layout::Layout;
 use crate::render::{Ghost, RoomLegend};
@@ -150,10 +149,7 @@ impl Interaction {
         p: &Pointer,
         hovered: Option<(usize, usize)>,
         layers: &mut LayerStack,
-        undo: &mut Vec<UndoEntry>,
-        seed: u64,
-        cells: u32,
-        biomes: &[Biome],
+        history: &mut History,
     ) {
         let Some(biome) = self.paint_biome else {
             self.paint_stroke_saved = false;
@@ -182,7 +178,7 @@ impl Interaction {
             return;
         }
         if !self.paint_stroke_saved {
-            remember(undo, layers, seed, cells, biomes);
+            history.remember(layers);
             self.paint_stroke_saved = true;
         }
         layers.active_world_mut().set_room_biome(room, biome);
@@ -197,10 +193,7 @@ impl Interaction {
         p: &mut Pointer,
         layout: &Layout,
         map: Rect,
-        undo: &mut Vec<UndoEntry>,
-        seed: u64,
-        cells: u32,
-        biomes: &[Biome],
+        history: &mut History,
     ) -> Option<Ghost> {
         let choice = self.placing?;
         if p.right {
@@ -230,7 +223,7 @@ impl Interaction {
         }
         if free {
             let (kind, marker) = choice.pick.spec();
-            remember(undo, layers, seed, cells, biomes);
+            history.remember(layers);
             layers.active_world_mut().place_manual(
                 (x, y),
                 (choice.w, choice.h),
@@ -307,10 +300,7 @@ impl Interaction {
         legend: &RoomLegend,
         layers: &mut LayerStack,
         hovered: Option<(usize, usize)>,
-        undo: &mut Vec<UndoEntry>,
-        seed: u64,
-        cells: u32,
-        biomes: &[Biome],
+        history: &mut History,
     ) {
         let Some(icon) = self.icon_drag.clone() else {
             if p.left
@@ -330,7 +320,7 @@ impl Interaction {
                 && layer == layers.active()
                 && !layers.is_active_locked()
             {
-                tag_room(layers, room, &icon, undo, seed, cells, biomes);
+                tag_room(layers, room, &icon, history);
             }
             self.icon_drag = None;
         }
@@ -344,10 +334,7 @@ impl Interaction {
         layers: &mut LayerStack,
         blocked: bool,
         hovered: Option<(usize, usize)>,
-        undo: &mut Vec<UndoEntry>,
-        seed: u64,
-        cells: u32,
-        biomes: &[Biome],
+        history: &mut History,
     ) -> usize {
         if blocked || layers.is_active_locked() {
             return 0;
@@ -380,13 +367,13 @@ impl Interaction {
         } else {
             return 0;
         };
-        remember(undo, layers, seed, cells, biomes);
+        history.remember(layers);
         let removed = layers.active_world_mut().remove_rooms(&targets);
         if removed > 0 {
             self.moving = None;
             self.selected.clear();
         } else {
-            undo.pop();
+            history.forget();
         }
         removed
     }
@@ -397,10 +384,7 @@ impl Interaction {
         layers: &mut LayerStack,
         blocked: bool,
         hit: (usize, usize),
-        undo: &mut Vec<UndoEntry>,
-        seed: u64,
-        cells: u32,
-        biomes: &[Biome],
+        history: &mut History,
     ) {
         if blocked {
             return;
@@ -410,16 +394,16 @@ impl Interaction {
             return;
         }
         if ctx.input(|i| i.key_pressed(Key::B)) {
-            tag_room(layers, room, ids::BOSS, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::BOSS, history);
         }
         if ctx.input(|i| i.key_pressed(Key::S) && !i.modifiers.command) {
-            tag_room(layers, room, ids::SAVE, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::SAVE, history);
         }
         if ctx.input(|i| i.key_pressed(Key::H)) {
-            tag_room(layers, room, ids::SECRET, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::SECRET, history);
         }
         if ctx.input(|i| i.key_pressed(Key::P)) {
-            tag_room(layers, room, ids::PORTAL, undo, seed, cells, biomes);
+            tag_room(layers, room, ids::PORTAL, history);
         }
     }
 
@@ -462,19 +446,11 @@ impl Interaction {
     }
 }
 
-fn tag_room(
-    layers: &mut LayerStack,
-    room: usize,
-    icon: &str,
-    undo: &mut Vec<UndoEntry>,
-    seed: u64,
-    cells: u32,
-    biomes: &[Biome],
-) {
+fn tag_room(layers: &mut LayerStack, room: usize, icon: &str, history: &mut History) {
     let world = layers.active_world();
     if matches!(icon, ids::SECRET | ids::PORTAL) && world.rooms[room].kind == RoomKind::Corridor {
         return;
     }
-    remember(undo, layers, seed, cells, biomes);
+    history.remember(layers);
     layers.active_world_mut().toggle_icon(room, icon);
 }
