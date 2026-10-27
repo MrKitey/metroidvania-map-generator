@@ -55,7 +55,7 @@ pub fn door_rect(d: &Door, layout: &Layout) -> Rect {
 }
 
 /// Side of an icon in points, at `scale` points per world unit.
-/// `icon_size` is 1..=10; cell share is `icon_size / 10`.
+/// `icon_size` is `MIN_ICON_SIZE..=MAX_ICON_SIZE`; cell share is `icon_size / 10`.
 pub fn icon_side_px(layout: &Layout, scale: f32, icon_size: u32) -> f32 {
     let share = settings::icon_share(icon_size);
     (layout.cw.min(layout.ch) * share * scale).max(MIN_ICON_PX)

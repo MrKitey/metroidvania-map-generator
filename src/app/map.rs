@@ -101,7 +101,8 @@ impl App {
             } else {
                 None
             };
-        let blocked = self.settings.open || self.session.renaming;
+        // A text field typing a letter or Backspace must not edit the room under the cursor.
+        let blocked = self.settings.open || self.session.renaming || ctx.text_edit_focused();
         if let Some(hit) = hovered {
             self.interact.room_shortcuts(
                 &ctx,

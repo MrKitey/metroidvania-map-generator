@@ -272,7 +272,8 @@ impl App {
         if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::S)) {
             self.save_project(now);
         }
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
+        // A focused text field keeps Ctrl+Z for its own undo.
+        if !ctx.text_edit_focused() && ctx.input(|i| i.modifiers.command && i.key_pressed(Key::Z)) {
             self.undo_edit();
         }
         if escape && self.help_open {
@@ -295,13 +296,16 @@ impl App {
             return;
         }
 
+        if ctx.text_edit_focused() {
+            return;
+        }
         if ctx.input(|i| i.key_pressed(Key::C)) {
             self.fit = true;
         }
         if ctx.input(|i| i.key_pressed(Key::G)) {
             self.grid = !self.grid;
         }
-        if !ctx.text_edit_focused() && ctx.input(|i| i.key_pressed(Key::F)) {
+        if ctx.input(|i| i.key_pressed(Key::F)) {
             self.layer_frames = !self.layer_frames;
         }
     }
