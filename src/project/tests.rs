@@ -1,4 +1,6 @@
-use super::file::{ProjectFile, read, read_meta, utc_now, write, write_v2, write_with_version};
+use super::file::{
+    ProjectFile, Snapshot, read, read_meta, utc_now, write, write_v2, write_with_version,
+};
 use super::io::{self, file_name, forget, read_recent, remember};
 use crate::biome;
 use crate::layer::LayerStack;
@@ -52,17 +54,50 @@ fn sample() -> (ProjectFile, LayerStack) {
     .unwrap();
     let layers = LayerStack::from_world(world);
     let biomes = biome::default_biomes();
-    let file = ProjectFile::capture(
-        "Castle",
-        42,
-        768,
-        false,
-        "2024-01-02T03:04:05Z",
-        &Settings::default(),
-        &biomes,
-        &layers,
-    );
+    let file = ProjectFile::capture(&snapshot(&biomes, &layers));
     (file, layers)
+}
+
+fn snapshot<'a>(biomes: &'a [biome::Biome], layers: &'a LayerStack) -> Snapshot<'a> {
+    Snapshot {
+        name: "Castle",
+        seed: 42,
+        cells: 768,
+        grid: false,
+        created_at: "2024-01-02T03:04:05Z",
+        settings: Settings::default(),
+        biomes,
+        layers,
+    }
+}
+
+#[test]
+fn same_as_matches_capture_until_the_map_changes() {
+    let (file, mut layers) = sample();
+    let biomes = biome::default_biomes();
+    assert!(file.same_as(&snapshot(&biomes, &layers)));
+
+    let renamed = Snapshot {
+        name: "Keep",
+        ..snapshot(&biomes, &layers)
+    };
+    assert!(!file.same_as(&renamed));
+    let reseeded = Snapshot {
+        seed: 43,
+        ..snapshot(&biomes, &layers)
+    };
+    assert!(!file.same_as(&reseeded));
+    let mut settings = Settings::default();
+    settings.min_rooms += 1;
+    let resized = Snapshot {
+        settings,
+        ..snapshot(&biomes, &layers)
+    };
+    assert!(!file.same_as(&resized));
+
+    assert!(layers.active_world_mut().move_room(0, 5, 5));
+    assert!(!file.same_as(&snapshot(&biomes, &layers)));
+    assert!(ProjectFile::capture(&snapshot(&biomes, &layers)).same_as(&snapshot(&biomes, &layers)));
 }
 
 #[test]

@@ -4,7 +4,7 @@ use super::{MAX_CELLS, MIN_CELLS, START_CELLS, build_world};
 use crate::export::{self, MapData};
 use crate::layer::LayerStack;
 use crate::layout::Layout;
-use crate::project::{self, Loaded, ProjectFile};
+use crate::project::{self, Loaded, ProjectFile, Snapshot};
 use crate::storage;
 use crate::text::status;
 use std::path::{Path, PathBuf};
@@ -325,16 +325,20 @@ impl super::App {
     }
 
     fn project_file_named(&self, name: &str) -> ProjectFile {
-        ProjectFile::capture(
+        ProjectFile::capture(&self.snapshot(name))
+    }
+
+    fn snapshot<'a>(&'a self, name: &'a str) -> Snapshot<'a> {
+        Snapshot {
             name,
-            self.seed,
-            self.cells,
-            self.grid,
-            &self.session.created_at,
-            &self.settings.settings(),
-            &self.biomes,
-            &self.layers,
-        )
+            seed: self.seed,
+            cells: self.cells,
+            grid: self.grid,
+            created_at: &self.session.created_at,
+            settings: self.settings.settings(),
+            biomes: &self.biomes,
+            layers: &self.layers,
+        }
     }
 
     pub(super) fn handle_dropped(&mut self, ctx: &egui::Context, now: f64) {
@@ -376,7 +380,15 @@ impl super::App {
     }
 
     pub(super) fn sync_dirty(&mut self, now: f64) {
-        let current = self.project_file();
+        let snapshot = self.snapshot(&self.session.name);
+        // Nothing changed since the last frame, so `dirty` is still right. This skips
+        // copying every room and door each frame.
+        if let Some(last) = &self.session.last
+            && last.same_as(&snapshot)
+        {
+            return;
+        }
+        let current = ProjectFile::capture(&snapshot);
         self.session.sync(current, now);
     }
 

@@ -357,6 +357,27 @@ fn remove_rooms_deletes_a_batch() {
 }
 
 #[test]
+fn remove_rooms_matches_one_by_one_removal() {
+    let mut batch = generate(768, 3);
+    assert!(batch.rooms.len() > 8);
+    let mut single = batch.clone();
+    assert_eq!(batch.remove_rooms(&[7, 2, 999, 2, 5]), 3);
+    for idx in [7, 5, 2] {
+        assert!(single.remove_room(idx));
+    }
+    assert!(batch == single);
+    for (i, r) in batch.rooms.iter().enumerate() {
+        for cy in r.y..r.y + r.h as i32 {
+            for cx in r.x..r.x + r.w as i32 {
+                assert_eq!(batch.room_at(cx, cy), Some(i));
+            }
+        }
+    }
+    let cells: u32 = batch.rooms.iter().map(|r| r.w * r.h).sum();
+    assert_eq!(batch.grid.len(), cells as usize);
+}
+
+#[test]
 fn from_parts_rebuilds_the_grid() {
     let world = generate(256, 1);
     let restored = World::from_parts(

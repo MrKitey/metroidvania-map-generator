@@ -115,10 +115,10 @@ impl World {
     /// Clears custom icons that no longer exist in the library.
     pub fn clear_missing_icons(&mut self, valid: &[String]) {
         for room in &mut self.rooms {
-            if let Some(id) = &room.icon {
-                if !valid.iter().any(|v| v == id) {
-                    room.icon = None;
-                }
+            if let Some(id) = &room.icon
+                && !valid.iter().any(|v| v == id)
+            {
+                room.icon = None;
             }
         }
     }
@@ -261,46 +261,53 @@ impl World {
     /// Removes room `idx` and the doors that touched it.
     /// Rooms after it move down, and door indices follow.
     /// Returns false, and changes nothing, if `idx` is out of range.
+    #[cfg(test)]
     pub fn remove_room(&mut self, idx: usize) -> bool {
-        if idx >= self.rooms.len() {
-            return false;
-        }
-        let room = self.rooms.remove(idx);
-        self.set_cells(room.x, room.y, room.w, room.h, None);
-        self.doors.retain(|d| d.a != idx && d.b != idx);
-        for door in &mut self.doors {
-            if door.a > idx {
-                door.a -= 1;
-            }
-            if door.b > idx {
-                door.b -= 1;
-            }
-        }
-        for cell in self.grid.values_mut() {
-            if *cell > idx {
-                *cell -= 1;
-            }
-        }
-        true
+        self.remove_rooms(&[idx]) == 1
     }
 
     /// Removes every listed room. Duplicates and out-of-range indices are ignored.
+    /// Rooms after a removed one move down, and door and grid indices follow.
     /// Returns how many rooms were removed. The layer may become empty.
     pub fn remove_rooms(&mut self, indices: &[usize]) -> usize {
-        let mut to_remove: Vec<usize> = indices
-            .iter()
-            .copied()
-            .filter(|&i| i < self.rooms.len())
-            .collect();
-        to_remove.sort_unstable();
-        to_remove.dedup();
-        to_remove.sort_unstable_by(|a, b| b.cmp(a));
+        // New index of each room, or None for removed ones. One pass over rooms,
+        // doors and grid, whatever the number of rooms removed.
+        let mut remap: Vec<Option<usize>> = (0..self.rooms.len()).map(Some).collect();
         let mut removed = 0;
-        for idx in to_remove {
-            if self.remove_room(idx) {
+        for &i in indices {
+            if let Some(slot) = remap.get_mut(i)
+                && slot.take().is_some()
+            {
                 removed += 1;
             }
         }
+        if removed == 0 {
+            return 0;
+        }
+        let mut next = 0;
+        for slot in remap.iter_mut().flatten() {
+            *slot = next;
+            next += 1;
+        }
+        let mut i = 0;
+        self.rooms.retain(|_| {
+            i += 1;
+            remap[i - 1].is_some()
+        });
+        self.doors.retain_mut(|d| match (remap[d.a], remap[d.b]) {
+            (Some(a), Some(b)) => {
+                (d.a, d.b) = (a, b);
+                true
+            }
+            _ => false,
+        });
+        self.grid.retain(|_, cell| match remap[*cell] {
+            Some(n) => {
+                *cell = n;
+                true
+            }
+            None => false,
+        });
         removed
     }
 

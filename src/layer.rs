@@ -263,19 +263,34 @@ impl LayerStack {
     }
 
     pub fn to_saved(&self) -> Vec<SavedLayer> {
-        self.layers
-            .iter()
-            .map(|l| SavedLayer {
-                name: l.name.clone(),
-                color: to_hex(l.color32()),
-                visible: l.visible,
-                locked: l.locked,
-                opacity: l.opacity,
-                rooms: l.world.rooms.clone(),
-                doors: l.world.doors.clone(),
-                used_biomes: l.world.biomes.clone(),
-            })
-            .collect()
+        self.layers.iter().map(SavedLayer::from_layer).collect()
+    }
+}
+
+impl SavedLayer {
+    fn from_layer(l: &Layer) -> SavedLayer {
+        SavedLayer {
+            name: l.name.clone(),
+            color: to_hex(l.color32()),
+            visible: l.visible,
+            locked: l.locked,
+            opacity: l.opacity,
+            rooms: l.world.rooms.clone(),
+            doors: l.world.doors.clone(),
+            used_biomes: l.world.biomes.clone(),
+        }
+    }
+
+    /// Same as `*self == SavedLayer::from_layer(l)`, without copying the rooms and doors.
+    pub fn matches(&self, l: &Layer) -> bool {
+        self.name == l.name
+            && self.visible == l.visible
+            && self.locked == l.locked
+            && self.opacity == l.opacity
+            && self.rooms == l.world.rooms
+            && self.doors == l.world.doors
+            && self.used_biomes == l.world.biomes
+            && self.color == to_hex(l.color32())
     }
 }
 

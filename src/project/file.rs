@@ -39,6 +39,16 @@ impl FileSettings {
         }
     }
 
+    /// Same as `*self == FileSettings::from_settings(settings)`, without the copies.
+    fn matches(&self, settings: &Settings) -> bool {
+        self.viewport == settings.viewport
+            && self.min_rooms == settings.min_rooms
+            && self.max_rooms == settings.max_rooms
+            && self.room_sizes == settings.room_sizes
+            && self.boss_sizes == settings.boss_sizes
+            && self.corridor_sizes == settings.corridor_sizes
+    }
+
     fn into_settings(self) -> Settings {
         Settings {
             viewport: self.viewport,
@@ -98,32 +108,61 @@ pub struct ProjectFile {
     layers: LayersFile,
 }
 
+/// The open map as the app holds it, borrowed to build or check a `ProjectFile`.
+pub struct Snapshot<'a> {
+    pub name: &'a str,
+    pub seed: u64,
+    pub cells: u32,
+    pub grid: bool,
+    pub created_at: &'a str,
+    pub settings: Settings,
+    pub biomes: &'a [Biome],
+    pub layers: &'a LayerStack,
+}
+
 impl ProjectFile {
     /// Snapshot of the open map. The name, seed and creation date are stored as they are now.
-    pub fn capture(
-        name: &str,
-        seed: u64,
-        cells: u32,
-        grid: bool,
-        created_at: &str,
-        settings: &Settings,
-        biomes: &[Biome],
-        layers: &LayerStack,
-    ) -> ProjectFile {
+    pub fn capture(s: &Snapshot) -> ProjectFile {
         ProjectFile {
             version: VERSION,
-            name: name.to_owned(),
-            seed,
-            cells,
-            grid,
-            created_at: created_at.to_owned(),
-            settings: FileSettings::from_settings(settings),
-            biomes: biomes.iter().map(Entry::from).collect(),
+            name: s.name.to_owned(),
+            seed: s.seed,
+            cells: s.cells,
+            grid: s.grid,
+            created_at: s.created_at.to_owned(),
+            settings: FileSettings::from_settings(&s.settings),
+            biomes: s.biomes.iter().map(Entry::from).collect(),
             layers: LayersFile {
-                active: layers.active(),
-                layers: layers.to_saved(),
+                active: s.layers.active(),
+                layers: s.layers.to_saved(),
             },
         }
+    }
+
+    /// Same as `*self == ProjectFile::capture(s)`, without copying the rooms and doors.
+    /// Run each frame to tell whether the map changed.
+    pub fn same_as(&self, s: &Snapshot) -> bool {
+        self.version == VERSION
+            && self.name == s.name
+            && self.seed == s.seed
+            && self.cells == s.cells
+            && self.grid == s.grid
+            && self.created_at == s.created_at
+            && self.settings.matches(&s.settings)
+            && self.biomes.len() == s.biomes.len()
+            && self
+                .biomes
+                .iter()
+                .zip(s.biomes)
+                .all(|(e, b)| *e == Entry::from(b))
+            && self.layers.active == s.layers.active()
+            && self.layers.layers.len() == s.layers.len()
+            && self
+                .layers
+                .layers
+                .iter()
+                .zip(s.layers.layers())
+                .all(|(saved, layer)| saved.matches(layer))
     }
 
     pub fn created_at(&self) -> &str {

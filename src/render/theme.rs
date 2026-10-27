@@ -33,38 +33,32 @@ fn darker(c: Color32) -> Color32 {
     )
 }
 
+/// Fill and border of the first icon of a room, from the library or the fallbacks.
 fn special_colors(r: &Room, icons: &[IconDef]) -> Option<(Color32, Color32)> {
-    let id = room_icon_ids(r).into_iter().next()?;
-    if let Some(def) = icon_lib::find(icons, &id) {
+    let id = room_icon_ids(r).next()?;
+    if let Some(def) = icon_lib::find(icons, id) {
         return Some((def.fill, def.border));
     }
-    fallback_colors(&id)
+    fallback_colors(id)
+}
+
+/// Fill, border and whether the border is thicker than usual, in one icon lookup.
+/// Rooms with a marker or a special kind stand out. Corridors use a darker fill.
+pub fn room_style(r: &Room, biomes: &[Biome], icons: &[IconDef]) -> (Color32, Color32, bool) {
+    if let Some((fill, border)) = special_colors(r, icons) {
+        return (fill, border, true);
+    }
+    let biome = &biomes[r.biome];
+    match r.kind {
+        RoomKind::Normal => (biome.fill, biome.border(), false),
+        RoomKind::Corridor => (darker(biome.fill), CORRIDOR_BORDER, false),
+        RoomKind::Secret | RoomKind::Portal => (biome.fill, biome.border(), true),
+    }
 }
 
 /// Biome color for a room. Corridors use a darker shade.
 pub fn room_fill(r: &Room, biomes: &[Biome], icons: &[IconDef]) -> Color32 {
-    if let Some((fill, _)) = special_colors(r, icons) {
-        return fill;
-    }
-    let fill = biomes[r.biome].fill;
-    match r.kind {
-        RoomKind::Normal => fill,
-        RoomKind::Secret | RoomKind::Portal => fill,
-        RoomKind::Corridor => darker(fill),
-    }
-}
-
-/// Border color of a room, and whether the border is thicker than usual.
-/// Rooms with a marker or a special kind stand out.
-pub fn room_border(r: &Room, biomes: &[Biome], icons: &[IconDef]) -> (Color32, bool) {
-    if let Some((_, border)) = special_colors(r, icons) {
-        return (border, true);
-    }
-    match r.kind {
-        RoomKind::Normal => (biomes[r.biome].border(), false),
-        RoomKind::Corridor => (CORRIDOR_BORDER, false),
-        RoomKind::Secret | RoomKind::Portal => (biomes[r.biome].border(), true),
-    }
+    room_style(r, biomes, icons).0
 }
 
 /// Color of a door. A door inside a biome takes the room color so it blends in,
